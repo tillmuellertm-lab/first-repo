@@ -1,0 +1,437 @@
+"""Lokale Weboberflaeche.
+
+Bewusst nur an 127.0.0.1 gebunden: die Arbeitsmappe enthaelt hochsensible Daten
+und hat im Netz nichts verloren. Laufende Analysen werden in einem
+Hintergrundthread ausgefuehrt, damit die Oberflaeche waehrenddessen bedienbar
+bleibt.
+"""
+
+from __future__ import annotations
+
+import datetime as _dt
+import logging
+import threading
+from dataclasses import dataclass, field
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from typing import Any
+
+from .. import gaps, organize, report, rules, taxonomy
+from ..formatierung import euro
+from ..analyze import AnalyseFehler, Analysedienst, ExtraktionsFehler, schluessel_vorhanden
+from ..models import (
+    EIGNUNG_BEDINGT,
+    EIGNUNG_GEEIGNET,
+    EIGNUNG_LABEL,
+    EIGNUNG_UNGEEIGNET,
+    MERKMALE,
+    STATUS_ANALYSIERT,
+    STATUS_FEHLER,
+    Profil,
+)
+from ..workspace import Arbeitsmappe, ArbeitsmappenFehler
+
+LOG = logging.getLogger(__name__)
+
+
+@dataclass
+class Auftrag:
+    """Zustand eines laufenden Hintergrundlaufs."""
+
+    art: str = ""
+    laeuft: bool = False
+    gesamt: int = 0
+    erledigt: int = 0
+    aktuell: str = ""
+    meldungen: list[str] = field(default_factory=list)
+    fehler: str = ""
+    fertig_um: str = ""
+
+    def als_dict(self) -> dict[str, Any]:
+        return {
+            "art": self.art,
+            "laeuft": self.laeuft,
+            "gesamt": self.gesamt,
+            "erledigt": self.erledigt,
+            "aktuell": self.aktuell,
+            "meldungen": self.meldungen[-40:],
+            "fehler": self.fehler,
+            "fertig_um": self.fertig_um,
+        }
+
+
+def anwendung_bauen(mappe: Arbeitsmappe) -> Any:
+    try:
+        from flask import (  # noqa: PLC0415
+            Flask,
+            abort,
+            jsonify,
+            redirect,
+            render_template,
+            request,
+            send_file,
+            url_for,
+        )
+    except ImportError as fehler:  # pragma: no cover
+        raise ArbeitsmappenFehler(
+            "Fuer die Weboberflaeche wird Flask benoetigt: pip install flask"
+        ) from fehler
+
+    app = Flask(__name__)
+    app.config["MAX_CONTENT_LENGTH"] = 256 * 1024 * 1024
+    sperre = threading.Lock()
+    auftrag = Auftrag()
+
+    def regelwerk() -> rules.Regelwerk:
+        return rules.laden(mappe.jahr)
+
+    def auswertung() -> gaps.Auswertung:
+        return gaps.auswerten(mappe.dokumente, regelwerk(), mappe.profil)
+
+    def grunddaten() -> dict[str, Any]:
+        werk = regelwerk()
+        return {
+            "mappe": mappe,
+            "jahr": mappe.jahr,
+            "profil": mappe.profil,
+            "regelwerk": werk,
+            "taxonomy": taxonomy,
+            "eignung_label": EIGNUNG_LABEL,
+            "schluessel_vorhanden": schluessel_vorhanden(),
+            "auftrag_laeuft": auftrag.laeuft,
+        }
+
+    # ----------------------------------------------------------- Ansichten --
+
+    @app.get("/")
+    def uebersicht():
+        werk = regelwerk()
+        ergebnis = gaps.auswerten(mappe.dokumente, werk, mappe.profil)
+        gruppen = []
+        for kategorie in taxonomy.KATEGORIEN:
+            liste = [d for d in mappe.dokumente if d.wirksame_kategorie == kategorie.id]
+            if liste:
+                liste.sort(key=lambda d: (d.analyse.datum if d.analyse and d.analyse.datum else "9999", d.dateiname))
+                gruppen.append((kategorie, liste))
+        return render_template(
+            "index.html",
+            **grunddaten(),
+            auswertung=ergebnis,
+            kennzahlen=ergebnis.kennzahlen,
+            gruppen=gruppen,
+            nicht_analysiert=[d for d in mappe.dokumente if d.analyse is None],
+        )
+
+    @app.get("/befunde")
+    def befunde():
+        ergebnis = auswertung()
+        return render_template("befunde.html", **grunddaten(), auswertung=ergebnis)
+
+    @app.route("/profil", methods=["GET", "POST"])
+    def profil():
+        if request.method == "POST":
+            formular = request.form
+            neu = Profil(
+                name=formular.get("name", "").strip(),
+                veranlagungsjahr=mappe.jahr,
+                familienstand=formular.get("familienstand", "ledig"),
+                veranlagungsart=formular.get("veranlagungsart", "einzel"),
+                anzahl_kinder=_ganzzahl(formular.get("anzahl_kinder")) or 0,
+                merkmale=formular.getlist("merkmale"),
+                entfernung_km=_kommazahl(formular.get("entfernung_km")),
+                arbeitstage=_ganzzahl(formular.get("arbeitstage")),
+                homeoffice_tage=_ganzzahl(formular.get("homeoffice_tage")),
+                grad_der_behinderung=_ganzzahl(formular.get("grad_der_behinderung")),
+                pflegegrad=_ganzzahl(formular.get("pflegegrad")),
+                bruttoarbeitslohn=_kommazahl(formular.get("bruttoarbeitslohn")),
+                gesamtbetrag_der_einkuenfte=_kommazahl(formular.get("gesamtbetrag_der_einkuenfte")),
+                notizen=formular.get("notizen", "").strip(),
+            )
+            mappe.profil = neu
+            mappe.speichern()
+            return redirect(url_for("profil", gespeichert=1))
+        return render_template(
+            "profil.html",
+            **grunddaten(),
+            merkmale=MERKMALE,
+            gespeichert=request.args.get("gespeichert"),
+        )
+
+    @app.route("/dokument/<dokument_id>", methods=["GET", "POST"])
+    def dokument(dokument_id: str):
+        eintrag = mappe.dokument(dokument_id)
+        if eintrag is None:
+            abort(404)
+        if request.method == "POST":
+            eintrag.manuelle_kategorie = request.form.get("kategorie", "").strip()
+            eintrag.notiz = request.form.get("notiz", "").strip()
+            mappe.speichern()
+            return redirect(url_for("dokument", dokument_id=dokument_id, gespeichert=1))
+        return render_template(
+            "dokument.html",
+            **grunddaten(),
+            dokument=eintrag,
+            kategorien=taxonomy.KATEGORIEN,
+            gespeichert=request.args.get("gespeichert"),
+        )
+
+    @app.get("/datei/<dokument_id>")
+    def datei(dokument_id: str):
+        eintrag = mappe.dokument(dokument_id)
+        if eintrag is None:
+            abort(404)
+        pfad = mappe.pfad_zu(eintrag)
+        if not pfad.exists():
+            abort(404)
+        return send_file(pfad, mimetype=eintrag.medientyp or None)
+
+    @app.get("/bericht")
+    def bericht():
+        werk = regelwerk()
+        ergebnis = gaps.auswerten(mappe.dokumente, werk, mappe.profil)
+        return report.html_bericht(mappe.dokumente, ergebnis, werk, mappe.profil, _letzte_gesamtauswertung())
+
+    # ---------------------------------------------------------------- API --
+
+    @app.post("/api/hochladen")
+    def hochladen():
+        dateien = request.files.getlist("dateien")
+        if not dateien:
+            return jsonify({"fehler": "Keine Dateien empfangen."}), 400
+        aufgenommen, dubletten, abgelehnt = [], [], []
+        with TemporaryDirectory() as temp:
+            for datei in dateien:
+                if not datei.filename:
+                    continue
+                zwischenpfad = Path(temp) / Path(datei.filename).name
+                datei.save(zwischenpfad)
+                try:
+                    eintrag, ist_neu = mappe.datei_aufnehmen(zwischenpfad, Path(datei.filename).name)
+                except ArbeitsmappenFehler as fehler:
+                    abgelehnt.append({"datei": datei.filename, "grund": str(fehler)})
+                    continue
+                (aufgenommen if ist_neu else dubletten).append(eintrag.dateiname)
+        mappe.speichern()
+        return jsonify(
+            {
+                "aufgenommen": aufgenommen,
+                "dubletten": dubletten,
+                "abgelehnt": abgelehnt,
+                "gesamt": len(mappe.dokumente),
+            }
+        )
+
+    @app.post("/api/analyse")
+    def analyse_starten():
+        if not schluessel_vorhanden():
+            return jsonify({"fehler": "Es ist kein ANTHROPIC_API_KEY gesetzt."}), 400
+        alle = bool(request.json and request.json.get("alle"))
+        nur = (request.json or {}).get("dokument")
+        with sperre:
+            if auftrag.laeuft:
+                return jsonify({"fehler": "Es laeuft bereits ein Vorgang."}), 409
+            if nur:
+                zu_pruefen = [d for d in mappe.dokumente if d.id == nur]
+            elif alle:
+                zu_pruefen = list(mappe.dokumente)
+            else:
+                zu_pruefen = [d for d in mappe.dokumente if d.analyse is None or d.status == STATUS_FEHLER]
+            if not zu_pruefen:
+                return jsonify({"fehler": "Es gibt nichts zu analysieren."}), 400
+            auftrag.art = "analyse"
+            auftrag.laeuft = True
+            auftrag.gesamt = len(zu_pruefen)
+            auftrag.erledigt = 0
+            auftrag.aktuell = ""
+            auftrag.meldungen = []
+            auftrag.fehler = ""
+            auftrag.fertig_um = ""
+
+        def lauf() -> None:
+            dienst = Analysedienst()
+            werk = regelwerk()
+            try:
+                for eintrag in zu_pruefen:
+                    auftrag.aktuell = eintrag.dateiname
+                    try:
+                        eintrag.analyse = dienst.dokument_analysieren(
+                            mappe.pfad_zu(eintrag), eintrag.medientyp, werk, mappe.profil, eintrag.notiz
+                        )
+                        eintrag.status = STATUS_ANALYSIERT
+                        eintrag.fehler = ""
+                        zusatz = EIGNUNG_LABEL.get(eintrag.analyse.eignung, "")
+                        auftrag.meldungen.append(f"{eintrag.dateiname}: {eintrag.analyse.dokumenttyp} ({zusatz})")
+                    except (AnalyseFehler, ExtraktionsFehler, OSError) as fehler:
+                        eintrag.status = STATUS_FEHLER
+                        eintrag.fehler = str(fehler)
+                        auftrag.meldungen.append(f"{eintrag.dateiname}: FEHLER {fehler}")
+                    auftrag.erledigt += 1
+                    mappe.speichern()
+            except Exception as fehler:  # noqa: BLE001 - Thread darf nicht still sterben
+                auftrag.fehler = str(fehler)
+                LOG.exception("Analyselauf abgebrochen")
+            finally:
+                auftrag.laeuft = False
+                auftrag.aktuell = ""
+                auftrag.fertig_um = _dt.datetime.now().strftime("%H:%M:%S")
+
+        threading.Thread(target=lauf, daemon=True).start()
+        return jsonify(auftrag.als_dict())
+
+    @app.get("/api/auftrag")
+    def auftrag_abfragen():
+        return jsonify(auftrag.als_dict())
+
+    @app.post("/api/ordnen")
+    def ordnen():
+        daten = request.json or {}
+        with sperre:
+            if auftrag.laeuft:
+                return jsonify({"fehler": "Es laeuft bereits ein Vorgang."}), 409
+            auftrag.art = "ordnen"
+            auftrag.laeuft = True
+            auftrag.gesamt = 1
+            auftrag.erledigt = 0
+            auftrag.meldungen = []
+            auftrag.fehler = ""
+            auftrag.aktuell = "Ablage wird aufgebaut"
+
+        def lauf() -> None:
+            try:
+                werk = regelwerk()
+                ergebnis = gaps.auswerten(mappe.dokumente, werk, mappe.profil)
+                modellauswertung = None
+                if daten.get("gesamtauswertung") and schluessel_vorhanden():
+                    auftrag.aktuell = "Gesamtauswertung laeuft"
+                    dienst = Analysedienst()
+                    modellauswertung = dienst.gesamtauswertung(
+                        werk,
+                        mappe.profil,
+                        [_bestandseintrag(d) for d in mappe.dokumente],
+                        [b.als_dict() for b in ergebnis.befunde],
+                    )
+                    _gesamtauswertung_sichern(modellauswertung)
+                auftrag.aktuell = "Dateien werden einsortiert"
+                ablage = organize.ablage_erzeugen(
+                    mappe, ungeeignete_mitnehmen=not daten.get("ohne_ungeeignete")
+                )
+                mappe.speichern()
+                berichte = report.berichte_schreiben(
+                    mappe.berichte, mappe.dokumente, ergebnis, werk, mappe.profil, modellauswertung
+                )
+                auftrag.meldungen.append(f"{ablage.anzahl} Dateien einsortiert unter {ablage.wurzel}")
+                for pfad in berichte:
+                    auftrag.meldungen.append(f"Bericht: {pfad}")
+                if daten.get("paket"):
+                    paket = organize.paket_erzeugen(mappe, ablage, berichte)
+                    auftrag.meldungen.append(f"Paket: {paket}")
+                auftrag.erledigt = 1
+            except Exception as fehler:  # noqa: BLE001
+                auftrag.fehler = str(fehler)
+                LOG.exception("Ordnen fehlgeschlagen")
+            finally:
+                auftrag.laeuft = False
+                auftrag.aktuell = ""
+                auftrag.fertig_um = _dt.datetime.now().strftime("%H:%M:%S")
+
+        threading.Thread(target=lauf, daemon=True).start()
+        return jsonify(auftrag.als_dict())
+
+    @app.post("/api/dokument/<dokument_id>/loeschen")
+    def dokument_loeschen(dokument_id: str):
+        erfolg = mappe.dokument_entfernen(dokument_id, datei_loeschen=True)
+        mappe.speichern()
+        return jsonify({"erfolg": erfolg})
+
+    @app.post("/api/eingang-einlesen")
+    def eingang_einlesen():
+        neue = mappe.eingang_einlesen()
+        mappe.speichern()
+        return jsonify({"neu": [d.dateiname for d in neue]})
+
+    # ------------------------------------------------------------ Hilfen --
+
+    def _gesamtauswertung_sichern(daten: dict[str, Any]) -> None:
+        import json
+
+        pfad = mappe.zustandsverzeichnis / "gesamtauswertung.json"
+        pfad.write_text(json.dumps(daten, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    def _letzte_gesamtauswertung() -> dict[str, Any] | None:
+        import json
+
+        pfad = mappe.zustandsverzeichnis / "gesamtauswertung.json"
+        if not pfad.exists():
+            return None
+        try:
+            return json.loads(pfad.read_text(encoding="utf-8"))
+        except ValueError:
+            return None
+
+    @app.template_filter("euro")
+    def _euro(betrag: float | None) -> str:
+        return euro(betrag) if betrag not in (None, "") else "—"
+
+    @app.template_filter("datum")
+    def _datum(wert: str | None) -> str:
+        if not wert:
+            return ""
+        try:
+            return _dt.date.fromisoformat(str(wert)).strftime("%d.%m.%Y")
+        except ValueError:
+            return str(wert)
+
+    return app
+
+
+def _bestandseintrag(dokument) -> dict[str, Any]:
+    analyse = dokument.analyse
+    if not analyse:
+        return {"datei": dokument.dateiname, "status": "nicht analysiert"}
+    return {
+        "datei": dokument.dateiname,
+        "kategorie": dokument.wirksame_kategorie,
+        "typ": analyse.dokumenttyp,
+        "aussteller": analyse.aussteller,
+        "datum": analyse.datum,
+        "steuerjahr": analyse.steuerjahr,
+        "betrag_gesamt": analyse.betrag_gesamt,
+        "betrag_abzugsfaehig": analyse.betrag_abzugsfaehig,
+        "zahlungsart": analyse.zahlungsart,
+        "eignung": analyse.eignung,
+        "fehlende_nachweise": analyse.fehlende_nachweise,
+        "zusammenfassung": analyse.zusammenfassung,
+    }
+
+
+def _ganzzahl(wert: Any) -> int | None:
+    try:
+        return int(str(wert).strip()) if str(wert or "").strip() else None
+    except ValueError:
+        return None
+
+
+def _kommazahl(wert: Any) -> float | None:
+    text = str(wert or "").strip().replace(".", "").replace(",", ".")
+    try:
+        return float(text) if text else None
+    except ValueError:
+        return None
+
+
+def starten(mappe: Arbeitsmappe, host: str = "127.0.0.1", port: int = 5173, debug: bool = False) -> None:
+    app = anwendung_bauen(mappe)
+    print(f"Steuer-Assistent laeuft auf http://{host}:{port}")
+    print(f"Arbeitsmappe: {mappe.wurzel}  ·  Veranlagungszeitraum {mappe.jahr}")
+    if not schluessel_vorhanden():
+        print("Hinweis: ohne ANTHROPIC_API_KEY ist die Dokumentanalyse deaktiviert.")
+    app.run(host=host, port=port, debug=debug, use_reloader=False)
+
+
+__all__ = [
+    "EIGNUNG_BEDINGT",
+    "EIGNUNG_GEEIGNET",
+    "EIGNUNG_UNGEEIGNET",
+    "anwendung_bauen",
+    "starten",
+]
