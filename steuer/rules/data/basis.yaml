@@ -1,0 +1,360 @@
+# Gemeinsame Checkliste und Optimierungsansaetze, die nicht jaehrlich wechseln.
+# Jahresdateien erben diese Datei ueber "erbt_von: basis" und koennen einzelne
+# Eintraege ueber dieselbe id ueberschreiben oder ergaenzen.
+jahr: basis
+stand: "2026-08-14"
+
+checkliste:
+  - id: stammdaten
+    titel: Stammdaten und Vorjahresunterlagen
+    anlage: Mantelbogen
+    prioritaet: hoch
+    erwartete_dokumente:
+      - Steuer-Identifikationsnummer
+      - Bankverbindung fuer die Erstattung
+      - Steuerbescheid des Vorjahres
+      - Vollmacht fuer den Steuerberater
+    hinweis: "Der Vorjahresbescheid zeigt dem Berater sofort, was zuletzt anerkannt oder gestrichen wurde."
+
+  - id: lohnsteuerbescheinigung
+    titel: Lohnsteuerbescheinigung
+    anlage: Anlage N
+    prioritaet: hoch
+    gilt_wenn: [angestellt]
+    erwartete_dokumente:
+      - Lohnsteuerbescheinigung des Arbeitgebers
+    hinweis: "Je Arbeitsverhaeltnis eine Bescheinigung. Bei Arbeitgeberwechsel im Jahr fehlen haeufig Unterlagen."
+
+  - id: lohnersatzleistungen
+    titel: Lohnersatzleistungen
+    anlage: Anlage N / Mantelbogen
+    prioritaet: hoch
+    gilt_wenn: [lohnersatzleistungen]
+    erwartete_dokumente:
+      - Bescheinigung ueber Arbeitslosengeld, Kurzarbeitergeld, Krankengeld, Elterngeld oder Mutterschaftsgeld
+    hinweis: >-
+      Loest den Progressionsvorbehalt aus und erzwingt die Pflichtveranlagung ab 410 EUR.
+      Fuehrt oft zu Nachzahlungen, muss aber vollstaendig erklaert werden.
+
+  - id: fahrten_arbeit
+    titel: Fahrten zur ersten Taetigkeitsstaette
+    anlage: Anlage N
+    prioritaet: hoch
+    gilt_wenn: [angestellt]
+    erwartete_dokumente:
+      - Aufstellung Arbeitstage und einfache Entfernung in Kilometern
+      - Jahreskarte oder Monatstickets bei Nutzung des OePNV
+    hinweis: "Bei 220 Arbeitstagen und 25 km sind das bereits rund 1.795 EUR Werbungskosten."
+
+  - id: homeoffice
+    titel: Homeoffice und Arbeitszimmer
+    anlage: Anlage N
+    prioritaet: mittel
+    gilt_wenn: [homeoffice]
+    erwartete_dokumente:
+      - Aufstellung der Homeoffice-Tage
+      - Bei eigenem Arbeitszimmer, Mietvertrag und Nebenkostenabrechnung
+    hinweis: "Homeoffice-Tage und Fahrten zur Arbeit koennen fuer denselben Tag nicht doppelt angesetzt werden."
+
+  - id: arbeitsmittel
+    titel: Arbeitsmittel
+    anlage: Anlage N
+    prioritaet: mittel
+    gilt_wenn: [angestellt]
+    erwartete_dokumente:
+      - Rechnungen fuer Notebook, Monitor, Buerostuhl, Fachliteratur, Software
+    hinweis: "Bis 800 EUR netto sofort abziehbar, darueber ueber die Nutzungsdauer verteilt."
+
+  - id: fortbildung
+    titel: Fort- und Weiterbildung
+    anlage: Anlage N
+    prioritaet: mittel
+    erwartete_dokumente:
+      - Kurs- und Seminarrechnungen
+      - Fahrt- und Uebernachtungskosten
+      - Pruefungsgebuehren
+
+  - id: bewerbungskosten
+    titel: Bewerbungskosten
+    anlage: Anlage N
+    prioritaet: niedrig
+    gilt_wenn: [jobwechsel]
+    erwartete_dokumente:
+      - Aufstellung der Bewerbungen
+      - Fahrtkosten zu Vorstellungsgespraechen
+
+  - id: doppelte_haushaltsfuehrung
+    titel: Doppelte Haushaltsfuehrung
+    anlage: Anlage N
+    prioritaet: hoch
+    gilt_wenn: [doppelter_haushalt]
+    erwartete_dokumente:
+      - Mietvertrag und Mietzahlungen der Zweitwohnung
+      - Nachweis des Lebensmittelpunkts am Hauptwohnsitz
+      - Familienheimfahrten
+
+  - id: umzug
+    titel: Umzugskosten
+    anlage: Anlage N / Anlage haushaltsnahe Aufwendungen
+    prioritaet: mittel
+    gilt_wenn: [umzug]
+    erwartete_dokumente:
+      - Rechnung des Umzugsunternehmens
+      - Maklerrechnung
+      - Nachweis der beruflichen Veranlassung
+    hinweis: "Beruflich veranlasst sind es Werbungskosten, privat greift zumindest § 35a fuer die Umzugsfirma."
+
+  - id: gewerkschaft
+    titel: Beitraege zu Berufsverbaenden
+    anlage: Anlage N
+    prioritaet: niedrig
+    erwartete_dokumente:
+      - Jahresbescheinigung Gewerkschaft oder Berufsverband
+
+  - id: vorsorge_kranken
+    titel: Kranken- und Pflegeversicherung
+    anlage: Anlage Vorsorgeaufwand
+    prioritaet: hoch
+    erwartete_dokumente:
+      - Jahresbescheinigung der Krankenkasse oder privaten Krankenversicherung
+      - Bescheinigung ueber Beitragsrueckerstattungen
+
+  - id: vorsorge_sonstige
+    titel: Weitere Vorsorgeaufwendungen
+    anlage: Anlage Vorsorgeaufwand
+    prioritaet: mittel
+    erwartete_dokumente:
+      - Haftpflichtversicherung
+      - Berufsunfaehigkeits- und Risikolebensversicherung
+      - Unfallversicherung
+      - Ruerup-Bescheinigung
+    hinweis: "Kfz-Haftpflicht zaehlt, Kaskoversicherung nicht."
+
+  - id: riester
+    titel: Riester-Rente
+    anlage: Anlage AV
+    prioritaet: mittel
+    gilt_wenn: [riester]
+    erwartete_dokumente:
+      - Bescheinigung nach § 10a EStG des Anbieters
+
+  - id: kapitalertraege
+    titel: Kapitalertraege
+    anlage: Anlage KAP
+    prioritaet: mittel
+    gilt_wenn: [kapitalanlagen]
+    erwartete_dokumente:
+      - Jahressteuerbescheinigungen aller Banken und Broker
+      - Verlustbescheinigung (Antrag bis 15.12. des Jahres)
+    hinweis: >-
+      Guenstigerpruefung beantragen, wenn der persoenliche Steuersatz unter 25 % liegt.
+      Nicht ausgeschoepfte Sparer-Pauschbetraege bei mehreren Banken zurueckholen.
+
+  - id: kirchensteuer
+    titel: Gezahlte Kirchensteuer
+    anlage: Sonderausgaben
+    prioritaet: niedrig
+    gilt_wenn: [kirchensteuerpflichtig]
+    erwartete_dokumente:
+      - Nachweis der Kirchensteuer-Nachzahlung aus dem Vorjahresbescheid
+    hinweis: "Die als Sonderausgabe abziehbare Kirchensteuer ist die tatsaechlich gezahlte, nicht die einbehaltene."
+
+  - id: spenden
+    titel: Spenden und Mitgliedsbeitraege
+    anlage: Sonderausgaben
+    prioritaet: mittel
+    erwartete_dokumente:
+      - Zuwendungsbestaetigungen
+      - Kontoauszuege bei Kleinspenden bis 300 EUR
+
+  - id: handwerker
+    titel: Handwerkerleistungen
+    anlage: Anlage haushaltsnahe Aufwendungen
+    prioritaet: hoch
+    gilt_wenn: [eigener_haushalt]
+    erwartete_dokumente:
+      - Handwerkerrechnungen mit ausgewiesenem Lohnanteil
+      - Zugehoerige Kontoauszuege oder Ueberweisungsbelege
+    hinweis: >-
+      Bis zu 1.200 EUR direkte Steuerermaessigung. Barzahlung schliesst den Abzug
+      vollstaendig aus. Auch Schornsteinfeger, Wartung der Heizung und
+      Dachrinnenreinigung zaehlen.
+
+  - id: haushaltsnahe_dienstleistungen
+    titel: Haushaltsnahe Dienstleistungen
+    anlage: Anlage haushaltsnahe Aufwendungen
+    prioritaet: hoch
+    gilt_wenn: [eigener_haushalt]
+    erwartete_dokumente:
+      - Rechnungen fuer Reinigung, Gartenpflege, Winterdienst, Pflegedienst
+      - Nebenkostenabrechnung des Vermieters mit ausgewiesenen haushaltsnahen Anteilen
+    hinweis: >-
+      Die Nebenkostenabrechnung wird am haeufigsten vergessen. Hausmeister,
+      Treppenhausreinigung, Gartenpflege und Winterdienst sind darin fast immer enthalten.
+
+  - id: aussergewoehnliche_belastungen
+    titel: Krankheits- und Pflegekosten
+    anlage: Aussergewoehnliche Belastungen
+    prioritaet: mittel
+    erwartete_dokumente:
+      - Zuzahlungen fuer Medikamente und Rezeptgebuehren
+      - Zahnarzt-, Brillen- und Hoergeraeterechnungen
+      - Fahrtkosten zu Aerzten
+      - Bescheinigung der Krankenkasse ueber geleistete Zuzahlungen
+    hinweis: >-
+      Nur der Teil oberhalb der zumutbaren Belastung wirkt sich aus. Deshalb lohnt
+      es sich, planbare Behandlungen in einem Jahr zu buendeln.
+
+  - id: behinderung
+    titel: Behinderung
+    anlage: Aussergewoehnliche Belastungen
+    prioritaet: hoch
+    gilt_wenn: [behinderung]
+    erwartete_dokumente:
+      - Schwerbehindertenausweis oder Feststellungsbescheid
+
+  - id: kinder
+    titel: Kinder
+    anlage: Anlage Kind
+    prioritaet: hoch
+    gilt_wenn: [kinder]
+    erwartete_dokumente:
+      - Kindergeldbescheid oder Nachweis der Zahlungen
+      - Rechnungen und Zahlungsnachweise der Kinderbetreuung
+      - Schulgeldbescheinigung bei Privatschule
+      - Ausbildungs- oder Studiennachweis bei volljaehrigen Kindern
+    hinweis: "Kinderbetreuungskosten muessen unbar gezahlt sein, Barzahlung an die Tagesmutter zaehlt nicht."
+
+  - id: vermietung
+    titel: Vermietung und Verpachtung
+    anlage: Anlage V
+    prioritaet: hoch
+    gilt_wenn: [vermietung]
+    erwartete_dokumente:
+      - Mieteinnahmen-Aufstellung
+      - Darlehenszinsen und Tilgungsplan
+      - Grundsteuer, Versicherungen, Verwaltergebuehren
+      - Reparatur- und Modernisierungsrechnungen
+      - Abrechnung der Nebenkosten gegenueber den Mietern
+
+  - id: selbstaendig
+    titel: Selbstaendige oder gewerbliche Einkuenfte
+    anlage: Anlage S / G / EUeR
+    prioritaet: hoch
+    gilt_wenn: [selbstaendig]
+    erwartete_dokumente:
+      - Einnahmen-Ueberschuss-Rechnung
+      - Ausgangs- und Eingangsrechnungen
+      - Umsatzsteuervoranmeldungen
+      - Anlageverzeichnis
+
+  - id: renten
+    titel: Renten
+    anlage: Anlage R
+    prioritaet: hoch
+    gilt_wenn: [rente]
+    erwartete_dokumente:
+      - Rentenbezugsmitteilung oder Rentenanpassungsmitteilung
+      - Bescheinigung ueber Betriebsrenten
+
+  - id: krypto_sonstiges
+    titel: Private Veraeusserungsgeschaefte und Kryptowerte
+    anlage: Anlage SO
+    prioritaet: mittel
+    gilt_wenn: [krypto]
+    erwartete_dokumente:
+      - Transaktionsreport der Boerse oder Wallet
+      - Steuerreport mit FIFO-Berechnung
+    hinweis: "Nach mehr als einem Jahr Haltedauer steuerfrei. Unter der Freigrenze von 1.000 EUR ebenfalls."
+
+  - id: ausland
+    titel: Auslandseinkuenfte
+    anlage: Anlage AUS / N-AUS
+    prioritaet: hoch
+    gilt_wenn: [auslandseinkuenfte]
+    erwartete_dokumente:
+      - Auslaendische Steuerbescheide
+      - Nachweis einbehaltener Quellensteuer
+
+  - id: unterhalt
+    titel: Unterhaltsleistungen
+    anlage: Anlage U / Unterhalt
+    prioritaet: mittel
+    gilt_wenn: [unterhalt]
+    erwartete_dokumente:
+      - Zahlungsnachweise
+      - Anlage U mit Unterschrift des Empfaengers beim Realsplitting
+
+chancen:
+  - id: nebenkostenabrechnung
+    titel: Haushaltsnahe Anteile aus der Nebenkostenabrechnung
+    gilt_wenn: [mieter]
+    potenzial_eur: 300
+    beschreibung: >-
+      In fast jeder Nebenkostenabrechnung stecken Hausmeister, Treppenhausreinigung,
+      Gartenpflege, Winterdienst und Schornsteinfeger. 20 % davon mindern die Steuer
+      direkt. Beim Vermieter oder der Hausverwaltung eine Bescheinigung nach § 35a anfordern.
+
+  - id: guenstigerpruefung_kap
+    titel: Guenstigerpruefung bei Kapitalertraegen
+    gilt_wenn: [kapitalanlagen]
+    potenzial_eur: 200
+    beschreibung: >-
+      Liegt der persoenliche Steuersatz unter 25 %, erstattet die Guenstigerpruefung
+      einen Teil der einbehaltenen Abgeltungsteuer. Der Antrag kostet nichts und wird
+      nur angewendet, wenn er guenstiger ist.
+
+  - id: sparer_pauschbetrag_ungenutzt
+    titel: Nicht ausgeschoepfte Sparer-Pauschbetraege
+    gilt_wenn: [kapitalanlagen]
+    potenzial_eur: 250
+    beschreibung: >-
+      Bei mehreren Banken verteilt sich der Pauschbetrag oft ungleich. Ueber die
+      Anlage KAP wird zu viel einbehaltene Abgeltungsteuer zurueckgeholt.
+
+  - id: arbeitszimmer_vs_homeoffice
+    titel: Arbeitszimmer statt Tagespauschale pruefen
+    gilt_wenn: [homeoffice]
+    potenzial_eur: 400
+    beschreibung: >-
+      Ist das Arbeitszimmer Mittelpunkt der gesamten Taetigkeit, sind die
+      tatsaechlichen anteiligen Kosten oft hoeher als 1.260 EUR.
+
+  - id: handwerker_verteilen
+    titel: Handwerkerrechnungen ueber zwei Jahre verteilen
+    gilt_wenn: [eigener_haushalt]
+    potenzial_eur: 500
+    beschreibung: >-
+      Der Hoechstbetrag von 1.200 EUR Ermaessigung pro Jahr verfaellt ungenutzt.
+      Bei groesseren Massnahmen lohnt sich eine Abschlagszahlung im einen und die
+      Schlusszahlung im naechsten Jahr. Massgeblich ist das Zahlungsdatum.
+
+  - id: krankheitskosten_buendeln
+    titel: Krankheitskosten buendeln
+    potenzial_eur: 400
+    beschreibung: >-
+      Weil nur der Betrag oberhalb der zumutbaren Belastung wirkt, sollten
+      planbare Behandlungen wie Zahnersatz oder Brille in einem Jahr zusammengelegt werden.
+
+  - id: verlustvortrag_studium
+    titel: Verlustvortrag aus Zweitausbildung oder Studium
+    gilt_wenn: [studium]
+    potenzial_eur: 1000
+    beschreibung: >-
+      Kosten einer Zweitausbildung sind Werbungskosten und koennen als Verlustvortrag
+      festgestellt und mit spaeteren Einkuenften verrechnet werden.
+
+  - id: rueckwirkende_abgabe
+    titel: Freiwillige Abgabe fuer zurueckliegende Jahre
+    potenzial_eur: 1000
+    beschreibung: >-
+      Ohne Abgabepflicht koennen Erklaerungen noch vier Jahre rueckwirkend
+      eingereicht werden. Fuer 2024 laeuft die Frist bis zum 31.12.2028.
+
+  - id: umzug_35a
+    titel: Umzug ueber § 35a absetzen
+    gilt_wenn: [umzug]
+    potenzial_eur: 400
+    beschreibung: >-
+      Auch bei privatem Umzug sind die Lohnkosten der Umzugsfirma zu 20 %
+      als haushaltsnahe Dienstleistung abziehbar.
