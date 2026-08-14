@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block titel %}Steuer-Assistent{% endblock %} · {{ jahr }}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
+</head>
+<body>
+<header class="kopfleiste">
+  <div class="huelle kopf-inhalt">
+    <div>
+      <a class="marke" href="{{ url_for('uebersicht') }}">Steuer-Assistent</a>
+      <span class="jahr">Veranlagungszeitraum {{ jahr }}</span>
+    </div>
+    <nav>
+      <a href="{{ url_for('uebersicht') }}">Uebersicht</a>
+      <a href="{{ url_for('befunde') }}">Luecken &amp; Chancen</a>
+      <a href="{{ url_for('profil') }}">Profil</a>
+      <a href="{{ url_for('bericht') }}" target="_blank" rel="noopener">Bericht</a>
+    </nav>
+  </div>
+</header>
+
+{% if regelwerk.ist_ersatz %}
+<div class="banner warnung huelle">
+  Fuer {{ jahr }} liegt kein gepflegter Rechtsstand vor. Es werden ersatzweise die Werte aus
+  {{ regelwerk.quelle_jahr }} verwendet. Entwurf erzeugen mit
+  <code>steuer recht-update --jahr {{ jahr }}</code>.
+</div>
+{% endif %}
+{% if not schluessel_vorhanden %}
+<div class="banner warnung huelle">
+  Es ist kein <code>ANTHROPIC_API_KEY</code> gesetzt, die Dokumentanalyse ist deaktiviert.
+  Schluessel setzen und neu starten: <code>export ANTHROPIC_API_KEY=sk-ant-...</code>
+</div>
+{% endif %}
+
+<main class="huelle">
+  {% block inhalt %}{% endblock %}
+</main>
+
+<footer class="huelle fussleiste">
+  <p>
+    Dieses Werkzeug ist eine maschinelle Vorbereitung von Unterlagen und keine Steuerberatung
+    im Sinne des Steuerberatungsgesetzes. Alle Einordnungen, Betraege und Hinweise sind
+    Vorschlaege und muessen fachlich geprueft werden.
+  </p>
+  <p class="pfad">Arbeitsmappe: <code>{{ mappe.wurzel }}</code> · Rechtsstand {{ regelwerk.stand }}</p>
+</footer>
+
+<script src="{{ url_for('static', filename='app.js') }}"></script>
+{% block skripte %}{% endblock %}
+</body>
+</html>
