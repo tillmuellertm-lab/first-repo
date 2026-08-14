@@ -1,0 +1,300 @@
+jahr: 2024
+stand: "2026-08-14"
+status: gepflegt
+erbt_von: basis
+hinweis: >-
+  Werte nach bestem Wissen zusammengetragen. Diese Datei ersetzt keine
+  Steuerberatung. Vor der Abgabe die Werte mit dem Steuerberater abgleichen
+  oder mit "steuer recht-update --jahr 2024" gegen aktuelle Quellen pruefen.
+quellen:
+  - "EStG in der fuer den VZ 2024 geltenden Fassung"
+  - "Wachstumschancengesetz / Inflationsausgleichsgesetz"
+  - "BMF-Schreiben zu Reisekosten und haeuslichem Arbeitszimmer"
+
+werte:
+  grundfreibetrag:
+    label: Grundfreibetrag
+    wert: 11784
+    einheit: EUR
+    verdoppelt_bei_zusammenveranlagung: true
+    rechtsgrundlage: "§ 32a Abs. 1 EStG"
+    hinweis: "Rueckwirkend von 11.604 EUR auf 11.784 EUR angehoben."
+
+  arbeitnehmer_pauschbetrag:
+    label: Arbeitnehmer-Pauschbetrag (Werbungskosten)
+    wert: 1230
+    einheit: EUR
+    rechtsgrundlage: "§ 9a Satz 1 Nr. 1a EStG"
+    hinweis: "Belege lohnen sich erst, wenn die Werbungskosten diesen Betrag uebersteigen."
+
+  sonderausgaben_pauschbetrag:
+    label: Sonderausgaben-Pauschbetrag
+    wert: 36
+    einheit: EUR
+    verdoppelt_bei_zusammenveranlagung: true
+    rechtsgrundlage: "§ 10c EStG"
+
+  sparer_pauschbetrag:
+    label: Sparer-Pauschbetrag
+    wert: 1000
+    einheit: EUR
+    verdoppelt_bei_zusammenveranlagung: true
+    rechtsgrundlage: "§ 20 Abs. 9 EStG"
+
+  entfernungspauschale_bis_20km:
+    label: Entfernungspauschale, 1. bis 20. Kilometer
+    wert: 0.30
+    einheit: EUR_pro_km
+    rechtsgrundlage: "§ 9 Abs. 1 Satz 3 Nr. 4 EStG"
+
+  entfernungspauschale_ab_21km:
+    label: Entfernungspauschale ab dem 21. Kilometer
+    wert: 0.38
+    einheit: EUR_pro_km
+    rechtsgrundlage: "§ 9 Abs. 1 Satz 3 Nr. 4 EStG"
+
+  homeoffice_pauschale_pro_tag:
+    label: Homeoffice-Tagespauschale
+    wert: 6
+    einheit: EUR_pro_tag
+    max_tage: 210
+    max_betrag: 1260
+    rechtsgrundlage: "§ 4 Abs. 5 Satz 1 Nr. 6c EStG"
+
+  arbeitszimmer_jahrespauschale:
+    label: Jahrespauschale haeusliches Arbeitszimmer
+    wert: 1260
+    einheit: EUR
+    rechtsgrundlage: "§ 4 Abs. 5 Satz 1 Nr. 6b EStG"
+    hinweis: "Nur wenn das Arbeitszimmer Mittelpunkt der gesamten Taetigkeit ist; alternativ tatsaechliche Kosten."
+
+  verpflegungsmehraufwand_inland_24h:
+    label: Verpflegungsmehraufwand Inland, ganzer Tag
+    wert: 28
+    einheit: EUR
+    rechtsgrundlage: "§ 9 Abs. 4a EStG"
+
+  verpflegungsmehraufwand_inland_8h:
+    label: Verpflegungsmehraufwand Inland, ueber 8 Stunden / An- und Abreisetag
+    wert: 14
+    einheit: EUR
+    rechtsgrundlage: "§ 9 Abs. 4a EStG"
+
+  kilometerpauschale_pkw_dienstreise:
+    label: Kilometersatz eigener Pkw bei Auswaertstaetigkeit
+    wert: 0.30
+    einheit: EUR_pro_km
+    rechtsgrundlage: "§ 9 Abs. 1 Satz 3 Nr. 4a EStG i.V.m. BRKG"
+
+  umzugskostenpauschale_berechtigter:
+    label: Umzugskostenpauschale Berechtigter (ab 01.03.2024)
+    wert: 964
+    einheit: EUR
+    rechtsgrundlage: "§ 10 BUKG"
+
+  umzugskostenpauschale_weitere_person:
+    label: Umzugskostenpauschale je weiterer Person (ab 01.03.2024)
+    wert: 643
+    einheit: EUR
+    rechtsgrundlage: "§ 10 BUKG"
+
+  handwerkerleistungen_hoechstbetrag_aufwand:
+    label: Handwerkerleistungen, beruecksichtigungsfaehiger Lohnanteil
+    wert: 6000
+    einheit: EUR
+    ermaessigung_prozent: 20
+    max_steuerermaessigung: 1200
+    rechtsgrundlage: "§ 35a Abs. 3 EStG"
+    hinweis: "Nur Lohn-, Fahrt- und Maschinenkosten, kein Material. Unbare Zahlung zwingend."
+
+  haushaltsnahe_dienstleistungen_hoechstbetrag_aufwand:
+    label: Haushaltsnahe Dienstleistungen, beruecksichtigungsfaehiger Aufwand
+    wert: 20000
+    einheit: EUR
+    ermaessigung_prozent: 20
+    max_steuerermaessigung: 4000
+    rechtsgrundlage: "§ 35a Abs. 2 EStG"
+
+  haushaltsnahe_minijob_hoechstbetrag_aufwand:
+    label: Haushaltsnahes Beschaeftigungsverhaeltnis (Minijob)
+    wert: 2550
+    einheit: EUR
+    ermaessigung_prozent: 20
+    max_steuerermaessigung: 510
+    rechtsgrundlage: "§ 35a Abs. 1 EStG"
+
+  kinderbetreuungskosten:
+    label: Kinderbetreuungskosten
+    wert: 6000
+    einheit: EUR
+    abziehbarer_anteil: 0.6667
+    max_abzug: 4000
+    rechtsgrundlage: "§ 10 Abs. 1 Nr. 5 EStG"
+    hinweis: "Zwei Drittel der Aufwendungen, hoechstens 4.000 EUR je Kind bis 14 Jahre. Unbare Zahlung zwingend."
+
+  kinderfreibetrag:
+    label: Kinderfreibetrag (beide Elternteile)
+    wert: 6612
+    einheit: EUR
+    rechtsgrundlage: "§ 32 Abs. 6 EStG"
+
+  bea_freibetrag:
+    label: Freibetrag Betreuung, Erziehung, Ausbildung (beide Elternteile)
+    wert: 2928
+    einheit: EUR
+    rechtsgrundlage: "§ 32 Abs. 6 EStG"
+
+  kindergeld_monatlich:
+    label: Kindergeld je Kind und Monat
+    wert: 250
+    einheit: EUR
+
+  ausbildungsfreibetrag:
+    label: Ausbildungsfreibetrag (auswaerts untergebrachtes volljaehriges Kind)
+    wert: 1200
+    einheit: EUR
+    rechtsgrundlage: "§ 33a Abs. 2 EStG"
+
+  vorsorgeaufwendungen_hoechstbetrag:
+    label: Hoechstbetrag Altersvorsorgeaufwendungen
+    wert: 27566
+    einheit: EUR
+    verdoppelt_bei_zusammenveranlagung: true
+    rechtsgrundlage: "§ 10 Abs. 3 EStG"
+    hinweis: "Seit 2023 zu 100 % als Sonderausgaben abziehbar."
+
+  riester_hoechstbetrag:
+    label: Riester, Sonderausgabenabzug Hoechstbetrag
+    wert: 2100
+    einheit: EUR
+    rechtsgrundlage: "§ 10a EStG"
+
+  spenden_hoechstgrenze_prozent:
+    label: Spendenabzug, Hoechstgrenze
+    wert: 20
+    einheit: prozent_gesamtbetrag_der_einkuenfte
+    rechtsgrundlage: "§ 10b Abs. 1 EStG"
+    hinweis: "Bis 300 EUR je Zuwendung genuegt der Zahlungsbeleg (vereinfachter Nachweis)."
+
+  spenden_vereinfachter_nachweis_grenze:
+    label: Vereinfachter Zuwendungsnachweis bis
+    wert: 300
+    einheit: EUR
+    rechtsgrundlage: "§ 50 Abs. 4 EStDV"
+
+  uebungsleiterpauschale:
+    label: Uebungsleiterpauschale
+    wert: 3000
+    einheit: EUR
+    rechtsgrundlage: "§ 3 Nr. 26 EStG"
+
+  ehrenamtspauschale:
+    label: Ehrenamtspauschale
+    wert: 840
+    einheit: EUR
+    rechtsgrundlage: "§ 3 Nr. 26a EStG"
+
+  gwg_grenze_netto:
+    label: Geringwertige Wirtschaftsgueter, Sofortabzug
+    wert: 800
+    einheit: EUR_netto
+    rechtsgrundlage: "§ 6 Abs. 2 EStG"
+    hinweis: "952 EUR brutto bei 19 % USt. Darueber Abschreibung ueber die Nutzungsdauer."
+
+  arbeitsmittel_nichtbeanstandungsgrenze:
+    label: Arbeitsmittel ohne Einzelnachweis (Verwaltungspraxis)
+    wert: 110
+    einheit: EUR
+    hinweis: "Kein Rechtsanspruch, wird von vielen Finanzaemtern anerkannt."
+
+  kontofuehrungsgebuehren_pauschale:
+    label: Kontofuehrungsgebuehren pauschal
+    wert: 16
+    einheit: EUR
+    hinweis: "Verwaltungspraxis, kein Rechtsanspruch."
+
+  bewerbungskosten_pauschale_mit_mappe:
+    label: Bewerbungskosten je Bewerbung mit Mappe (Verwaltungspraxis)
+    wert: 8.50
+    einheit: EUR
+
+  bewerbungskosten_pauschale_online:
+    label: Bewerbungskosten je Online-Bewerbung (Verwaltungspraxis)
+    wert: 2.50
+    einheit: EUR
+
+  private_veraeusserungsgeschaefte_freigrenze:
+    label: Freigrenze private Veraeusserungsgeschaefte
+    wert: 1000
+    einheit: EUR
+    rechtsgrundlage: "§ 23 Abs. 3 Satz 5 EStG"
+    hinweis: "Freigrenze, nicht Freibetrag: ein Euro darueber macht den gesamten Gewinn steuerpflichtig."
+
+  doppelte_haushaltsfuehrung_unterkunft_monat:
+    label: Doppelte Haushaltsfuehrung, Unterkunftskosten Inland je Monat
+    wert: 1000
+    einheit: EUR
+    rechtsgrundlage: "§ 9 Abs. 1 Satz 3 Nr. 5 EStG"
+
+  unterhalt_hoechstbetrag:
+    label: Unterhalt an beduerftige Personen, Hoechstbetrag
+    wert: 11784
+    einheit: EUR
+    rechtsgrundlage: "§ 33a Abs. 1 EStG"
+
+  pflege_pauschbetrag_grad_2:
+    label: Pflege-Pauschbetrag Pflegegrad 2
+    wert: 600
+    einheit: EUR
+    rechtsgrundlage: "§ 33b Abs. 6 EStG"
+
+  pflege_pauschbetrag_grad_3:
+    label: Pflege-Pauschbetrag Pflegegrad 3
+    wert: 1100
+    einheit: EUR
+    rechtsgrundlage: "§ 33b Abs. 6 EStG"
+
+  pflege_pauschbetrag_grad_4_5:
+    label: Pflege-Pauschbetrag Pflegegrad 4 oder 5
+    wert: 1800
+    einheit: EUR
+    rechtsgrundlage: "§ 33b Abs. 6 EStG"
+
+behinderten_pauschbetrag:
+  rechtsgrundlage: "§ 33b Abs. 3 EStG"
+  staffel:
+    - {gdb: 20, betrag: 384}
+    - {gdb: 30, betrag: 620}
+    - {gdb: 40, betrag: 860}
+    - {gdb: 50, betrag: 1140}
+    - {gdb: 60, betrag: 1440}
+    - {gdb: 70, betrag: 1780}
+    - {gdb: 80, betrag: 2120}
+    - {gdb: 90, betrag: 2460}
+    - {gdb: 100, betrag: 2840}
+  merkzeichen:
+    - {zeichen: "H, Bl oder TBl", betrag: 7400}
+  fahrtkostenpauschale:
+    - {voraussetzung: "GdB ab 80 oder ab 70 mit Merkzeichen G", betrag: 900}
+    - {voraussetzung: "Merkzeichen aG, Bl, TBl oder H", betrag: 4500}
+
+zumutbare_belastung:
+  rechtsgrundlage: "§ 33 Abs. 3 EStG"
+  hinweis: >-
+    Stufenweise Berechnung nach BFH VI R 75/14: die Prozentsaetze gelten jeweils
+    nur fuer den Teilbetrag der Einkuenfte in der Stufe.
+  stufen_gesamtbetrag_der_einkuenfte: [15340, 51130]
+  saetze:
+    ledig_ohne_kind: [5, 6, 7]
+    verheiratet_ohne_kind: [4, 5, 6]
+    ein_oder_zwei_kinder: [2, 3, 4]
+    drei_oder_mehr_kinder: [1, 1, 2]
+
+fristen:
+  abgabe_ohne_berater: "2025-07-31"
+  abgabe_mit_berater: "2026-04-30"
+  einspruchsfrist_tage: 30
+  festsetzungsverjaehrung_antragsveranlagung: "2028-12-31"
+  hinweis: >-
+    Bei Antragsveranlagung (freiwillige Abgabe) betraegt die Frist vier Jahre
+    nach Ablauf des Veranlagungszeitraums.

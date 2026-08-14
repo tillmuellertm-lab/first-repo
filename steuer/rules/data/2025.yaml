@@ -1,0 +1,74 @@
+jahr: 2025
+stand: "2026-08-14"
+status: gepflegt
+erbt_von: 2024
+hinweis: >-
+  Nur die Werte, die von 2024 abweichen, sind hier gepflegt. Alles Weitere wird
+  aus 2024.yaml und basis.yaml geerbt. Vor der Abgabe mit
+  "steuer recht-update --jahr 2025" gegen aktuelle Quellen pruefen.
+quellen:
+  - "EStG in der fuer den VZ 2025 geltenden Fassung"
+  - "Steuerfortentwicklungsgesetz"
+
+werte:
+  grundfreibetrag:
+    label: Grundfreibetrag
+    wert: 12096
+    einheit: EUR
+    verdoppelt_bei_zusammenveranlagung: true
+    rechtsgrundlage: "§ 32a Abs. 1 EStG"
+
+  kinderfreibetrag:
+    label: Kinderfreibetrag (beide Elternteile)
+    wert: 6672
+    einheit: EUR
+    rechtsgrundlage: "§ 32 Abs. 6 EStG"
+
+  kindergeld_monatlich:
+    label: Kindergeld je Kind und Monat
+    wert: 255
+    einheit: EUR
+
+  kinderbetreuungskosten:
+    label: Kinderbetreuungskosten
+    wert: 6000
+    einheit: EUR
+    abziehbarer_anteil: 0.8
+    max_abzug: 4800
+    rechtsgrundlage: "§ 10 Abs. 1 Nr. 5 EStG"
+    hinweis: >-
+      Ab 2025 sind 80 % der Aufwendungen abziehbar, hoechstens 4.800 EUR je Kind.
+      Unbare Zahlung weiterhin zwingend.
+
+  vorsorgeaufwendungen_hoechstbetrag:
+    label: Hoechstbetrag Altersvorsorgeaufwendungen
+    wert: 29344
+    einheit: EUR
+    verdoppelt_bei_zusammenveranlagung: true
+    rechtsgrundlage: "§ 10 Abs. 3 EStG"
+
+  unterhalt_hoechstbetrag:
+    label: Unterhalt an beduerftige Personen, Hoechstbetrag
+    wert: 12096
+    einheit: EUR
+    rechtsgrundlage: "§ 33a Abs. 1 EStG"
+    hinweis: "Ab 2025 nur noch per Ueberweisung, Barzahlungen werden nicht mehr anerkannt."
+
+fristen:
+  abgabe_ohne_berater: "2026-07-31"
+  abgabe_mit_berater: "2027-03-01"
+  einspruchsfrist_tage: 30
+  festsetzungsverjaehrung_antragsveranlagung: "2029-12-31"
+  hinweis: >-
+    Ab dem VZ 2025 gilt wieder die regulaere Beraterfrist nach § 149 Abs. 3 AO
+    (Ende Februar des uebernaechsten Jahres, hier verschoben auf den 01.03.2027,
+    weil der 28.02.2027 ein Sonntag ist).
+
+chancen:
+  - id: unterhalt_ueberweisung
+    titel: Unterhalt nur noch unbar zahlen
+    gilt_wenn: [unterhalt]
+    potenzial_eur: 500
+    beschreibung: >-
+      Seit 2025 werden Unterhaltsleistungen nur noch anerkannt, wenn sie
+      ueberwiesen wurden. Barzahlungen gehen vollstaendig verloren.
