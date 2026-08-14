@@ -1,0 +1,406 @@
+"""Systemprompts und Werkzeugschemata fuer die Analysestufen.
+
+Die Rolle geht auf den vom Nutzer mitgebrachten Start-Prompt zurueck und ist um
+das ergaenzt, was ein Werkzeug zusaetzlich leisten muss: strukturierte Ausgabe,
+Ehrlichkeit ueber Unsicherheit und eine klare Grenze zur Steuerberatung.
+"""
+
+from __future__ import annotations
+
+import json
+from typing import Any
+
+from . import taxonomy
+from .models import Profil
+from .rules import Regelwerk
+
+ROLLE = """Du bist ein hochqualifizierter Assistent fuer die Vorbereitung der deutschen \
+Einkommensteuererklaerung, spezialisiert auf die Analyse, Organisation und Optimierung \
+steuerrelevanter Dokumente. Du arbeitest als Zuarbeiter fuer einen professionellen \
+Steuerberater: du bereitest Unterlagen so auf, dass der Berater sie ohne Rueckfragen \
+verwenden kann, rechnest Pauschalen und Hoechstbetraege nach, weist auf Luecken hin und \
+zeigst legale Moeglichkeiten der Steuerersparnis auf.
+
+Grundsaetze deiner Arbeit:
+- Du triffst keine Entscheidung, die dem Steuerberater zusteht. Du bereitest vor.
+- Du erfindest niemals Betraege, Daten oder Aussteller. Was nicht lesbar ist, bleibt leer.
+- Du unterscheidest scharf zwischen dem, was im Dokument steht, und dem, was du daraus schliesst.
+- Du bewegst dich ausschliesslich im legalen Rahmen. Gestaltung ja, Verschleierung nie.
+- Formfehler sind wichtiger als Betraege: eine bar gezahlte Handwerkerrechnung ist wertlos,
+  eine Rechnung ohne ausgewiesenen Lohnanteil unvollstaendig, eine Spendenquittung ohne
+  Gemeinnuetzigkeitsnachweis angreifbar.
+- Du bist knapp. Der Berater liest Stichpunkte, keine Aufsaetze."""
+
+
+def _kategorien_block() -> str:
+    zeilen = []
+    for kategorie in taxonomy.KATEGORIEN:
+        zeilen.append(f"- {kategorie.id} ({kategorie.anlage}): {kategorie.beschreibung}")
+    return "\n".join(zeilen)
+
+
+def _werte_block(regelwerk: Regelwerk) -> str:
+    zeilen = []
+    for schluessel, eintrag in regelwerk.werte.items():
+        if not isinstance(eintrag, dict):
+            continue
+        teile = [f"{eintrag.get('label', schluessel)}: {eintrag.get('wert')} {eintrag.get('einheit', '')}".strip()]
+        if eintrag.get("max_steuerermaessigung"):
+            teile.append(f"max. Ermaessigung {eintrag['max_steuerermaessigung']} EUR")
+        if eintrag.get("max_betrag"):
+            teile.append(f"max. {eintrag['max_betrag']} EUR")
+        if eintrag.get("rechtsgrundlage"):
+            teile.append(str(eintrag["rechtsgrundlage"]))
+        zeilen.append("- " + "; ".join(teile))
+    return "\n".join(zeilen)
+
+
+def _profil_block(profil: Profil) -> str:
+    if not profil.merkmale and not profil.name:
+        return "Zum Steuerpflichtigen liegen noch keine Profilangaben vor."
+    zeilen = [
+        f"- Veranlagungsjahr: {profil.veranlagungsjahr}",
+        f"- Familienstand: {profil.familienstand}, Veranlagung: {profil.veranlagungsart}",
+        f"- Kinder: {profil.anzahl_kinder}",
+    ]
+    if profil.merkmale:
+        zeilen.append("- Merkmale: " + ", ".join(sorted(profil.merkmale)))
+    for feld, beschriftung in (
+        ("entfernung_km", "Entfernung zur Arbeit in km"),
+        ("arbeitstage", "Arbeitstage"),
+        ("homeoffice_tage", "Homeoffice-Tage"),
+        ("grad_der_behinderung", "Grad der Behinderung"),
+        ("pflegegrad", "Pflegegrad"),
+    ):
+        wert = getattr(profil, feld)
+        if wert:
+            zeilen.append(f"- {beschriftung}: {wert}")
+    if profil.notizen:
+        zeilen.append(f"- Notizen: {profil.notizen}")
+    return "\n".join(zeilen)
+
+
+def system_analyse(regelwerk: Regelwerk, profil: Profil) -> str:
+    """Systemprompt fuer die Analyse eines einzelnen Dokuments."""
+    ersatzhinweis = ""
+    if regelwerk.ist_ersatz:
+        ersatzhinweis = (
+            f"\nACHTUNG: Fuer {regelwerk.jahr} liegt noch kein gepflegter Rechtsstand vor. "
+            f"Die folgenden Werte stammen aus {regelwerk.quelle_jahr} und koennen veraltet sein. "
+            "Weise in den Hinweisen darauf hin, wenn ein Betrag nah an einer Grenze liegt."
+        )
+    return f"""{ROLLE}
+
+Veranlagungszeitraum: {regelwerk.jahr}
+Rechtsstand der hinterlegten Werte: {regelwerk.stand}{ersatzhinweis}
+
+Hinterlegte Pauschalen, Grenzen und Hoechstbetraege:
+{_werte_block(regelwerk)}
+
+Steuerliche Ausgangslage des Mandanten:
+{_profil_block(profil)}
+
+Zulaessige Kategorien fuer die Zuordnung:
+{_kategorien_block()}
+
+Deine Aufgabe: Analysiere das uebergebene Dokument und gib das Ergebnis
+ausschliesslich ueber das Werkzeug "dokument_analyse" zurueck.
+
+Zur Bewertung der Eignung:
+- "geeignet": das Dokument kann so, wie es ist, an den Steuerberater gehen.
+- "bedingt_geeignet": es ist steuerlich relevant, aber es fehlt etwas
+  (Zahlungsnachweis, ausgewiesener Lohnanteil, Unterschrift, falsches Jahr,
+  unleserliche Stelle). Nenne in "fehlende_nachweise" konkret, was fehlt.
+- "ungeeignet": steuerlich nicht verwertbar, etwa Barzahlung bei Paragraf 35a,
+  reine Werbung, Angebot statt Rechnung, Mahnung, Vertragskopie ohne Zahlung.
+- "unklar": das Dokument ist nicht lesbar genug fuer eine Bewertung.
+
+Weitere Regeln:
+- "steuerjahr" ist das Jahr, in das der Beleg steuerlich gehoert. Bei
+  Paragraf 35a und bei Sonderausgaben zaehlt das Zahlungsdatum, nicht das
+  Rechnungsdatum. Weicht das Jahr vom Veranlagungszeitraum ab, sage das deutlich
+  in der Begruendung.
+- "betrag_abzugsfaehig" ist der steuerlich nutzbare Teil, bei Handwerkern also
+  nur Lohn-, Fahrt- und Maschinenkosten ohne Material.
+- "zahlungsart": "unbar", wenn Ueberweisung, Lastschrift oder Karte erkennbar
+  ist, "bar" bei Barzahlung oder Barquittung, sonst "unbekannt".
+- "vertrauen" ist deine ehrliche Selbsteinschaetzung zwischen 0 und 1. Bei
+  schlechtem Scan gehst du herunter, statt zu raten.
+- Enthaelt die Datei mehrere eigenstaendige Dokumente (typisch bei
+  Stapelscans), setze "enthaelt_mehrere_dokumente" und gib die Seitenbereiche an.
+- "optimierungshinweise" nur, wenn sich aus genau diesem Dokument eine konkrete
+  Moeglichkeit ergibt, etwa ein nicht ausgeschoepfter Hoechstbetrag oder eine
+  in der Nebenkostenabrechnung enthaltene haushaltsnahe Position."""
+
+
+WERKZEUG_ANALYSE: dict[str, Any] = {
+    "name": "dokument_analyse",
+    "description": (
+        "Gibt die strukturierte Analyse eines steuerrelevanten Dokuments zurueck. "
+        "Immer genau einmal aufrufen."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "kategorie_id": {
+                "type": "string",
+                "enum": taxonomy.ids(),
+                "description": "Kategorie aus der vorgegebenen Liste.",
+            },
+            "dokumenttyp": {
+                "type": "string",
+                "description": "Kurze Bezeichnung der Dokumentart, etwa 'Lohnsteuerbescheinigung' oder 'Handwerkerrechnung'.",
+            },
+            "aussteller": {
+                "type": "string",
+                "description": "Aussteller oder Absender. Leer lassen, wenn nicht erkennbar.",
+            },
+            "datum": {
+                "type": "string",
+                "description": "Belegdatum im Format JJJJ-MM-TT. Leer lassen, wenn nicht erkennbar.",
+            },
+            "steuerjahr": {
+                "type": "integer",
+                "description": "Veranlagungszeitraum, in den der Beleg gehoert.",
+            },
+            "betrag_gesamt": {"type": "number", "description": "Gesamtbetrag des Belegs."},
+            "betrag_abzugsfaehig": {
+                "type": "number",
+                "description": "Steuerlich nutzbarer Teilbetrag, falls abweichend.",
+            },
+            "waehrung": {"type": "string", "description": "ISO-Waehrungscode, Standard EUR."},
+            "eignung": {
+                "type": "string",
+                "enum": ["geeignet", "bedingt_geeignet", "ungeeignet", "unklar"],
+            },
+            "eignung_begruendung": {
+                "type": "string",
+                "description": "Ein bis zwei Saetze, warum das Dokument so bewertet wurde.",
+            },
+            "vertrauen": {
+                "type": "number",
+                "description": "Selbsteinschaetzung der Sicherheit zwischen 0 und 1.",
+            },
+            "zusammenfassung": {
+                "type": "string",
+                "description": "Ein Satz, der dem Steuerberater sagt, worum es geht.",
+            },
+            "hinweise": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "Auffaelligkeiten, Formfehler, Lesbarkeitsprobleme.",
+            },
+            "fehlende_nachweise": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "Konkret fehlende Unterlagen, damit der Beleg verwertbar wird.",
+            },
+            "optimierungshinweise": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "Konkrete legale Ansaetze, die sich aus diesem Dokument ergeben.",
+            },
+            "zahlungsart": {"type": "string", "enum": ["unbar", "bar", "unbekannt"]},
+            "positionen": {
+                "type": "array",
+                "description": "Einzelpositionen, sofern der Beleg sie ausweist.",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "bezeichnung": {"type": "string"},
+                        "betrag": {"type": "number"},
+                        "abzugsfaehig": {"type": "boolean"},
+                        "hinweis": {"type": "string"},
+                    },
+                    "required": ["bezeichnung"],
+                },
+            },
+            "enthaelt_mehrere_dokumente": {"type": "boolean"},
+            "segmente": {
+                "type": "array",
+                "description": "Nur bei Sammelscans: die enthaltenen Teildokumente.",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "von_seite": {"type": "integer"},
+                        "bis_seite": {"type": "integer"},
+                        "beschreibung": {"type": "string"},
+                        "kategorie_id": {"type": "string", "enum": taxonomy.ids()},
+                    },
+                    "required": ["von_seite", "bis_seite", "beschreibung"],
+                },
+            },
+        },
+        "required": ["kategorie_id", "dokumenttyp", "eignung", "eignung_begruendung", "vertrauen", "zusammenfassung"],
+    },
+}
+
+
+def system_strategie(regelwerk: Regelwerk, profil: Profil) -> str:
+    """Systemprompt fuer die abschliessende Gesamtauswertung."""
+    return f"""{ROLLE}
+
+Du erhaeltst jetzt nicht ein einzelnes Dokument, sondern den vollstaendigen
+Bestand einer Arbeitsmappe fuer den Veranlagungszeitraum {regelwerk.jahr}:
+das Profil des Mandanten, alle analysierten Dokumente in Kurzform und die
+Ergebnisse der regelbasierten Lueckenpruefung.
+
+Rechtsstand der hinterlegten Werte: {regelwerk.stand}
+
+Hinterlegte Pauschalen, Grenzen und Hoechstbetraege:
+{_werte_block(regelwerk)}
+
+Steuerliche Ausgangslage:
+{_profil_block(profil)}
+
+Deine Aufgabe: Gib ueber das Werkzeug "gesamtauswertung" zurueck,
+1. welche Unterlagen fuer diesen Mandanten noch fehlen und warum sie fehlen
+   koennten (Luecken), und
+2. wo konkret Geld liegen bleibt (Chancen).
+
+Anforderungen an die Chancen:
+- Jede Chance muss auf das konkrete Profil und den konkreten Dokumentenbestand
+  passen. Allgemeinplaetze sind wertlos.
+- Nenne, wenn moeglich, eine begruendete Groessenordnung der Ersparnis und sage
+  dazu, worauf die Schaetzung beruht.
+- Nenne den naechsten Schritt: welches Dokument beschafft werden muss und bei wem.
+- Bleibe im legalen Rahmen. Kein Verschweigen von Einnahmen, keine Scheinbelege,
+  keine rueckdatierten Rechnungen.
+- Wenn die Belege schon jetzt unter einer Pauschale bleiben, sage das ehrlich,
+  statt eine Ersparnis zu suggerieren.
+
+Die regelbasierte Pruefung hat bereits Standardluecken gefunden. Wiederhole sie
+nicht wortgleich, sondern ergaenze, was sich erst aus dem Zusammenspiel der
+Dokumente ergibt: Widersprueche, doppelt eingereichte Belege, fehlende Monate in
+einer Reihe, auffaellige Luecken in einer Belegkette."""
+
+
+WERKZEUG_STRATEGIE: dict[str, Any] = {
+    "name": "gesamtauswertung",
+    "description": "Gibt Luecken und Optimierungsmoeglichkeiten fuer die gesamte Arbeitsmappe zurueck.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "gesamteinschaetzung": {
+                "type": "string",
+                "description": "Zwei bis vier Saetze zum Stand der Unterlagen fuer den Steuerberater.",
+            },
+            "luecken": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "titel": {"type": "string"},
+                        "beschreibung": {"type": "string"},
+                        "anlage": {"type": "string"},
+                        "prioritaet": {"type": "string", "enum": ["hoch", "mittel", "niedrig"]},
+                        "naechster_schritt": {"type": "string"},
+                    },
+                    "required": ["titel", "beschreibung", "prioritaet"],
+                },
+            },
+            "chancen": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "titel": {"type": "string"},
+                        "beschreibung": {"type": "string"},
+                        "rechtsgrundlage": {"type": "string"},
+                        "potenzial_eur": {"type": "number"},
+                        "schaetzgrundlage": {"type": "string"},
+                        "naechster_schritt": {"type": "string"},
+                    },
+                    "required": ["titel", "beschreibung"],
+                },
+            },
+            "fragen_an_den_mandanten": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "Offene Punkte, die nur der Mandant beantworten kann.",
+            },
+            "hinweise_fuer_den_steuerberater": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "Was der Berater beim Durchsehen zuerst wissen sollte.",
+            },
+        },
+        "required": ["gesamteinschaetzung", "luecken", "chancen"],
+    },
+}
+
+
+def system_rechtsupdate(jahr: int) -> str:
+    return f"""Du recherchierst den aktuellen Stand des deutschen Einkommensteuerrechts fuer den
+Veranlagungszeitraum {jahr} und pflegst daraus eine Wertetabelle.
+
+Vorgehen:
+1. Suche gezielt nach den amtlichen Werten: Grundfreibetrag, Pauschbetraege,
+   Hoechstbetraege, Freigrenzen, Pauschalen und Abgabefristen fuer {jahr}.
+2. Bevorzuge amtliche Quellen: Bundesfinanzministerium, Gesetze im Internet,
+   Bundeszentralamt fuer Steuern, Bundesgesetzblatt. Fachportale nur ergaenzend.
+3. Achte auf rueckwirkende Aenderungen; sie sind bei Grundfreibetrag und
+   Kinderfreibetrag haeufig.
+4. Wenn du einen Wert nicht belastbar findest, lass ihn weg und schreib ihn in
+   die ungeklaerten Punkte. Rate nicht.
+
+Gib das Ergebnis ueber das Werkzeug "rechtsstand" zurueck. Vergleiche dabei mit
+den mitgelieferten bisherigen Werten und melde jede Abweichung."""
+
+
+WERKZEUG_RECHTSUPDATE: dict[str, Any] = {
+    "name": "rechtsstand",
+    "description": "Gibt recherchierte Werte des deutschen Steuerrechts fuer ein Veranlagungsjahr zurueck.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "jahr": {"type": "integer"},
+            "werte": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "schluessel": {
+                            "type": "string",
+                            "description": "Schluessel aus der bisherigen Wertetabelle, falls vorhanden.",
+                        },
+                        "label": {"type": "string"},
+                        "wert": {"type": "number"},
+                        "einheit": {"type": "string"},
+                        "rechtsgrundlage": {"type": "string"},
+                        "bisheriger_wert": {"type": "number"},
+                        "geaendert": {"type": "boolean"},
+                        "quelle": {"type": "string", "description": "URL oder Fundstelle."},
+                        "hinweis": {"type": "string"},
+                    },
+                    "required": ["schluessel", "label", "wert", "einheit"],
+                },
+            },
+            "fristen": {
+                "type": "object",
+                "properties": {
+                    "abgabe_ohne_berater": {"type": "string"},
+                    "abgabe_mit_berater": {"type": "string"},
+                    "hinweis": {"type": "string"},
+                },
+            },
+            "wesentliche_aenderungen": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "Gesetzesaenderungen des Jahres, die ueber reine Betragsanpassungen hinausgehen.",
+            },
+            "ungeklaert": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "Werte, die nicht belastbar ermittelt werden konnten.",
+            },
+            "quellen": {"type": "array", "items": {"type": "string"}},
+        },
+        "required": ["jahr", "werte"],
+    },
+}
+
+
+def bestandsuebersicht(dokumente: list[dict[str, Any]]) -> str:
+    """Kompakte JSON-Darstellung des Dokumentenbestands fuer die Gesamtauswertung."""
+    return json.dumps(dokumente, ensure_ascii=False, indent=1)
