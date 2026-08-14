@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% block titel %}Profil{% endblock %}
+
+{% block inhalt %}
+<h1>Steuerliche Ausgangslage</h1>
+<p class="einleitung">
+  Aus diesen Angaben ergibt sich, welche Unterlagen ueberhaupt zu erwarten sind. Ohne sie
+  kann der Assistent zwar Dokumente einordnen, aber nicht sagen, was fehlt.
+  Die Angaben bleiben ausschliesslich in dieser Arbeitsmappe.
+</p>
+
+{% if gespeichert %}<div class="banner erfolg">Profil gespeichert.</div>{% endif %}
+
+<form method="post" class="formular">
+  <fieldset>
+    <legend>Person</legend>
+    <label>Name
+      <input type="text" name="name" value="{{ profil.name }}" autocomplete="off">
+    </label>
+    <label>Familienstand
+      <select name="familienstand">
+        {% for wert in ['ledig', 'verheiratet', 'geschieden', 'verwitwet'] %}
+          <option value="{{ wert }}" {% if profil.familienstand == wert %}selected{% endif %}>{{ wert }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Veranlagung
+      <select name="veranlagungsart">
+        <option value="einzel" {% if profil.veranlagungsart == 'einzel' %}selected{% endif %}>Einzelveranlagung</option>
+        <option value="zusammen" {% if profil.veranlagungsart == 'zusammen' %}selected{% endif %}>Zusammenveranlagung</option>
+      </select>
+    </label>
+    <label>Anzahl Kinder
+      <input type="number" name="anzahl_kinder" min="0" max="20" value="{{ profil.anzahl_kinder }}">
+    </label>
+  </fieldset>
+
+  <fieldset>
+    <legend>Was trifft zu?</legend>
+    <div class="merkmalsraster">
+      {% for kennung, beschriftung in merkmale %}
+      <label class="merkmal">
+        <input type="checkbox" name="merkmale" value="{{ kennung }}"
+               {% if profil.hat(kennung) %}checked{% endif %}>
+        <span>{{ beschriftung }}</span>
+      </label>
+      {% endfor %}
+    </div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Zahlen fuer die Berechnung</legend>
+    <p class="klein">
+      Freiwillig, aber wirksam: daraus rechnet der Assistent Entfernungspauschale,
+      Homeoffice-Pauschale und die zumutbare Belastung aus.
+    </p>
+    <label>Einfache Entfernung zur Arbeit in km
+      <input type="text" name="entfernung_km" value="{{ profil.entfernung_km if profil.entfernung_km is not none else '' }}">
+    </label>
+    <label>Arbeitstage im Jahr
+      <input type="number" name="arbeitstage" min="0" max="366"
+             value="{{ profil.arbeitstage if profil.arbeitstage is not none else '' }}">
+    </label>
+    <label>Homeoffice-Tage im Jahr
+      <input type="number" name="homeoffice_tage" min="0" max="366"
+             value="{{ profil.homeoffice_tage if profil.homeoffice_tage is not none else '' }}">
+    </label>
+    <label>Grad der Behinderung
+      <input type="number" name="grad_der_behinderung" min="0" max="100"
+             value="{{ profil.grad_der_behinderung if profil.grad_der_behinderung is not none else '' }}">
+    </label>
+    <label>Pflegegrad der gepflegten Person
+      <input type="number" name="pflegegrad" min="0" max="5"
+             value="{{ profil.pflegegrad if profil.pflegegrad is not none else '' }}">
+    </label>
+    <label>Bruttoarbeitslohn
+      <input type="text" name="bruttoarbeitslohn"
+             value="{{ profil.bruttoarbeitslohn if profil.bruttoarbeitslohn is not none else '' }}">
+    </label>
+    <label>Gesamtbetrag der Einkuenfte
+      <input type="text" name="gesamtbetrag_der_einkuenfte"
+             value="{{ profil.gesamtbetrag_der_einkuenfte if profil.gesamtbetrag_der_einkuenfte is not none else '' }}">
+      <small>Steht im Steuerbescheid des Vorjahres und wird fuer die zumutbare Belastung gebraucht.</small>
+    </label>
+  </fieldset>
+
+  <fieldset>
+    <legend>Notizen fuer den Steuerberater</legend>
+    <label>
+      <textarea name="notizen" rows="4"
+                placeholder="Besonderheiten des Jahres: Jobwechsel im Maerz, Zahnersatz, geerbte Wohnung ...">{{ profil.notizen }}</textarea>
+    </label>
+  </fieldset>
+
+  <button type="submit" class="knopf haupt">Profil speichern</button>
+</form>
+{% endblock %}

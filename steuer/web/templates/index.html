@@ -1,0 +1,170 @@
+{% extends "base.html" %}
+{% block titel %}Uebersicht{% endblock %}
+
+{% block inhalt %}
+<section class="kacheln">
+  <div class="kachel">
+    <div class="titel">Dokumente</div>
+    <div class="wert">{{ kennzahlen.anzahl_dokumente }}</div>
+    <div class="fuss">{{ kennzahlen.anzahl_analysiert }} analysiert</div>
+  </div>
+  <div class="kachel gut">
+    <div class="titel">Einreichbar</div>
+    <div class="wert">{{ kennzahlen.anzahl_geeignet }}</div>
+    <div class="fuss">ohne Rueckfragen verwendbar</div>
+  </div>
+  <div class="kachel achtung">
+    <div class="titel">Offene Punkte</div>
+    <div class="wert">{{ kennzahlen.anzahl_bedingt }}</div>
+    <div class="fuss">Nachweis fehlt noch</div>
+  </div>
+  <div class="kachel">
+    <div class="titel">Werbungskosten</div>
+    <div class="wert">{{ kennzahlen.werbungskosten_gesamt | euro }}</div>
+    <div class="fuss">
+      {% if kennzahlen.werbungskosten_ueber_pauschbetrag > 0 %}
+        {{ kennzahlen.werbungskosten_ueber_pauschbetrag | euro }} ueber dem Pauschbetrag
+      {% else %}
+        noch {{ (-kennzahlen.werbungskosten_ueber_pauschbetrag) | euro }} bis zum Pauschbetrag
+      {% endif %}
+    </div>
+  </div>
+  <div class="kachel">
+    <div class="titel">Haushaltsnah, 20 %</div>
+    <div class="wert">{{ kennzahlen.haushaltsnahe_ermaessigung_geschaetzt | euro }}</div>
+    <div class="fuss">mindert die Steuer direkt</div>
+  </div>
+  <div class="kachel">
+    <div class="titel">Chancen</div>
+    <div class="wert">{{ auswertung.chancen | length }}</div>
+    <div class="fuss"><a href="{{ url_for('befunde') }}">ansehen</a></div>
+  </div>
+</section>
+
+<section class="werkbank">
+  <div id="ablage" class="ablage">
+    <p class="gross">Scans hierher ziehen</p>
+    <p class="klein">PDF, PNG, JPG · oder Dateien direkt in <code>{{ mappe.eingang }}</code> ablegen</p>
+    <input type="file" id="dateiwahl" multiple hidden
+           accept=".pdf,.png,.jpg,.jpeg,.gif,.webp,.txt,.csv,.md">
+    <button type="button" class="knopf" onclick="document.getElementById('dateiwahl').click()">
+      Dateien auswaehlen
+    </button>
+    <button type="button" class="knopf leise" data-aktion="eingang-einlesen">
+      Eingangsordner einlesen
+    </button>
+  </div>
+
+  <div class="aktionen">
+    <button type="button" class="knopf haupt" data-aktion="analyse"
+            {% if not schluessel_vorhanden %}disabled{% endif %}>
+      Neue Dokumente analysieren
+      {% if nicht_analysiert %}<span class="zaehler">{{ nicht_analysiert | length }}</span>{% endif %}
+    </button>
+    <button type="button" class="knopf" data-aktion="analyse-alle"
+            {% if not schluessel_vorhanden %}disabled{% endif %}>
+      Alles neu analysieren
+    </button>
+    <label class="schalter"><input type="checkbox" id="mit-gesamtauswertung" checked>
+      Gesamtauswertung durch das Modell</label>
+    <label class="schalter"><input type="checkbox" id="mit-paket" checked>
+      ZIP-Paket packen</label>
+    <button type="button" class="knopf haupt" data-aktion="ordnen">
+      Ordnen und Uebersicht erzeugen
+    </button>
+  </div>
+</section>
+
+<section id="fortschritt" class="fortschritt" hidden>
+  <div class="balken"><div class="fuellung" id="fuellung"></div></div>
+  <p class="zeile"><span id="fortschritt-text">…</span></p>
+  <pre id="protokoll" class="protokoll"></pre>
+</section>
+
+{% if not mappe.dokumente %}
+<section class="leer">
+  <h2>Noch keine Unterlagen</h2>
+  <p>
+    Legen Sie Ihre Scans oben ab. Danach prueft der Assistent jedes Dokument einzeln:
+    worum es sich handelt, in welche Anlage es gehoert, ob es so einreichbar ist und
+    was gegebenenfalls noch fehlt.
+  </p>
+  <p>
+    Damit die Lueckenanalyse etwas taugt, lohnt sich vorher ein Blick ins
+    <a href="{{ url_for('profil') }}">Profil</a>: Erst daraus ergibt sich, welche Unterlagen
+    ueberhaupt zu erwarten sind.
+  </p>
+</section>
+{% else %}
+
+{% if auswertung.warnungen %}
+<section class="hinweisblock">
+  <h2>Sofort ansehen</h2>
+  {% for befund in auswertung.warnungen if befund.prioritaet == 'hoch' %}
+  <div class="hinweis hoch">
+    <strong>{{ befund.titel }}</strong>
+    <p>{{ befund.beschreibung }}</p>
+  </div>
+  {% endfor %}
+</section>
+{% endif %}
+
+<section>
+  <h2>Unterlagen nach Anlagen</h2>
+  {% for kategorie, dokumente in gruppen %}
+  <details class="gruppe" {% if kategorie.id not in ('nicht_steuerrelevant',) %}open{% endif %}>
+    <summary>
+      <span class="ordner">{{ kategorie.ordner }}</span>
+      <span class="label">{{ kategorie.label }}</span>
+      <span class="anlage">{{ kategorie.anlage }}</span>
+      <span class="anzahl">{{ dokumente | length }}</span>
+    </summary>
+    <table>
+      <thead>
+        <tr>
+          <th>Dokument</th><th>Datum</th><th>Aussteller</th>
+          <th class="betrag">Betrag</th><th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for dokument in dokumente %}
+        <tr>
+          <td>
+            <a href="{{ url_for('dokument', dokument_id=dokument.id) }}">
+              {{ dokument.analyse.dokumenttyp if dokument.analyse and dokument.analyse.dokumenttyp else dokument.dateiname }}
+            </a>
+            {% if dokument.analyse and dokument.analyse.zusammenfassung %}
+              <div class="klein">{{ dokument.analyse.zusammenfassung }}</div>
+            {% endif %}
+            {% if dokument.analyse and dokument.analyse.fehlende_nachweise %}
+              <div class="klein fehlt">Fehlt noch: {{ dokument.analyse.fehlende_nachweise | join('; ') }}</div>
+            {% endif %}
+            {% if dokument.manuelle_kategorie %}<div class="klein">manuell zugeordnet</div>{% endif %}
+          </td>
+          <td>{{ dokument.analyse.datum | datum if dokument.analyse else '' }}</td>
+          <td>{{ dokument.analyse.aussteller if dokument.analyse else '' }}</td>
+          <td class="betrag">
+            {% if dokument.analyse %}
+              {{ (dokument.analyse.betrag_abzugsfaehig or dokument.analyse.betrag_gesamt) | euro }}
+            {% endif %}
+          </td>
+          <td>
+            {% if dokument.analyse %}
+              <span class="marke {{ dokument.analyse.eignung }}">
+                {{ eignung_label.get(dokument.analyse.eignung, 'offen') }}
+              </span>
+            {% elif dokument.status == 'fehler' %}
+              <span class="marke ungeeignet">Fehler</span>
+            {% else %}
+              <span class="marke unklar">offen</span>
+            {% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </details>
+  {% endfor %}
+</section>
+{% endif %}
+{% endblock %}
