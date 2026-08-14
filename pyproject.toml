@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "steuer-assistent"
+version = "0.1.0"
+description = "Bereitet eingescannte Unterlagen fuer die deutsche Einkommensteuererklaerung als Zuarbeit fuer den Steuerberater auf."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+dependencies = [
+    "anthropic>=0.40",
+    "PyYAML>=6.0",
+    "pypdf>=4.0",
+    "Flask>=3.0",
+    "Pillow>=10.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+steuer = "steuer.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["steuer*"]
+
+[tool.setuptools.package-data]
+steuer = ["rules/data/*.yaml", "web/templates/*.html", "web/static/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
