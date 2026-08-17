@@ -73,7 +73,15 @@ def seitenzahl(pfad: Path) -> int | None:
     except ExtraktionsFehler:
         raise
     except Exception as fehler:  # beschaedigte PDFs sollen nicht den Lauf stoppen
-        LOG.warning("Seitenzahl von %s nicht ermittelbar: %s", pfad.name, fehler)
+        if "cryptography" in str(fehler):
+            # Verschluesselte PDFs, wie Arbeitgeber sie fuer Lohnunterlagen liefern.
+            LOG.warning(
+                "%s ist verschluesselt und kann ohne das Paket 'cryptography' nicht "
+                "gelesen werden. Behebung: pip install cryptography",
+                pfad.name,
+            )
+        else:
+            LOG.warning("Seitenzahl von %s nicht ermittelbar: %s", pfad.name, fehler)
         return None
 
 
