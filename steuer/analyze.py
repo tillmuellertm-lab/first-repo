@@ -191,16 +191,33 @@ class Analysedienst:
 
         bloecke = list(inhalt.bloecke) + [{"type": "text", "text": "\n".join(aufforderung)}]
 
-        antwort = self._mit_wiederholung(
-            lambda: self.client.messages.create(
-                model=self.modell_dokument,
-                max_tokens=4096,
-                system=prompts.system_analyse(regelwerk, profil),
-                tools=[prompts.WERKZEUG_ANALYSE],
-                tool_choice={"type": "tool", "name": "dokument_analyse"},
-                messages=[{"role": "user", "content": bloecke}],
+        try:
+            antwort = self._mit_wiederholung(
+                lambda: self.client.messages.create(
+                    model=self.modell_dokument,
+                    max_tokens=4096,
+                    system=prompts.system_analyse(regelwerk, profil),
+                    tools=[prompts.WERKZEUG_ANALYSE],
+                    tool_choice={"type": "tool", "name": "dokument_analyse"},
+                    messages=[{"role": "user", "content": bloecke}],
+                )
             )
-        )
+        except Exception as fehler:
+            # Die haeufigsten API-Fehler in verstaendliche Meldungen uebersetzen,
+            # statt den englischen Traceback bis zum Nutzer durchzureichen.
+            meldung = str(fehler)
+            if "prompt is too long" in meldung:
+                raise AnalyseFehler(
+                    f"{pfad.name} ist zu umfangreich fuer eine einzelne Analyse. "
+                    "Bitte die Datei in kleinere Teile aufteilen, am besten je Beleg "
+                    "eine Datei, und erneut hochladen."
+                ) from fehler
+            if "credit balance is too low" in meldung:
+                raise AnalyseFehler(
+                    "Das Guthaben des API-Kontos ist aufgebraucht. Unter "
+                    "console.anthropic.com/settings/billing aufladen und erneut versuchen."
+                ) from fehler
+            raise
 
         rohdaten = self._werkzeugergebnis(antwort, "dokument_analyse")
         analyse = _analyse_aus_rohdaten(rohdaten)

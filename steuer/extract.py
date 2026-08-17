@@ -18,6 +18,7 @@ LOG = logging.getLogger(__name__)
 
 # Grenzen der Anthropic-API mit etwas Sicherheitsabstand.
 MAX_PDF_SEITEN = 30
+MAX_PDF_BYTES = 20_000_000  # die API nimmt maximal 32 MB je Anfrage, Base64 vergroessert um ein Drittel
 MAX_BILDKANTE = 1568
 MAX_BILD_BYTES = 4_500_000
 MAX_TEXT_ZEICHEN = 60_000
@@ -148,11 +149,32 @@ def inhalt_aufbereiten(pfad: Path, medientyp: str) -> Inhalt:
     if medientyp == "application/pdf":
         seiten = seitenzahl(pfad)
         gekuerzt = bool(seiten and seiten > MAX_PDF_SEITEN)
-        rohdaten = _pdf_kuerzen(pfad, MAX_PDF_SEITEN) if gekuerzt else pfad.read_bytes()
         hinweise = []
         if gekuerzt:
+            rohdaten = _pdf_kuerzen(pfad, MAX_PDF_SEITEN)
             hinweise.append(
                 f"Nur die ersten {MAX_PDF_SEITEN} von {seiten} Seiten wurden analysiert."
+            )
+        elif seiten is None:
+            # Seitenzahl unbekannt (beschaedigtes oder ungewoehnliches PDF):
+            # sicherheitshalber trotzdem beschneiden, statt die volle Datei zu
+            # verschicken und an der Kontextgrenze der API zu scheitern.
+            try:
+                rohdaten = _pdf_kuerzen(pfad, MAX_PDF_SEITEN)
+                gekuerzt = True
+                hinweise.append(
+                    f"Seitenzahl nicht ermittelbar; vorsorglich nur die ersten "
+                    f"{MAX_PDF_SEITEN} Seiten analysiert."
+                )
+            except Exception:  # noqa: BLE001 - Zerlegen unmoeglich, Original versuchen
+                rohdaten = pfad.read_bytes()
+        else:
+            rohdaten = pfad.read_bytes()
+        if len(rohdaten) > MAX_PDF_BYTES:
+            raise ExtraktionsFehler(
+                f"{pfad.name} ist mit {len(rohdaten) / 1_000_000:.0f} MB zu gross fuer die "
+                "Analyse. Bitte die Datei aufteilen, am besten je Beleg eine Datei, "
+                "und erneut hochladen."
             )
         block = {
             "type": "document",

@@ -15,7 +15,6 @@ from .analyze import (
     AUSWAHL_STRATEGIE,
     AnalyseFehler,
     Analysedienst,
-    ExtraktionsFehler,
     KeinSchluessel,
     modell_dokument_pruefen,
     modell_strategie_pruefen,
@@ -239,7 +238,7 @@ def befehl_analyse(args: argparse.Namespace) -> int:
             dokument.status = STATUS_ANALYSIERT
             dokument.fehler = ""
             return dokument, None
-        except (AnalyseFehler, ExtraktionsFehler, OSError) as fehler:
+        except Exception as fehler:  # noqa: BLE001 - ein Dokument darf den Lauf nicht stoppen
             dokument.status = STATUS_FEHLER
             dokument.fehler = str(fehler)
             return dokument, fehler

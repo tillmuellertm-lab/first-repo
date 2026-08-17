@@ -21,9 +21,7 @@ from ..formatierung import euro
 from ..analyze import (
     AUSWAHL_DOKUMENT,
     AUSWAHL_STRATEGIE,
-    AnalyseFehler,
     Analysedienst,
-    ExtraktionsFehler,
     modell_dokument_pruefen,
     modell_strategie_pruefen,
     schluessel_vorhanden,
@@ -281,10 +279,11 @@ def anwendung_bauen(mappe: Arbeitsmappe) -> Any:
                         eintrag.fehler = ""
                         zusatz = EIGNUNG_LABEL.get(eintrag.analyse.eignung, "")
                         auftrag.meldungen.append(f"{eintrag.dateiname}: {eintrag.analyse.dokumenttyp} ({zusatz})")
-                    except (AnalyseFehler, ExtraktionsFehler, OSError) as fehler:
+                    except Exception as fehler:  # noqa: BLE001 - ein Dokument darf den Lauf nicht stoppen
                         eintrag.status = STATUS_FEHLER
                         eintrag.fehler = str(fehler)
                         auftrag.meldungen.append(f"{eintrag.dateiname}: FEHLER {fehler}")
+                        LOG.exception("Analyse von %s fehlgeschlagen", eintrag.dateiname)
                     auftrag.erledigt += 1
                     mappe.speichern()
             except Exception as fehler:  # noqa: BLE001 - Thread darf nicht still sterben

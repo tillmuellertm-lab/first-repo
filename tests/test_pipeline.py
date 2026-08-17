@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from steuer import gaps, naming, organize, report, rules
+from steuer import extract, gaps, naming, organize, report, rules
 from steuer.models import Analyse, Profil
 from steuer.workspace import Arbeitsmappe, ArbeitsmappenFehler, sichere_bezeichnung
 
@@ -233,3 +233,42 @@ def test_auswertung_findet_chancen_und_luecken(mappe: Arbeitsmappe, tmp_path: Pa
     assert "entfernungspauschale_berechnet" in ids
     assert "regel_nebenkostenabrechnung" in ids  # Merkmal "mieter"
     assert any(b.id == "fehlende_nachweise" for b in auswertung.luecken)
+
+
+# --------------------------------------------------- Schutz vor Riesendateien --
+
+def _pdf_erzeugen(pfad: Path, seiten: int) -> Path:
+    """Legt ein minimales PDF mit der gewuenschten Seitenzahl an."""
+    import pypdf
+
+    schreiber = pypdf.PdfWriter()
+    for _ in range(seiten):
+        schreiber.add_blank_page(width=200, height=200)
+    with pfad.open("wb") as datei:
+        schreiber.write(datei)
+    return pfad
+
+
+def test_langes_pdf_wird_auf_seitengrenze_gekuerzt(tmp_path: Path):
+    pfad = _pdf_erzeugen(tmp_path / "sammelscan.pdf", extract.MAX_PDF_SEITEN + 25)
+    inhalt = extract.inhalt_aufbereiten(pfad, "application/pdf")
+    assert inhalt.gekuerzt
+    assert any("Seiten" in h for h in inhalt.hinweise)
+
+
+def test_zu_grosse_datei_wird_mit_klarem_hinweis_abgelehnt(tmp_path: Path, monkeypatch):
+    """Statt an der Kontextgrenze der API zu scheitern, soll das Tool selbst bremsen."""
+    pfad = _pdf_erzeugen(tmp_path / "riesig.pdf", 5)
+    monkeypatch.setattr(extract, "MAX_PDF_BYTES", 100)
+    with pytest.raises(extract.ExtraktionsFehler) as fehler:
+        extract.inhalt_aufbereiten(pfad, "application/pdf")
+    assert "zu gross" in str(fehler.value)
+    assert "aufteilen" in str(fehler.value)
+
+
+def test_pdf_ohne_lesbare_seitenzahl_wird_vorsorglich_gekuerzt(tmp_path: Path, monkeypatch):
+    pfad = _pdf_erzeugen(tmp_path / "eigenartig.pdf", 3)
+    monkeypatch.setattr(extract, "seitenzahl", lambda _p: None)
+    inhalt = extract.inhalt_aufbereiten(pfad, "application/pdf")
+    assert inhalt.gekuerzt
+    assert any("nicht ermittelbar" in h for h in inhalt.hinweise)
