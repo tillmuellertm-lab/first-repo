@@ -451,6 +451,21 @@ def befehl_euer(args: argparse.Namespace) -> int:
         print("Keine analysierten Dokumente. Zuerst 'steuer analyse' ausfuehren.")
         return 1
 
+    betriebsbelege = [d for d in analysiert if d.wirksame_kategorie == "selbstaendig"]
+    if not betriebsbelege and not args.trotzdem:
+        print(
+            f"In dieser Mappe ({mappe.wurzel}) liegt kein einziges Dokument der Kategorie\n"
+            "'selbstaendig'. Das spricht dafuer, dass es die private Steuermappe ist und\n"
+            "nicht die Mappe des Betriebs.\n\n"
+            "Eine Aufstellung aus privaten Unterlagen waere irrefuehrend: Ein Bruttoarbeitslohn\n"
+            "sieht fuer das Werkzeug aus wie eine Betriebseinnahme.\n\n"
+            "  Alle Arbeitsmappen finden:  find ~ -name steuer.json -not -path \"*/.*\"\n"
+            "  In die richtige wechseln:   cd <Pfad>\n"
+            "  Trotzdem hier auswerten:    steuer euer --trotzdem",
+            file=sys.stderr,
+        )
+        return 1
+
     aufstellung = euer.aufstellen(analysiert, mappe.jahr)
     name = args.name or mappe.profil.name
 
@@ -473,6 +488,11 @@ def befehl_euer(args: argparse.Namespace) -> int:
         )
     if aufstellung.ohne_betrag:
         print(f"{euer.belege(len(aufstellung.ohne_betrag))} ohne erkennbaren Betrag.")
+    if aufstellung.privat:
+        print(
+            f"{euer.belege(len(aufstellung.privat))} als private Unterlagen uebergangen "
+            "(Arbeitslohn, Vorsorge, Kinder und aehnliches)."
+        )
     print(f"\n  {md_pfad}\n  {csv_pfad}")
     return 0
 
@@ -859,6 +879,11 @@ def parser_bauen() -> argparse.ArgumentParser:
         help="Nur Dokumente dieser Kategorie auswerten, fuer den Betrieb also 'selbstaendig'.",
     )
     p.add_argument("--name", help="Bezeichnung des Betriebs fuer den Bericht.")
+    p.add_argument(
+        "--trotzdem",
+        action="store_true",
+        help="Auch auswerten, wenn die Mappe nicht nach einer Betriebsmappe aussieht.",
+    )
     p.set_defaults(funktion=befehl_euer)
 
     p = unter.add_parser("recht-zeigen", help="Hinterlegten Rechtsstand anzeigen.")

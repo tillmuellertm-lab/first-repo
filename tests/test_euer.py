@@ -11,11 +11,13 @@ def beleg(
     typ: str = "",
     aussteller: str = "",
     eignung: str = "geeignet",
+    kategorie: str = "selbstaendig",
     mit_analyse: bool = True,
 ) -> Dokument:
     doc = Dokument(id=dateiname[:12], dateiname=dateiname)
     if mit_analyse:
         doc.analyse = Analyse(
+            kategorie_id=kategorie,
             dokumenttyp=typ,
             aussteller=aussteller,
             betrag_gesamt=betrag,
@@ -145,6 +147,56 @@ def test_markdown_bericht_nennt_verlust_und_offene_punkte():
     assert "scan-0815.pdf" in text
     # Der ungeklaerte Beleg darf die Summe nicht beeinflussen.
     assert "842" not in text
+
+
+def test_arbeitslohn_wird_niemals_als_betriebseinnahme_gezaehlt():
+    # Der Kern der Sperre: eine Lohnsteuerbescheinigung sieht nach einer
+    # Auszahlung aus und wuerde sonst als Betriebseinnahme in die Summe gehen.
+    lohn = beleg(
+        "lohnsteuerbescheinigung.pdf",
+        37391.40,
+        typ="Lohnsteuerbescheinigung",
+        aussteller="Arbeitgeber",
+        kategorie="nichtselbstaendige_arbeit",
+    )
+    honorar = beleg(
+        "honorar.pdf", 500.0, geschaeftsvorfall="einnahme", euer_posten="betriebseinnahmen"
+    )
+    aufstellung = euer.aufstellen([lohn, honorar], 2024)
+    assert aufstellung.summe_einnahmen == 500.0
+    assert [d.dateiname for d in aufstellung.privat] == ["lohnsteuerbescheinigung.pdf"]
+    assert lohn not in aufstellung.ungeklaert
+
+
+def test_alle_privaten_kategorien_werden_uebergangen():
+    dokumente = [
+        beleg(f"{kategorie}.pdf", 100.0, geschaeftsvorfall="einnahme", kategorie=kategorie)
+        for kategorie in sorted(euer.PRIVATE_KATEGORIEN)
+    ]
+    aufstellung = euer.aufstellen(dokumente, 2024)
+    assert aufstellung.summe_einnahmen == 0.0
+    assert len(aufstellung.privat) == len(euer.PRIVATE_KATEGORIEN)
+
+
+def test_neutrale_kategorien_bleiben_auswertbar():
+    # Kassenbons landen oft unter 'unklar' oder 'nicht_steuerrelevant'; sie
+    # duerfen nicht mit den privaten Unterlagen herausfallen.
+    for kategorie in ("unklar", "nicht_steuerrelevant", "zahlungsnachweise", "selbstaendig"):
+        dokument = beleg(
+            "bon.pdf", 20.0, geschaeftsvorfall="ausgabe", euer_posten="buero", kategorie=kategorie
+        )
+        assert euer.aufstellen([dokument], 2024).summe_ausgaben == 20.0, kategorie
+
+
+def test_bericht_weist_uebergangene_private_unterlagen_aus():
+    dokumente = [
+        beleg("honorar.pdf", 100.0, geschaeftsvorfall="einnahme", euer_posten="betriebseinnahmen"),
+        beleg("rente.pdf", 9000.0, kategorie="renten"),
+    ]
+    text = euer.markdown_bericht(euer.aufstellen(dokumente, 2024))
+    assert "1 Beleg" in text
+    assert "private Unterlagen" in text
+    assert "9.000" not in text
 
 
 def test_lange_listen_werden_gekuerzt():

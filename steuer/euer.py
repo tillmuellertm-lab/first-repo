@@ -147,6 +147,32 @@ POSTEN: tuple[Posten, ...] = (
 NACH_ID = {p.id: p for p in POSTEN}
 SAMMELPOSTEN = "uebrige"
 
+# Kategorien, die niemals Betriebseinnahmen oder Betriebsausgaben sein koennen.
+# Ohne diese Sperre wuerde eine Lohnsteuerbescheinigung als Betriebseinnahme
+# gezaehlt, und die Aufstellung saehe richtig aus, waehrend sie es nicht ist.
+PRIVATE_KATEGORIEN = frozenset({
+    "stammdaten",
+    "vorjahr",
+    "nichtselbstaendige_arbeit",
+    "werbungskosten_fahrten",
+    "werbungskosten_arbeitsmittel",
+    "werbungskosten_arbeitszimmer",
+    "werbungskosten_fortbildung",
+    "werbungskosten_sonstige",
+    "lohnersatzleistungen",
+    "kapitalertraege",
+    "vermietung",
+    "renten",
+    "sonstige_einkuenfte",
+    "vorsorgeaufwendungen",
+    "altersvorsorge_av",
+    "sonderausgaben",
+    "aussergewoehnliche_belastungen",
+    "haushaltsnahe_aufwendungen",
+    "kinder",
+    "unterhalt",
+})
+
 
 def ids() -> list[str]:
     return [p.id for p in POSTEN]
@@ -181,6 +207,7 @@ class Aufstellung:
     ausgaben: list[Zeile] = field(default_factory=list)
     ungeklaert: list[Dokument] = field(default_factory=list)
     ohne_betrag: list[Dokument] = field(default_factory=list)
+    privat: list[Dokument] = field(default_factory=list)
 
     @property
     def summe_einnahmen(self) -> float:
@@ -273,6 +300,9 @@ def aufstellen(dokumente: Iterable[Dokument], jahr: int) -> Aufstellung:
     for dokument in dokumente:
         analyse = dokument.analyse
         if not analyse or analyse.eignung == EIGNUNG_UNGEEIGNET:
+            continue
+        if dokument.wirksame_kategorie in PRIVATE_KATEGORIEN:
+            aufstellung.privat.append(dokument)
             continue
         betrag = _betrag(dokument)
         if betrag is None:
@@ -390,6 +420,16 @@ def markdown_bericht(aufstellung: Aufstellung, name: str = "") -> str:
         a("")
         for posten in hinweise:
             a(f"- **{posten.label}:** {posten.hinweis}")
+        a("")
+
+    if aufstellung.privat:
+        a("## Nicht beruecksichtigt: private Unterlagen")
+        a("")
+        a(f"**{belege(len(aufstellung.privat))}** gehoeren zu Kategorien, die keine")
+        a("Betriebseinnahmen oder -ausgaben sein koennen (Arbeitslohn, Renten, Vorsorge,")
+        a("Kinder und aehnliches). Sie wurden uebergangen. Sind es viele, ist das ein")
+        a("Zeichen dafuer, dass hier private Steuerunterlagen und Betriebsbelege in")
+        a("derselben Mappe liegen.")
         a("")
 
     if aufstellung.ungeklaert or aufstellung.ohne_betrag:
