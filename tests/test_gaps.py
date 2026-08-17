@@ -203,3 +203,54 @@ def test_manuelle_kategorie_setzt_analyse_ausser_kraft():
     doc.manuelle_kategorie = "haushaltsnahe_aufwendungen"
     zahlen = gaps.kennzahlen([doc], REGELWERK, profil())
     assert zahlen["haushaltsnahe_aufwendungen_gesamt"] == 500
+
+
+# ------------------------------------------- Grosse Mappen bleiben lesbar --
+
+def test_gleiche_hinweise_werden_gebuendelt():
+    """Derselbe Hinweis aus vielen Belegen ergibt einen Befund, nicht hunderte."""
+    dokumente = []
+    for nummer in range(40):
+        doc = dokument("werbungskosten_arbeitsmittel", 50, kennung=f"d{nummer:03d}")
+        doc.analyse.optimierungshinweise = ["Zahlungsnachweis beilegen."]
+        dokumente.append(doc)
+    ergebnis = gaps.auswerten(dokumente, REGELWERK, profil(), heute=dt.date(2025, 1, 15))
+    treffer = [b for b in ergebnis.chancen if "Zahlungsnachweis" in b.beschreibung]
+    assert len(treffer) == 1
+    assert treffer[0].titel == "Aus 40 Belegen"
+    assert len(treffer[0].betroffene_dokumente) == 40
+
+
+def test_sehr_viele_verschiedene_hinweise_werden_gedeckelt():
+    dokumente = []
+    for nummer in range(80):
+        doc = dokument("werbungskosten_arbeitsmittel", 50, kennung=f"d{nummer:03d}")
+        doc.analyse.optimierungshinweise = [f"Einzelfall {nummer}"]
+        dokumente.append(doc)
+    ergebnis = gaps.auswerten(dokumente, REGELWERK, profil(), heute=dt.date(2025, 1, 15))
+    einzel = [b for b in ergebnis.chancen if b.id.startswith("dokumenthinweis")]
+    assert len(einzel) <= gaps.MAX_DOKUMENTHINWEISE + 1
+    assert any(b.id == "dokumenthinweise_weitere" for b in einzel)
+
+
+def test_bestand_fuer_gesamtauswertung_behaelt_die_wichtigen():
+    """Bei sehr grossen Mappen darf die Kontextgrenze nicht gesprengt werden."""
+    from steuer.analyze import MAX_BESTAND_GESAMTAUSWERTUNG, _bestand_begrenzen
+
+    bestand = (
+        [{"kategorie": "nicht_steuerrelevant", "eignung": "ungeeignet"} for _ in range(900)]
+        + [{"kategorie": "sonderausgaben", "eignung": "geeignet", "betrag_gesamt": 500} for _ in range(50)]
+    )
+    gekuerzt, weggelassen = _bestand_begrenzen(bestand)
+    assert len(gekuerzt) == MAX_BESTAND_GESAMTAUSWERTUNG
+    assert weggelassen == len(bestand) - MAX_BESTAND_GESAMTAUSWERTUNG
+    # die verwertbaren Belege muessen vollstaendig enthalten sein
+    assert sum(1 for e in gekuerzt if e["eignung"] == "geeignet") == 50
+
+
+def test_kleiner_bestand_bleibt_unveraendert():
+    from steuer.analyze import _bestand_begrenzen
+
+    bestand = [{"kategorie": "sonderausgaben", "eignung": "geeignet"} for _ in range(10)]
+    gekuerzt, weggelassen = _bestand_begrenzen(bestand)
+    assert gekuerzt == bestand and weggelassen == 0

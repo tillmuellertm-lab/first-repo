@@ -664,6 +664,62 @@ def behinderten_pauschbetrag(grad: int, regelwerk: Regelwerk) -> float | None:
     return passend
 
 
+# Hoechstens so viele Chancen aus Einzeldokumenten uebernehmen. Bei sehr grossen
+# Mappen entstehen sonst tausende fast gleichlautende Eintraege, die weder der
+# Nutzer lesen noch die Gesamtauswertung verarbeiten kann.
+MAX_DOKUMENTHINWEISE = 25
+
+
+def _hinweise_zusammenfassen(dokumente: list[Dokument]) -> list[Befund]:
+    """Fasst die Optimierungshinweise der Einzeldokumente zusammen.
+
+    Gleichlautende Hinweise aus vielen Dokumenten werden zu einem Befund
+    gebuendelt, der alle betroffenen Dokumente nennt.
+    """
+    gebuendelt: dict[str, list[str]] = defaultdict(list)
+    for dokument in dokumente:
+        if not dokument.analyse:
+            continue
+        for hinweis in dokument.analyse.optimierungshinweise:
+            text = " ".join(str(hinweis).split())
+            if text:
+                gebuendelt[text].append(dokument.id)
+
+    # Haeufigste Hinweise zuerst: was viele Belege betrifft, wiegt schwerer.
+    sortiert = sorted(gebuendelt.items(), key=lambda paar: (-len(paar[1]), paar[0]))
+
+    befunde: list[Befund] = []
+    for nummer, (text, ids) in enumerate(sortiert[:MAX_DOKUMENTHINWEISE]):
+        titel = "Aus einem Beleg" if len(ids) == 1 else f"Aus {len(ids)} Belegen"
+        befunde.append(
+            Befund(
+                art="chance",
+                id=f"dokumenthinweis_{nummer}",
+                titel=titel,
+                beschreibung=text,
+                prioritaet="mittel",
+                betroffene_dokumente=ids,
+            )
+        )
+
+    uebrig = len(sortiert) - len(befunde)
+    if uebrig > 0:
+        befunde.append(
+            Befund(
+                art="chance",
+                id="dokumenthinweise_weitere",
+                titel=f"{uebrig} weitere Einzelhinweise",
+                beschreibung=(
+                    f"Aus den Belegen stammen {uebrig} weitere Hinweise, die hier nicht "
+                    "einzeln aufgefuehrt sind. Sie stehen jeweils in der Detailansicht "
+                    "des betreffenden Dokuments unter 'Ansatzpunkte'."
+                ),
+                prioritaet="niedrig",
+            )
+        )
+    return befunde
+
+
 def auswerten(
     dokumente: list[Dokument],
     regelwerk: Regelwerk,
@@ -721,21 +777,7 @@ def auswerten(
     befunde.extend(_dubletten_pruefen(dokumente))
     befunde.extend(_frist_pruefen(regelwerk, heute))
 
-    # Optimierungshinweise aus den Einzelanalysen uebernehmen.
-    for dokument in dokumente:
-        if not dokument.analyse:
-            continue
-        for nummer, hinweis in enumerate(dokument.analyse.optimierungshinweise):
-            befunde.append(
-                Befund(
-                    art="chance",
-                    id=f"dok_{dokument.id}_{nummer}",
-                    titel=f"Aus {dokument.dateiname}",
-                    beschreibung=hinweis,
-                    prioritaet="mittel",
-                    betroffene_dokumente=[dokument.id],
-                )
-            )
+    befunde.extend(_hinweise_zusammenfassen(dokumente))
 
     reihenfolge = {"hoch": 0, "mittel": 1, "niedrig": 2}
     befunde.sort(key=lambda b: (reihenfolge.get(b.prioritaet, 3), b.titel))

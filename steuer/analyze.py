@@ -240,8 +240,18 @@ class Analysedienst:
         bestand: list[dict[str, Any]],
         regelbefunde: list[dict[str, Any]],
     ) -> dict[str, Any]:
+        bestand, weggelassen = _bestand_begrenzen(bestand)
+        vorwort = ""
+        if weggelassen:
+            vorwort = (
+                f"Hinweis: Die Mappe enthaelt {len(bestand) + weggelassen} Dokumente. "
+                f"Aufgefuehrt sind die {len(bestand)} steuerlich bedeutsamsten; "
+                f"{weggelassen} als nicht steuerrelevant oder nicht verwertbar eingestufte "
+                "Belege sind weggelassen. Beziehe dich in der Einschaetzung auf diesen Umstand.\n\n"
+            )
         text = (
-            "Dokumentenbestand der Arbeitsmappe:\n"
+            vorwort
+            + "Dokumentenbestand der Arbeitsmappe:\n"
             + prompts.bestandsuebersicht(bestand)
             + "\n\nBereits regelbasiert erkannte Luecken und Chancen:\n"
             + prompts.bestandsuebersicht(regelbefunde)
@@ -290,6 +300,40 @@ class Analysedienst:
             )
         )
         return self._werkzeugergebnis(antwort, "rechtsstand")
+
+
+# Hoechstens so viele Dokumente in die Gesamtauswertung geben. Bei sehr grossen
+# Mappen sprengt die vollstaendige Liste sonst die Kontextgrenze des Modells.
+MAX_BESTAND_GESAMTAUSWERTUNG = 300
+
+# Reihenfolge, in der Dokumente bei Platzmangel behalten werden.
+_EIGNUNG_GEWICHT = {"geeignet": 0, "bedingt_geeignet": 1, "unklar": 2, "ungeeignet": 3}
+
+
+def _bestand_begrenzen(bestand: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], int]:
+    """Kuerzt sehr grosse Bestaende auf die steuerlich bedeutsamsten Dokumente.
+
+    Behalten werden zuerst die verwertbaren Belege, danach die unklaren; als
+    nicht steuerrelevant eingestufte fallen zuerst heraus. Rueckgabe ist die
+    gekuerzte Liste und die Zahl der weggelassenen Eintraege.
+    """
+    if len(bestand) <= MAX_BESTAND_GESAMTAUSWERTUNG:
+        return bestand, 0
+
+    def gewicht(eintrag: dict[str, Any]) -> tuple[int, int, float]:
+        eignung = str(eintrag.get("eignung", "unklar"))
+        nicht_relevant = 1 if eintrag.get("kategorie") == "nicht_steuerrelevant" else 0
+        betrag = eintrag.get("betrag_abzugsfaehig") or eintrag.get("betrag_gesamt") or 0
+        try:
+            betrag = float(betrag)
+        except (TypeError, ValueError):
+            betrag = 0.0
+        # grosse Betraege zuerst, damit die wesentlichen Belege sicher dabei sind
+        return (nicht_relevant, _EIGNUNG_GEWICHT.get(eignung, 2), -betrag)
+
+    sortiert = sorted(bestand, key=gewicht)
+    behalten = sortiert[:MAX_BESTAND_GESAMTAUSWERTUNG]
+    return behalten, len(bestand) - len(behalten)
 
 
 def _zahl(wert: Any) -> float | None:
