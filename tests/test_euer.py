@@ -199,6 +199,45 @@ def test_bericht_weist_uebergangene_private_unterlagen_aus():
     assert "9.000" not in text
 
 
+def test_herkunft_der_richtung_wird_gezaehlt():
+    dokumente = [
+        beleg("a.pdf", 100.0, geschaeftsvorfall="einnahme", euer_posten="betriebseinnahmen"),
+        beleg("b.pdf", 60.0, typ="Tankstelle Quittung"),  # nur Stichwort
+    ]
+    aufstellung = euer.aufstellen(dokumente, 2024)
+    assert aufstellung.aus_analyse == 1
+    assert aufstellung.geschaetzt == 1
+    assert not aufstellung.nur_geraten
+
+
+def test_ohne_jede_analyseangabe_gilt_die_aufstellung_als_geraten():
+    dokumente = [
+        beleg("kontoauszug.pdf", 5000.0, typ="Gutschrift"),
+        beleg("bon.pdf", 20.0, typ="Quittung"),
+    ]
+    aufstellung = euer.aufstellen(dokumente, 2024)
+    assert aufstellung.nur_geraten
+    text = euer.markdown_bericht(aufstellung)
+    assert "nicht belastbar" in text
+    assert "steuer analyse --alle" in text
+
+
+def test_leere_aufstellung_gilt_nicht_als_geraten():
+    aufstellung = euer.aufstellen([], 2024)
+    assert not aufstellung.nur_geraten
+    assert "nicht belastbar" not in euer.markdown_bericht(aufstellung)
+
+
+def test_teilweise_geratene_aufstellung_nennt_den_anteil():
+    dokumente = [
+        beleg(f"a{i}.pdf", 100.0, geschaeftsvorfall="einnahme", euer_posten="betriebseinnahmen")
+        for i in range(3)
+    ] + [beleg("bon.pdf", 60.0, typ="Tankstelle Quittung")]
+    text = euer.markdown_bericht(euer.aufstellen(dokumente, 2024))
+    assert "1 Beleg (25%)" in text
+    assert "nicht belastbar" not in text
+
+
 def test_lange_listen_werden_gekuerzt():
     dokumente = [beleg(f"scan-{i}.pdf", 10.0) for i in range(40)]
     text = euer.markdown_bericht(euer.aufstellen(dokumente, 2024))

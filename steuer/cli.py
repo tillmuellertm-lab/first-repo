@@ -476,6 +476,15 @@ def befehl_euer(args: argparse.Namespace) -> int:
     csv_pfad.write_text(euer.csv_export(aufstellung), encoding="utf-8-sig")
     md_pfad.write_text(euer.markdown_bericht(aufstellung, name), encoding="utf-8")
 
+    if aufstellung.nur_geraten:
+        print(
+            "ACHTUNG: Bei keinem Beleg war in der Analyse vermerkt, ob es sich um eine\n"
+            "Einnahme oder eine Ausgabe handelt. Die Richtung wurde durchweg anhand von\n"
+            "Stichworten geraten. Die folgenden Summen sind nicht belastbar.\n\n"
+            "  Abhilfe: steuer analyse --alle   (danach steuer euer erneut)\n",
+            file=sys.stderr,
+        )
+
     print(f"Erfasste Belege: {aufstellung.anzahl_belege}")
     print(f"Betriebseinnahmen: {euro(aufstellung.summe_einnahmen)}")
     print(f"Betriebsausgaben:  {euro(aufstellung.summe_ausgaben)}")

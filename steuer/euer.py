@@ -208,6 +208,9 @@ class Aufstellung:
     ungeklaert: list[Dokument] = field(default_factory=list)
     ohne_betrag: list[Dokument] = field(default_factory=list)
     privat: list[Dokument] = field(default_factory=list)
+    # Belege, deren Richtung aus der Analyse stammt bzw. nur geraten wurde.
+    aus_analyse: int = 0
+    geschaetzt: int = 0
 
     @property
     def summe_einnahmen(self) -> float:
@@ -230,6 +233,15 @@ class Aufstellung:
     def anzahl_belege(self) -> int:
         return sum(z.anzahl for z in self.einnahmen + self.ausgaben)
 
+    @property
+    def nur_geraten(self) -> bool:
+        """Kein einziger Beleg trug die Richtung aus der Analyse bei.
+
+        Typisch fuer Mappen, die vor Einfuehrung der Felder analysiert wurden.
+        Die Summen beruhen dann allein auf Stichworten und sind unbrauchbar.
+        """
+        return self.geschaetzt > 0 and self.aus_analyse == 0
+
 
 def _suchtext(dokument: Dokument) -> str:
     analyse = dokument.analyse
@@ -245,25 +257,26 @@ def _suchtext(dokument: Dokument) -> str:
     return " ".join(teile).lower()
 
 
-def _richtung(dokument: Dokument) -> str | None:
-    """Einnahme oder Ausgabe, oder None wenn nicht sicher bestimmbar.
+def _richtung(dokument: Dokument) -> tuple[str | None, str]:
+    """Einnahme oder Ausgabe samt Herkunft der Angabe.
 
     Vorrang hat die Angabe aus der Analyse; nur wenn sie fehlt, wird anhand
     von Stichworten geschaetzt. Was unklar bleibt, wird auch als unklar
-    ausgewiesen, statt es zu raten.
+    ausgewiesen, statt es zu raten. Die Herkunft wird mitgefuehrt, weil eine
+    geratene Richtung sehr viel weniger wert ist als eine gelesene.
     """
     analyse = dokument.analyse
     if analyse and analyse.geschaeftsvorfall in (EINNAHME, AUSGABE):
-        return analyse.geschaeftsvorfall
+        return analyse.geschaeftsvorfall, "analyse"
 
     text = _suchtext(dokument)
     einnahme_worte = ("ausgangsrechnung", "honorar", "erloes", "gutschrift", "auszahlung", "payout", "zahlungseingang")
     ausgabe_worte = ("eingangsrechnung", "quittung", "kassenbon", "beleg ueber", "rechnung von", "lastschrift", "abbuchung")
     if any(wort in text for wort in einnahme_worte):
-        return EINNAHME
+        return EINNAHME, "stichwort"
     if any(wort in text for wort in ausgabe_worte):
-        return AUSGABE
-    return None
+        return AUSGABE, "stichwort"
+    return None, ""
 
 
 def _posten_bestimmen(dokument: Dokument, richtung: str) -> Posten:
@@ -308,10 +321,14 @@ def aufstellen(dokumente: Iterable[Dokument], jahr: int) -> Aufstellung:
         if betrag is None:
             aufstellung.ohne_betrag.append(dokument)
             continue
-        richtung = _richtung(dokument)
+        richtung, herkunft = _richtung(dokument)
         if richtung is None:
             aufstellung.ungeklaert.append(dokument)
             continue
+        if herkunft == "analyse":
+            aufstellung.aus_analyse += 1
+        else:
+            aufstellung.geschaetzt += 1
         posten = _posten_bestimmen(dokument, richtung)
         zeile = zeilen[posten.id]
         zeile.betrag = round(zeile.betrag + abs(betrag), 2)
@@ -377,6 +394,26 @@ def markdown_bericht(aufstellung: Aufstellung, name: str = "") -> str:
     a("> vorhandenen Belege zusammen, damit der Steuerberater die Anlage EUeR daraus")
     a("> erstellen kann. Die Zuordnung zu den Posten ist ein Vorschlag.")
     a("")
+
+    if aufstellung.nur_geraten:
+        a("## Die Summen sind hier nicht belastbar")
+        a("")
+        a("Bei **keinem einzigen** Beleg stand in der Analyse, ob es sich um eine Einnahme")
+        a("oder eine Ausgabe handelt. Die Richtung wurde deshalb durchweg anhand von")
+        a("Stichworten geraten, und das geht regelmaessig schief: Auf einem Kontoauszug")
+        a("steht \"Gutschrift\" auch dort, wo Geld abgeht.")
+        a("")
+        a("Die Dokumente stammen aus einer Pruefung, die diese Angabe noch nicht erhoben")
+        a("hat. Abhilfe: die Belege mit `steuer analyse --alle` erneut pruefen lassen,")
+        a("danach diese Aufstellung neu erzeugen.")
+        a("")
+        a("**Bis dahin sind die folgenden Zahlen nur eine grobe Sortierhilfe.**")
+        a("")
+    elif aufstellung.geschaetzt:
+        anteil = aufstellung.geschaetzt / max(aufstellung.anzahl_belege, 1)
+        a(f"> Bei {belege(aufstellung.geschaetzt)} ({anteil:.0%}) wurde die Richtung nicht")
+        a("> aus dem Dokument gelesen, sondern anhand von Stichworten geschaetzt.")
+        a("")
 
     a("## Betriebseinnahmen")
     a("")
