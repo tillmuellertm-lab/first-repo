@@ -272,3 +272,52 @@ def test_pdf_ohne_lesbare_seitenzahl_wird_vorsorglich_gekuerzt(tmp_path: Path, m
     inhalt = extract.inhalt_aufbereiten(pfad, "application/pdf")
     assert inhalt.gekuerzt
     assert any("nicht ermittelbar" in h for h in inhalt.hinweise)
+
+
+# ------------------------------------------------------------ Ausgliedern --
+
+def test_dokument_mit_analyse_in_andere_mappe_uebernehmen(mappe: Arbeitsmappe, tmp_path: Path):
+    """Beim Verschieben muss die Analyse erhalten bleiben."""
+    quelle = _datei(tmp_path, "gewerbe.txt", "Eingangsrechnung")
+    dokument, _ = mappe.datei_aufnehmen(quelle)
+    dokument.analyse = Analyse(
+        kategorie_id="selbstaendig",
+        dokumenttyp="Eingangsrechnung",
+        betrag_gesamt=119.0,
+        eignung="bedingt_geeignet",
+        zusammenfassung="Wareneinkauf",
+    )
+    dokument.status = "analysiert"
+    dokument.zieldateiname = "alt.pdf"
+
+    ziel = Arbeitsmappe.anlegen(tmp_path / "gewerbe", 2024, Profil(veranlagungsjahr=2024))
+    assert ziel.dokument_uebernehmen(dokument, mappe.pfad_zu(dokument))
+
+    uebernommen = ziel.dokumente[0]
+    assert uebernommen.analyse is not None
+    assert uebernommen.analyse.dokumenttyp == "Eingangsrechnung"
+    assert uebernommen.analyse.betrag_gesamt == 119.0
+    assert uebernommen.status == "analysiert"
+    assert (ziel.eingang / uebernommen.dateiname).exists()
+    # die Ablage der neuen Mappe wird frisch aufgebaut
+    assert uebernommen.zieldateiname == ""
+
+
+def test_uebernehmen_erkennt_dublette(mappe: Arbeitsmappe, tmp_path: Path):
+    quelle = _datei(tmp_path, "beleg.txt", "derselbe Inhalt")
+    dokument, _ = mappe.datei_aufnehmen(quelle)
+    ziel = Arbeitsmappe.anlegen(tmp_path / "ziel", 2024, Profil(veranlagungsjahr=2024))
+    assert ziel.dokument_uebernehmen(dokument, mappe.pfad_zu(dokument))
+    assert not ziel.dokument_uebernehmen(dokument, mappe.pfad_zu(dokument))
+    assert len(ziel.dokumente) == 1
+
+
+def test_uebernehmen_loest_namenskollision_auf(mappe: Arbeitsmappe, tmp_path: Path):
+    ziel = Arbeitsmappe.anlegen(tmp_path / "ziel", 2024, Profil(veranlagungsjahr=2024))
+    (ziel.eingang / "beleg.txt").write_text("schon da", encoding="utf-8")
+
+    quelle = _datei(tmp_path, "beleg.txt", "anderer Inhalt")
+    dokument, _ = mappe.datei_aufnehmen(quelle)
+    assert ziel.dokument_uebernehmen(dokument, mappe.pfad_zu(dokument))
+    assert ziel.dokumente[0].dateiname != "beleg.txt"
+    assert (ziel.eingang / "beleg.txt").read_text(encoding="utf-8") == "schon da"

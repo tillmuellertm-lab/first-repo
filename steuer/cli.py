@@ -436,6 +436,95 @@ def _bestandseintrag(dokument: Dokument) -> dict:
     }
 
 
+def befehl_ausgliedern(args: argparse.Namespace) -> int:
+    """Verschiebt Dokumente nach Kategorie oder Steuerjahr in eine andere Mappe."""
+    mappe = _mappe_oeffnen(args)
+    if not args.kategorie and not args.fremdes_jahr:
+        print(
+            "Bitte angeben, was ausgegliedert werden soll:\n"
+            "  --kategorie <Kennung>   z. B. selbstaendig\n"
+            "  --fremdes-jahr          alles, was nicht ins Jahr der Mappe gehoert\n\n"
+            "Verfuegbare Kategorien:",
+            file=sys.stderr,
+        )
+        for kategorie in taxonomy.KATEGORIEN:
+            print(f"  {kategorie.id:32} {kategorie.label}", file=sys.stderr)
+        return 1
+
+    unbekannt = [k for k in (args.kategorie or []) if k not in taxonomy.NACH_ID]
+    if unbekannt:
+        print(f"Unbekannte Kategorie: {', '.join(unbekannt)}", file=sys.stderr)
+        return 1
+
+    betroffen = []
+    for dokument in mappe.dokumente:
+        grund = ""
+        if args.kategorie and dokument.wirksame_kategorie in args.kategorie:
+            grund = taxonomy.kategorie(dokument.wirksame_kategorie).label
+        elif (
+            args.fremdes_jahr
+            and dokument.analyse
+            and dokument.analyse.steuerjahr
+            and dokument.analyse.steuerjahr != mappe.jahr
+        ):
+            grund = f"Steuerjahr {dokument.analyse.steuerjahr}"
+        if grund:
+            betroffen.append((dokument, grund))
+
+    if not betroffen:
+        print("Kein Dokument passt auf diese Auswahl.")
+        return 0
+
+    print(f"{len(betroffen)} von {len(mappe.dokumente)} Dokumenten betroffen:\n")
+    nach_grund: dict[str, int] = {}
+    for _, grund in betroffen:
+        nach_grund[grund] = nach_grund.get(grund, 0) + 1
+    for grund, anzahl in sorted(nach_grund.items(), key=lambda p: -p[1]):
+        print(f"  {anzahl:>5}  {grund}")
+
+    if args.probelauf:
+        print("\nProbelauf, es wurde nichts verschoben.")
+        print("Zum Ausfuehren denselben Befehl ohne --probelauf und mit --nach <Pfad> aufrufen.")
+        return 0
+
+    if not args.nach:
+        print("\nBitte mit --nach <Pfad> angeben, wohin die Dokumente sollen.", file=sys.stderr)
+        return 1
+
+    ziel_pfad = Path(args.nach).expanduser()
+    if (ziel_pfad / "steuer.json").exists():
+        ziel = Arbeitsmappe.laden(ziel_pfad)
+        print(f"\nZielmappe: {ziel.wurzel} (vorhanden, Jahr {ziel.jahr})")
+    else:
+        profil = Profil(
+            name=args.name or mappe.profil.name,
+            veranlagungsjahr=args.jahr or mappe.jahr,
+        )
+        ziel = Arbeitsmappe.anlegen(ziel_pfad, args.jahr or mappe.jahr, profil)
+        print(f"\nZielmappe: {ziel.wurzel} (neu angelegt)")
+
+    verschoben = uebersprungen = 0
+    for dokument, _ in betroffen:
+        quelle = mappe.pfad_zu(dokument)
+        if not quelle.exists():
+            uebersprungen += 1
+            continue
+        if ziel.dokument_uebernehmen(dokument, quelle):
+            mappe.dokument_entfernen(dokument.id, datei_loeschen=True)
+            verschoben += 1
+        else:
+            uebersprungen += 1
+
+    ziel.speichern()
+    mappe.speichern()
+
+    print(f"\n{verschoben} Dokumente verschoben, {uebersprungen} uebersprungen.")
+    print(f"In dieser Mappe verbleiben {len(mappe.dokumente)} Dokumente.")
+    print("\nDie Analysen wurden uebernommen, es ist keine erneute Pruefung noetig.")
+    print(f"Zielmappe ansehen:  cd {ziel.wurzel} && steuer status")
+    return 0
+
+
 def befehl_dateien(args: argparse.Namespace) -> int:
     """Zeigt Groesse und Seitenzahl jeder Datei, um Ausreisser zu finden."""
     from .extract import MAX_PDF_SEITEN, seitenzahl
@@ -650,6 +739,31 @@ def parser_bauen() -> argparse.ArgumentParser:
         help="Groesse und Seitenzahl aller Dateien anzeigen, um Ausreisser zu finden.",
     )
     p.set_defaults(funktion=befehl_dateien)
+
+    p = unter.add_parser(
+        "ausgliedern",
+        help="Dokumente nach Kategorie oder Steuerjahr in eine andere Arbeitsmappe verschieben.",
+    )
+    p.add_argument(
+        "--kategorie",
+        action="append",
+        metavar="KENNUNG",
+        help="Kategorie, die verschoben wird. Mehrfach angebbar.",
+    )
+    p.add_argument(
+        "--fremdes-jahr",
+        action="store_true",
+        help="Alle Dokumente verschieben, die in ein anderes Steuerjahr gehoeren.",
+    )
+    p.add_argument("--nach", metavar="PFAD", help="Zielmappe; wird bei Bedarf angelegt.")
+    p.add_argument("--jahr", type=int, help="Veranlagungsjahr der neuen Zielmappe.")
+    p.add_argument("--name", help="Name fuer die neue Zielmappe.")
+    p.add_argument(
+        "--probelauf",
+        action="store_true",
+        help="Nur anzeigen, was verschoben wuerde, ohne etwas zu aendern.",
+    )
+    p.set_defaults(funktion=befehl_ausgliedern)
 
     p = unter.add_parser("liste", help="Alle Dokumente nach Anlagen sortiert auflisten.")
     p.set_defaults(funktion=befehl_liste)

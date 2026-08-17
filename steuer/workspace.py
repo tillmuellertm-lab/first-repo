@@ -230,6 +230,26 @@ class Arbeitsmappe:
             neue.append(dokument)
         return neue
 
+    def dokument_uebernehmen(self, dokument: Dokument, quelldatei: Path) -> bool:
+        """Nimmt ein bereits analysiertes Dokument aus einer anderen Mappe auf.
+
+        Die Analyse bleibt erhalten, es wird also nicht erneut geprueft.
+        Rueckgabe ist False, wenn dasselbe Dokument hier schon liegt.
+        """
+        if any(d.sha256 == dokument.sha256 for d in self.dokumente):
+            return False
+        self.eingang.mkdir(parents=True, exist_ok=True)
+        zielname = _freier_name(self.eingang, dokument.dateiname)
+        shutil.copy2(quelldatei, self.eingang / zielname)
+
+        uebernommen = Dokument.aus_dict(dokument.als_dict())
+        uebernommen.dateiname = zielname
+        # Die Ablage wird in der neuen Mappe frisch aufgebaut.
+        uebernommen.zieldateiname = ""
+        uebernommen.zielordner = ""
+        self.dokumente.append(uebernommen)
+        return True
+
     def dokument_entfernen(self, dokument_id: str, datei_loeschen: bool = False) -> bool:
         dokument = self.dokument(dokument_id)
         if dokument is None:

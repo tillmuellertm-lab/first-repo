@@ -129,6 +129,7 @@ Die Originale bleiben unangetastet, die Ablage wird bei jedem Lauf frisch aufgeb
 | `steuer analyse [--alle]` | Dokumente prüfen; ohne `--alle` nur die neuen |
 | `steuer liste` | alle Dokumente nach Anlagen sortiert |
 | `steuer dateien` | Größe und Seitenzahl aller Dateien, findet Ausreißer |
+| `steuer ausgliedern` | Dokumente nach Kategorie oder Steuerjahr in eine andere Mappe verschieben |
 | `steuer status` | Kennzahlen auf einen Blick |
 | `steuer pruefen` | Lücken, Chancen und Warnungen |
 | `steuer trennen <Kennung>` | erkannten Sammelscan seitengenau zerlegen |
@@ -179,6 +180,31 @@ vorschlagen dürfen, aber nicht unbemerkt verändern.
 
 Fehlt für ein Jahr eine Datei, lädt das Werkzeug ersatzweise das jüngste vorhandene Jahr
 und weist in jeder Ausgabe und in jedem Bericht sichtbar darauf hin.
+
+---
+
+## Mehrere Mappen sauber trennen
+
+Geschäftsbelege und private Steuerunterlagen gehören nicht in dieselbe Mappe: Die
+Buchhaltung eines Gewerbes mündet in eine Einnahmen-Überschuss-Rechnung, nicht in
+Einzelbelege für die Steuererklärung. Vermischt verfälschen sie alle Kennzahlen.
+
+`steuer ausgliedern` verschiebt bereits analysierte Dokumente samt ihrer Analyse in
+eine andere Arbeitsmappe — eine erneute Prüfung ist nicht nötig:
+
+```bash
+# erst ansehen, was passieren würde
+steuer ausgliedern --kategorie selbstaendig --probelauf
+
+# dann ausführen
+steuer ausgliedern --kategorie selbstaendig --nach ~/gewerbe-2024
+
+# alles, was in ein anderes Steuerjahr gehört
+steuer ausgliedern --fremdes-jahr --nach ~/steuer-sonstige
+```
+
+Die Zielmappe wird bei Bedarf angelegt. `--kategorie` ist mehrfach angebbar, die
+verfügbaren Kennungen listet der Befehl ohne Argumente auf.
 
 ---
 
