@@ -17,9 +17,12 @@ from .rules import Regelwerk
 
 LOG = logging.getLogger(__name__)
 
-MODELL_DOKUMENT = "claude-sonnet-5"
-MODELL_STRATEGIE = "claude-opus-5"
-MODELL_RECHT = "claude-opus-5"
+# Modellwahl je Arbeitsschritt. Ueber die Umgebungsvariablen STEUER_MODELL_DOKUMENT,
+# STEUER_MODELL_STRATEGIE und STEUER_MODELL_RECHT laesst sich jede Stufe einzeln
+# umstellen, ohne den Code zu aendern.
+MODELL_DOKUMENT = os.environ.get("STEUER_MODELL_DOKUMENT", "claude-opus-5")
+MODELL_STRATEGIE = os.environ.get("STEUER_MODELL_STRATEGIE", "claude-fable-5")
+MODELL_RECHT = os.environ.get("STEUER_MODELL_RECHT", "claude-opus-5")
 
 MAX_VERSUCHE = 4
 WEB_SUCHE_WERKZEUG = {"type": "web_search_20250305", "name": "web_search", "max_uses": 12}

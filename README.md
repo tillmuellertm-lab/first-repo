@@ -216,12 +216,31 @@ Steuerunterlagen gehören zu den sensibelsten Daten, die ein Haushalt besitzt.
 
 ## Kosten
 
-Pro Dokument fällt ein Modellaufruf an. Die Größenordnung liegt bei wenigen Cent je
-Beleg; ein Jahrgang mit 80 Dokumenten kostet typischerweise unter zwei Euro. Die
-abschließende Gesamtauswertung ist ein weiterer, etwas teurerer Aufruf.
+Pro Dokument fällt ein Modellaufruf an, dazu je ein Aufruf für die abschließende
+Gesamtauswertung und für eine Rechtsrecherche.
 
-Voreingestellt sind `claude-sonnet-5` für die Einzeldokumente und `claude-opus-5` für
-Gesamtauswertung und Rechtsrecherche. Abweichend wählbar mit `steuer analyse --modell …`.
+Voreingestellt ist:
+
+| Arbeitsschritt | Modell | Umgebungsvariable |
+| --- | --- | --- |
+| Analyse jedes einzelnen Dokuments | `claude-opus-5` | `STEUER_MODELL_DOKUMENT` |
+| Abschließende Gesamtauswertung | `claude-fable-5` | `STEUER_MODELL_STRATEGIE` |
+| Rechtsstandsrecherche | `claude-opus-5` | `STEUER_MODELL_RECHT` |
+
+Jede Stufe lässt sich über ihre Umgebungsvariable umstellen, ohne den Code zu ändern:
+
+```bash
+STEUER_MODELL_DOKUMENT=claude-sonnet-5 steuer analyse
+```
+
+Zusätzlich setzt `steuer analyse --modell …` das Modell für einen einzelnen Lauf.
+
+**Zu den Kosten:** Die Dokumentanalyse ist der mit Abstand größte Posten, weil sie
+einmal je Beleg anfällt. Opus liefert dort die sorgfältigste Einordnung, ist aber
+deutlich teurer als Sonnet. Wer viele Belege hat und Kosten sparen will, stellt
+`STEUER_MODELL_DOKUMENT` auf `claude-sonnet-5` und behält Opus nur für die Fälle,
+die das Werkzeug als unsicher markiert (`steuer analyse --dokument <Kennung>
+--modell claude-opus-5`).
 
 ---
 
