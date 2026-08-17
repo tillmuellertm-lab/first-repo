@@ -10,7 +10,17 @@ from pathlib import Path
 
 from . import gaps, organize, report, rules, taxonomy
 from .formatierung import euro
-from .analyze import AnalyseFehler, Analysedienst, ExtraktionsFehler, KeinSchluessel, schluessel_vorhanden
+from .analyze import (
+    AUSWAHL_DOKUMENT,
+    AUSWAHL_STRATEGIE,
+    AnalyseFehler,
+    Analysedienst,
+    ExtraktionsFehler,
+    KeinSchluessel,
+    modell_dokument_pruefen,
+    modell_strategie_pruefen,
+    schluessel_vorhanden,
+)
 from .models import (
     EIGNUNG_BEDINGT,
     EIGNUNG_GEEIGNET,
@@ -213,7 +223,11 @@ def befehl_analyse(args: argparse.Namespace) -> int:
         )
         return 2
 
-    dienst = Analysedienst(modell_dokument=args.modell or Analysedienst.modell_dokument)
+    dienst = Analysedienst(
+        modell_dokument=modell_dokument_pruefen(
+            args.modell or mappe.einstellungen.get("modell_dokument")
+        )
+    )
     print(f"Analysiere {len(zu_pruefen)} Dokumente mit {dienst.modell_dokument} ...\n")
 
     def _einzeln(dokument: Dokument) -> tuple[Dokument, Exception | None]:
@@ -369,9 +383,12 @@ def befehl_ordnen(args: argparse.Namespace) -> int:
         if not schluessel_vorhanden():
             print("Ohne ANTHROPIC_API_KEY ist keine Gesamtauswertung moeglich.", file=sys.stderr)
         else:
-            print("Erstelle Gesamtauswertung ...")
+            modell = modell_strategie_pruefen(
+                args.modell_strategie or mappe.einstellungen.get("modell_strategie")
+            )
+            print(f"Erstelle Gesamtauswertung mit {modell} ...")
             try:
-                dienst = Analysedienst()
+                dienst = Analysedienst(modell_strategie=modell)
                 modellauswertung = dienst.gesamtauswertung(
                     regelwerk,
                     mappe.profil,
@@ -559,7 +576,11 @@ def parser_bauen() -> argparse.ArgumentParser:
     p = unter.add_parser("analyse", help="Dokumente inhaltlich pruefen lassen.")
     p.add_argument("--alle", action="store_true", help="Auch bereits analysierte Dokumente erneut pruefen.")
     p.add_argument("--dokument", help="Nur ein Dokument, Angabe der Kennung.")
-    p.add_argument("--modell", help="Abweichendes Modell fuer die Dokumentanalyse.")
+    p.add_argument(
+        "--modell",
+        choices=[k for k, _, _ in AUSWAHL_DOKUMENT],
+        help="Modell fuer die Dokumentanalyse.",
+    )
     p.add_argument("--parallel", type=int, default=3, help="Gleichzeitige Analysen, Standard 3.")
     p.set_defaults(funktion=befehl_analyse)
 
@@ -579,6 +600,11 @@ def parser_bauen() -> argparse.ArgumentParser:
     p = unter.add_parser("ordnen", help="Ablage aufbauen und Uebersicht fuer den Steuerberater erzeugen.")
     p.add_argument("--paket", action="store_true", help="Zusaetzlich ein ZIP fuer den Steuerberater packen.")
     p.add_argument("--gesamtauswertung", action="store_true", help="Abschliessende Auswertung durch das Modell.")
+    p.add_argument(
+        "--modell-strategie",
+        choices=[k for k, _, _ in AUSWAHL_STRATEGIE],
+        help="Modell fuer die Gesamtauswertung.",
+    )
     p.add_argument("--ohne-ungeeignete", action="store_true", help="Nicht steuerrelevante Dokumente weglassen.")
     p.add_argument("--trotzdem", action="store_true", help="Auch bei nicht analysierten Dokumenten fortfahren.")
     p.set_defaults(funktion=befehl_ordnen)

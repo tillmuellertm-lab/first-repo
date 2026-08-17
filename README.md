@@ -219,21 +219,28 @@ Steuerunterlagen gehören zu den sensibelsten Daten, die ein Haushalt besitzt.
 Pro Dokument fällt ein Modellaufruf an, dazu je ein Aufruf für die abschließende
 Gesamtauswertung und für eine Rechtsrecherche.
 
-Voreingestellt ist:
+**In der Weboberfläche wählen Sie das Modell vor jedem Lauf selbst** — je ein
+Auswahlfeld über den beiden Knöpfen, mit kurzer Erläuterung zur getroffenen Wahl.
+Die Auswahl wird in der Arbeitsmappe gemerkt und beim nächsten Start wieder angezeigt.
 
-| Arbeitsschritt | Modell | Umgebungsvariable |
-| --- | --- | --- |
-| Analyse jedes einzelnen Dokuments | `claude-opus-5` | `STEUER_MODELL_DOKUMENT` |
-| Abschließende Gesamtauswertung | `claude-fable-5` | `STEUER_MODELL_STRATEGIE` |
-| Rechtsstandsrecherche | `claude-opus-5` | `STEUER_MODELL_RECHT` |
+| Arbeitsschritt | Zur Wahl | Voreinstellung | Umgebungsvariable |
+| --- | --- | --- | --- |
+| Analyse jedes einzelnen Dokuments | Sonnet 5, Opus 5 | `claude-opus-5` | `STEUER_MODELL_DOKUMENT` |
+| Abschließende Gesamtauswertung | Opus 5, Fable 5 | `claude-fable-5` | `STEUER_MODELL_STRATEGIE` |
+| Rechtsstandsrecherche | — | `claude-opus-5` | `STEUER_MODELL_RECHT` |
 
-Jede Stufe lässt sich über ihre Umgebungsvariable umstellen, ohne den Code zu ändern:
+An der Kommandozeile geht dasselbe über Optionen:
+
+```bash
+steuer analyse --modell claude-sonnet-5
+steuer ordnen --gesamtauswertung --modell-strategie claude-opus-5
+```
+
+Die Voreinstellung je Stufe lässt sich zusätzlich über die Umgebungsvariable setzen:
 
 ```bash
 STEUER_MODELL_DOKUMENT=claude-sonnet-5 steuer analyse
 ```
-
-Zusätzlich setzt `steuer analyse --modell …` das Modell für einen einzelnen Lauf.
 
 **Zu den Kosten:** Die Dokumentanalyse ist der mit Abstand größte Posten, weil sie
 einmal je Beleg anfällt. Opus liefert dort die sorgfältigste Einordnung, ist aber

@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from steuer import analyze
 from steuer.models import Analyse, Profil
 from steuer.web.app import anwendung_bauen
 from steuer.workspace import Arbeitsmappe
@@ -183,3 +184,58 @@ def test_leere_mappe_rendert(tmp_path: Path):
         assert klient.get("/befunde").status_code == 200
         assert klient.get("/profil").status_code == 200
         assert klient.get("/bericht").status_code == 200
+
+
+# ------------------------------------------------------------- Modellwahl --
+
+def test_auswahlfelder_werden_angezeigt(klient):
+    inhalt = klient.get("/").get_data(as_text=True)
+    assert 'id="modell-dokument"' in inhalt
+    assert 'id="modell-strategie"' in inhalt
+    assert "Sonnet 5" in inhalt
+    assert "Opus 5" in inhalt
+    assert "Fable 5" in inhalt
+
+
+def test_modellwahl_wird_gemerkt(klient, monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test")
+    klient.post("/api/analyse", json={"modell": "claude-sonnet-5"})
+    for _ in range(100):
+        if not klient.get("/api/auftrag").get_json()["laeuft"]:
+            break
+        import time
+
+        time.sleep(0.05)
+    geladen = Arbeitsmappe.laden(klient.mappe.wurzel)
+    assert geladen.einstellungen["modell_dokument"] == "claude-sonnet-5"
+    # und das Auswahlfeld zeigt die Wahl wieder an
+    inhalt = klient.get("/").get_data(as_text=True)
+    assert '<option value="claude-sonnet-5" title=' in inhalt
+    assert 'value="claude-sonnet-5"' in inhalt.split('id="modell-dokument"')[1]
+
+
+def test_unbekanntes_modell_wird_nicht_durchgereicht(klient, monkeypatch):
+    """Die Kennung kommt aus dem Browser und darf nicht ungeprueft an die API gehen."""
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test")
+    klient.post("/api/analyse", json={"modell": "boesartig-erfunden"})
+    for _ in range(100):
+        if not klient.get("/api/auftrag").get_json()["laeuft"]:
+            break
+        import time
+
+        time.sleep(0.05)
+    geladen = Arbeitsmappe.laden(klient.mappe.wurzel)
+    assert geladen.einstellungen["modell_dokument"] == analyze.MODELL_DOKUMENT
+
+
+def test_modellwahl_der_gesamtauswertung_wird_gemerkt(klient):
+    antwort = klient.post("/api/ordnen", json={"modell": "claude-fable-5"})
+    assert antwort.status_code == 200
+    for _ in range(100):
+        if not klient.get("/api/auftrag").get_json()["laeuft"]:
+            break
+        import time
+
+        time.sleep(0.05)
+    geladen = Arbeitsmappe.laden(klient.mappe.wurzel)
+    assert geladen.einstellungen["modell_strategie"] == "claude-fable-5"

@@ -18,11 +18,60 @@ from .rules import Regelwerk
 LOG = logging.getLogger(__name__)
 
 # Modellwahl je Arbeitsschritt. Ueber die Umgebungsvariablen STEUER_MODELL_DOKUMENT,
-# STEUER_MODELL_STRATEGIE und STEUER_MODELL_RECHT laesst sich jede Stufe einzeln
-# umstellen, ohne den Code zu aendern.
+# STEUER_MODELL_STRATEGIE und STEUER_MODELL_RECHT laesst sich der Standard je Stufe
+# umstellen; in der Oberflaeche waehlt der Nutzer vor jedem Lauf einzeln aus.
 MODELL_DOKUMENT = os.environ.get("STEUER_MODELL_DOKUMENT", "claude-opus-5")
 MODELL_STRATEGIE = os.environ.get("STEUER_MODELL_STRATEGIE", "claude-fable-5")
 MODELL_RECHT = os.environ.get("STEUER_MODELL_RECHT", "claude-opus-5")
+
+# Zur Auswahl angebotene Modelle je Arbeitsschritt: (Kennung, Bezeichnung, Erlaeuterung).
+# Die Reihenfolge ist die Reihenfolge im Auswahlfeld.
+AUSWAHL_DOKUMENT: tuple[tuple[str, str, str], ...] = (
+    (
+        "claude-sonnet-5",
+        "Sonnet 5",
+        "Schnell und guenstig. Fuer klar lesbare Standardbelege meist ausreichend.",
+    ),
+    (
+        "claude-opus-5",
+        "Opus 5",
+        "Gruendlichste Einordnung, spuerbar teurer. Lohnt bei schlechten Scans "
+        "und ungewoehnlichen Belegen.",
+    ),
+)
+
+AUSWAHL_STRATEGIE: tuple[tuple[str, str, str], ...] = (
+    (
+        "claude-opus-5",
+        "Opus 5",
+        "Auf anspruchsvolles, mehrstufiges Schlussfolgern ausgelegt.",
+    ),
+    (
+        "claude-fable-5",
+        "Fable 5",
+        "Alternative aus derselben Modellfamilie. Im Zweifel beide ausprobieren "
+        "und die Ergebnisse vergleichen.",
+    ),
+)
+
+
+def _pruefen(modell: str | None, auswahl: tuple[tuple[str, str, str], ...], standard: str) -> str:
+    """Laesst nur Modelle aus der Auswahlliste zu.
+
+    Die Kennung kommt aus der Weboberflaeche und damit von aussen; ein
+    unbekannter Wert wird stillschweigend auf den Standard zurueckgesetzt,
+    statt ihn an die API durchzureichen.
+    """
+    erlaubt = {kennung for kennung, _, _ in auswahl}
+    return modell if modell in erlaubt else standard
+
+
+def modell_dokument_pruefen(modell: str | None) -> str:
+    return _pruefen(modell, AUSWAHL_DOKUMENT, MODELL_DOKUMENT)
+
+
+def modell_strategie_pruefen(modell: str | None) -> str:
+    return _pruefen(modell, AUSWAHL_STRATEGIE, MODELL_STRATEGIE)
 
 MAX_VERSUCHE = 4
 WEB_SUCHE_WERKZEUG = {"type": "web_search_20250305", "name": "web_search", "max_uses": 12}
@@ -302,9 +351,13 @@ def _analyse_aus_rohdaten(rohdaten: dict[str, Any]) -> Analyse:
 
 
 __all__ = [
+    "AUSWAHL_DOKUMENT",
+    "AUSWAHL_STRATEGIE",
     "AnalyseFehler",
     "Analysedienst",
     "ExtraktionsFehler",
     "KeinSchluessel",
+    "modell_dokument_pruefen",
+    "modell_strategie_pruefen",
     "schluessel_vorhanden",
 ]

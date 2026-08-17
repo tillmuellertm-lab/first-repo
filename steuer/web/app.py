@@ -18,7 +18,16 @@ from typing import Any
 
 from .. import gaps, organize, report, rules, taxonomy
 from ..formatierung import euro
-from ..analyze import AnalyseFehler, Analysedienst, ExtraktionsFehler, schluessel_vorhanden
+from ..analyze import (
+    AUSWAHL_DOKUMENT,
+    AUSWAHL_STRATEGIE,
+    AnalyseFehler,
+    Analysedienst,
+    ExtraktionsFehler,
+    modell_dokument_pruefen,
+    modell_strategie_pruefen,
+    schluessel_vorhanden,
+)
 from ..models import (
     EIGNUNG_BEDINGT,
     EIGNUNG_GEEIGNET,
@@ -99,6 +108,11 @@ def anwendung_bauen(mappe: Arbeitsmappe) -> Any:
             "eignung_label": EIGNUNG_LABEL,
             "schluessel_vorhanden": schluessel_vorhanden(),
             "auftrag_laeuft": auftrag.laeuft,
+            "auswahl_dokument": AUSWAHL_DOKUMENT,
+            "auswahl_strategie": AUSWAHL_STRATEGIE,
+            # zuletzt getroffene Wahl, damit das Auswahlfeld sie wieder anzeigt
+            "modell_dokument": modell_dokument_pruefen(mappe.einstellungen.get("modell_dokument")),
+            "modell_strategie": modell_strategie_pruefen(mappe.einstellungen.get("modell_strategie")),
         }
 
     # ----------------------------------------------------------- Ansichten --
@@ -227,6 +241,11 @@ def anwendung_bauen(mappe: Arbeitsmappe) -> Any:
             return jsonify({"fehler": "Es ist kein ANTHROPIC_API_KEY gesetzt."}), 400
         alle = bool(request.json and request.json.get("alle"))
         nur = (request.json or {}).get("dokument")
+        modell = modell_dokument_pruefen((request.json or {}).get("modell"))
+        # Sofort festhalten: die Wahl soll auch dann erhalten bleiben, wenn der
+        # Lauf gar nicht erst startet, etwa weil es nichts zu analysieren gibt.
+        mappe.einstellungen["modell_dokument"] = modell
+        mappe.speichern()
         with sperre:
             if auftrag.laeuft:
                 return jsonify({"fehler": "Es laeuft bereits ein Vorgang."}), 409
@@ -248,8 +267,9 @@ def anwendung_bauen(mappe: Arbeitsmappe) -> Any:
             auftrag.fertig_um = ""
 
         def lauf() -> None:
-            dienst = Analysedienst()
+            dienst = Analysedienst(modell_dokument=modell)
             werk = regelwerk()
+            auftrag.meldungen.append(f"Dokumentanalyse mit {modell}")
             try:
                 for eintrag in zu_pruefen:
                     auftrag.aktuell = eintrag.dateiname
@@ -285,6 +305,9 @@ def anwendung_bauen(mappe: Arbeitsmappe) -> Any:
     @app.post("/api/ordnen")
     def ordnen():
         daten = request.json or {}
+        modell = modell_strategie_pruefen(daten.get("modell"))
+        mappe.einstellungen["modell_strategie"] = modell
+        mappe.speichern()
         with sperre:
             if auftrag.laeuft:
                 return jsonify({"fehler": "Es laeuft bereits ein Vorgang."}), 409
@@ -302,8 +325,9 @@ def anwendung_bauen(mappe: Arbeitsmappe) -> Any:
                 ergebnis = gaps.auswerten(mappe.dokumente, werk, mappe.profil)
                 modellauswertung = None
                 if daten.get("gesamtauswertung") and schluessel_vorhanden():
-                    auftrag.aktuell = "Gesamtauswertung laeuft"
-                    dienst = Analysedienst()
+                    auftrag.aktuell = f"Gesamtauswertung laeuft ({modell})"
+                    auftrag.meldungen.append(f"Gesamtauswertung mit {modell}")
+                    dienst = Analysedienst(modell_strategie=modell)
                     modellauswertung = dienst.gesamtauswertung(
                         werk,
                         mappe.profil,

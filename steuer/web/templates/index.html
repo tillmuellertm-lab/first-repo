@@ -56,22 +56,49 @@
   </div>
 
   <div class="aktionen">
-    <button type="button" class="knopf haupt" data-aktion="analyse"
-            {% if not schluessel_vorhanden %}disabled{% endif %}>
-      Neue Dokumente analysieren
-      {% if nicht_analysiert %}<span class="zaehler">{{ nicht_analysiert | length }}</span>{% endif %}
-    </button>
-    <button type="button" class="knopf" data-aktion="analyse-alle"
-            {% if not schluessel_vorhanden %}disabled{% endif %}>
-      Alles neu analysieren
-    </button>
-    <label class="schalter"><input type="checkbox" id="mit-gesamtauswertung" checked>
-      Gesamtauswertung durch das Modell</label>
-    <label class="schalter"><input type="checkbox" id="mit-paket" checked>
-      ZIP-Paket packen</label>
-    <button type="button" class="knopf haupt" data-aktion="ordnen">
-      Ordnen und Uebersicht erzeugen
-    </button>
+    <div class="stufe">
+      <span class="stufe-titel">1 · Dokumente pruefen</span>
+      <label class="modellwahl">Modell
+        <select id="modell-dokument">
+          {% for kennung, bezeichnung, erlaeuterung in auswahl_dokument %}
+          <option value="{{ kennung }}" title="{{ erlaeuterung }}"
+                  {% if modell_dokument == kennung %}selected{% endif %}>{{ bezeichnung }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <p class="modellhinweis" id="hinweis-dokument"></p>
+      <div class="knopfreihe">
+        <button type="button" class="knopf haupt" data-aktion="analyse"
+                {% if not schluessel_vorhanden %}disabled{% endif %}>
+          Neue Dokumente analysieren
+          {% if nicht_analysiert %}<span class="zaehler">{{ nicht_analysiert | length }}</span>{% endif %}
+        </button>
+        <button type="button" class="knopf" data-aktion="analyse-alle"
+                {% if not schluessel_vorhanden %}disabled{% endif %}>
+          Alles neu analysieren
+        </button>
+      </div>
+    </div>
+
+    <div class="stufe">
+      <span class="stufe-titel">2 · Ordnen und auswerten</span>
+      <label class="schalter"><input type="checkbox" id="mit-gesamtauswertung" checked>
+        Gesamtauswertung der Potenziale und Risiken</label>
+      <label class="modellwahl" id="wahl-strategie">Modell
+        <select id="modell-strategie">
+          {% for kennung, bezeichnung, erlaeuterung in auswahl_strategie %}
+          <option value="{{ kennung }}" title="{{ erlaeuterung }}"
+                  {% if modell_strategie == kennung %}selected{% endif %}>{{ bezeichnung }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <p class="modellhinweis" id="hinweis-strategie"></p>
+      <label class="schalter"><input type="checkbox" id="mit-paket" checked>
+        ZIP-Paket packen</label>
+      <button type="button" class="knopf haupt" data-aktion="ordnen">
+        Ordnen und Uebersicht erzeugen
+      </button>
+    </div>
   </div>
 </section>
 

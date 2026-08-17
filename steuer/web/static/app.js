@@ -116,6 +116,46 @@ if (ablage) {
 const dateiwahl = document.getElementById("dateiwahl");
 if (dateiwahl) dateiwahl.addEventListener("change", () => lade(dateiwahl.files));
 
+// --- Modellwahl -----------------------------------------------------------
+
+// Die Erlaeuterung zum gewaehlten Modell steht als title am jeweiligen Eintrag.
+function zeigeModellhinweis(auswahlId, hinweisId) {
+  const auswahl = document.getElementById(auswahlId);
+  const hinweis = document.getElementById(hinweisId);
+  if (!auswahl || !hinweis) return;
+  const aktualisieren = () => {
+    hinweis.textContent = auswahl.selectedOptions[0]?.title || "";
+  };
+  auswahl.addEventListener("change", aktualisieren);
+  aktualisieren();
+}
+
+zeigeModellhinweis("modell-dokument", "hinweis-dokument");
+zeigeModellhinweis("modell-strategie", "hinweis-strategie");
+
+// Das Modell der Gesamtauswertung ist nur relevant, wenn sie auch angefordert wird.
+const schalterGesamt = document.getElementById("mit-gesamtauswertung");
+const wahlStrategie = document.getElementById("wahl-strategie");
+if (schalterGesamt && wahlStrategie) {
+  const umschalten = () => {
+    const an = schalterGesamt.checked;
+    wahlStrategie.classList.toggle("inaktiv", !an);
+    document.getElementById("modell-strategie").disabled = !an;
+    const hinweis = document.getElementById("hinweis-strategie");
+    if (hinweis) hinweis.hidden = !an;
+  };
+  schalterGesamt.addEventListener("change", umschalten);
+  umschalten();
+}
+
+function modellDokument() {
+  return document.getElementById("modell-dokument")?.value;
+}
+
+function modellStrategie() {
+  return document.getElementById("modell-strategie")?.value;
+}
+
 // --- Aktionen -------------------------------------------------------------
 
 document.addEventListener("click", async (ereignis) => {
@@ -124,16 +164,17 @@ document.addEventListener("click", async (ereignis) => {
   const aktion = knopf.dataset.aktion;
 
   if (aktion === "analyse") {
-    await starte("/api/analyse", {});
+    await starte("/api/analyse", { modell: modellDokument() });
   } else if (aktion === "analyse-alle") {
     if (!confirm("Alle Dokumente noch einmal analysieren? Das verursacht erneut API-Kosten.")) return;
-    await starte("/api/analyse", { alle: true });
+    await starte("/api/analyse", { alle: true, modell: modellDokument() });
   } else if (aktion === "neu-analysieren") {
-    await starte("/api/analyse", { dokument: knopf.dataset.dokument });
+    await starte("/api/analyse", { dokument: knopf.dataset.dokument, modell: knopf.dataset.modell });
   } else if (aktion === "ordnen") {
     await starte("/api/ordnen", {
       gesamtauswertung: document.getElementById("mit-gesamtauswertung")?.checked || false,
       paket: document.getElementById("mit-paket")?.checked || false,
+      modell: modellStrategie(),
     });
   } else if (aktion === "eingang-einlesen") {
     const antwort = await fetch("/api/eingang-einlesen", { method: "POST" });
