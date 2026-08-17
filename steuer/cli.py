@@ -477,6 +477,33 @@ def befehl_euer(args: argparse.Namespace) -> int:
     return 0
 
 
+def _kategorienverteilung(mappe: Arbeitsmappe) -> None:
+    """Zeigt, wie sich die Dokumente tatsaechlich auf die Kategorien verteilen."""
+    verteilung: dict[str, int] = {}
+    jahre: dict[str, int] = {}
+    for dokument in mappe.dokumente:
+        kennung = dokument.wirksame_kategorie if dokument.analyse else "(nicht analysiert)"
+        verteilung[kennung] = verteilung.get(kennung, 0) + 1
+        if dokument.analyse:
+            jahr = str(dokument.analyse.steuerjahr or "ohne Jahresangabe")
+            jahre[jahr] = jahre.get(jahr, 0) + 1
+
+    print(f"So verteilen sich die {len(mappe.dokumente)} Dokumente dieser Mappe:\n")
+    for kennung, anzahl in sorted(verteilung.items(), key=lambda p: -p[1]):
+        label = taxonomy.NACH_ID[kennung].label if kennung in taxonomy.NACH_ID else ""
+        print(f"  {anzahl:>5}  {kennung:34} {label}")
+
+    if jahre:
+        print(f"\nNach Steuerjahr (Mappe ist fuer {mappe.jahr}):\n")
+        for jahr, anzahl in sorted(jahre.items()):
+            print(f"  {anzahl:>5}  {jahr}")
+
+    print(
+        "\nDie linke Spalte ist die Kennung fuer --kategorie. "
+        "Ein Ordnername wie '22_Anlage_S_G_EUeR' ist nicht die Kennung."
+    )
+
+
 def befehl_ausgliedern(args: argparse.Namespace) -> int:
     """Verschiebt Dokumente nach Kategorie oder Steuerjahr in eine andere Mappe."""
     mappe = _mappe_oeffnen(args)
@@ -484,12 +511,9 @@ def befehl_ausgliedern(args: argparse.Namespace) -> int:
         print(
             "Bitte angeben, was ausgegliedert werden soll:\n"
             "  --kategorie <Kennung>   z. B. selbstaendig\n"
-            "  --fremdes-jahr          alles, was nicht ins Jahr der Mappe gehoert\n\n"
-            "Verfuegbare Kategorien:",
-            file=sys.stderr,
+            "  --fremdes-jahr          alles, was nicht ins Jahr der Mappe gehoert\n"
         )
-        for kategorie in taxonomy.KATEGORIEN:
-            print(f"  {kategorie.id:32} {kategorie.label}", file=sys.stderr)
+        _kategorienverteilung(mappe)
         return 1
 
     unbekannt = [k for k in (args.kategorie or []) if k not in taxonomy.NACH_ID]
@@ -513,7 +537,8 @@ def befehl_ausgliedern(args: argparse.Namespace) -> int:
             betroffen.append((dokument, grund))
 
     if not betroffen:
-        print("Kein Dokument passt auf diese Auswahl.")
+        print("Kein Dokument passt auf diese Auswahl.\n")
+        _kategorienverteilung(mappe)
         return 0
 
     print(f"{len(betroffen)} von {len(mappe.dokumente)} Dokumenten betroffen:\n")
