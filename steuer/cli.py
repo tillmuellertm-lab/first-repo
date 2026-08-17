@@ -436,6 +436,61 @@ def _bestandseintrag(dokument: Dokument) -> dict:
     }
 
 
+def befehl_dateien(args: argparse.Namespace) -> int:
+    """Zeigt Groesse und Seitenzahl jeder Datei, um Ausreisser zu finden."""
+    from .extract import MAX_PDF_SEITEN, seitenzahl
+
+    mappe = _mappe_oeffnen(args)
+    mappe.eingang_einlesen()
+    mappe.speichern()
+    if not mappe.dokumente:
+        print("Noch keine Dokumente aufgenommen.")
+        return 0
+
+    print(f"{'Groesse':>10}  {'Seiten':>8}  Datei")
+    print("-" * 78)
+
+    auffaellig: list[tuple[str, str]] = []
+    zeilen = []
+    for dokument in mappe.dokumente:
+        pfad = mappe.pfad_zu(dokument)
+        if not pfad.exists():
+            auffaellig.append((dokument.dateiname, "Originaldatei fehlt"))
+            continue
+        groesse = pfad.stat().st_size
+        seiten = seitenzahl(pfad) if dokument.medientyp == "application/pdf" else None
+        if dokument.medientyp == "application/pdf" and seiten is None:
+            anzeige = "unlesbar"
+            auffaellig.append(
+                (dokument.dateiname, "Seitenzahl nicht lesbar - haeufigste Ursache fuer Abbrueche")
+            )
+        elif seiten is None:
+            anzeige = "-"
+        else:
+            anzeige = str(seiten)
+            if seiten > MAX_PDF_SEITEN:
+                auffaellig.append(
+                    (dokument.dateiname, f"{seiten} Seiten, nur die ersten {MAX_PDF_SEITEN} werden geprueft")
+                )
+        if groesse > 20_000_000:
+            auffaellig.append((dokument.dateiname, f"{groesse / 1_000_000:.0f} MB, zu gross fuer die Analyse"))
+        zeilen.append((groesse, f"{groesse / 1_000_000:9.1f} MB  {anzeige:>8}  {dokument.dateiname}"))
+
+    for _, zeile in sorted(zeilen, reverse=True):
+        print(zeile)
+
+    print()
+    if auffaellig:
+        print("Auffaellig:")
+        for name, grund in auffaellig:
+            print(f"  {name}")
+            print(f"      {grund}")
+        print("\nSolche Dateien am besten je Beleg einzeln neu einscannen oder aufteilen.")
+    else:
+        print("Keine Auffaelligkeiten. Alle Dateien sind fuer die Analyse geeignet.")
+    return 0
+
+
 def befehl_liste(args: argparse.Namespace) -> int:
     mappe = _mappe_oeffnen(args)
     if not mappe.dokumente:
@@ -589,6 +644,12 @@ def parser_bauen() -> argparse.ArgumentParser:
 
     p = unter.add_parser("status", help="Kurzer Ueberblick ueber die Arbeitsmappe.")
     p.set_defaults(funktion=befehl_status)
+
+    p = unter.add_parser(
+        "dateien",
+        help="Groesse und Seitenzahl aller Dateien anzeigen, um Ausreisser zu finden.",
+    )
+    p.set_defaults(funktion=befehl_dateien)
 
     p = unter.add_parser("liste", help="Alle Dokumente nach Anlagen sortiert auflisten.")
     p.set_defaults(funktion=befehl_liste)

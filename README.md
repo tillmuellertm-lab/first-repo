@@ -128,6 +128,7 @@ Die Originale bleiben unangetastet, die Ablage wird bei jedem Lauf frisch aufgeb
 | `steuer hinzufuegen <Pfade>` | Dateien oder Ordner aufnehmen, Dubletten werden erkannt |
 | `steuer analyse [--alle]` | Dokumente prüfen; ohne `--alle` nur die neuen |
 | `steuer liste` | alle Dokumente nach Anlagen sortiert |
+| `steuer dateien` | Größe und Seitenzahl aller Dateien, findet Ausreißer |
 | `steuer status` | Kennzahlen auf einen Blick |
 | `steuer pruefen` | Lücken, Chancen und Warnungen |
 | `steuer trennen <Kennung>` | erkannten Sammelscan seitengenau zerlegen |
