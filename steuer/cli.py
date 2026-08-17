@@ -205,11 +205,29 @@ def befehl_analyse(args: argparse.Namespace) -> int:
         zu_pruefen = [d for d in mappe.dokumente if d.id.startswith(args.dokument)]
     elif args.alle:
         zu_pruefen = list(mappe.dokumente)
+    elif args.nachtragen:
+        # Alles, was eine aeltere Fassung der Analyse gesehen hat. Ein
+        # abgebrochener Lauf laesst sich damit fortsetzen, ohne die bereits
+        # bezahlten Dokumente ein zweites Mal zu pruefen.
+        zu_pruefen = [
+            d
+            for d in mappe.dokumente
+            if d.analyse is None or d.status == STATUS_FEHLER or not d.analyse.ist_aktuell
+        ]
     else:
         zu_pruefen = [d for d in mappe.dokumente if d.analyse is None or d.status == STATUS_FEHLER]
 
+    if args.hoechstens and args.hoechstens > 0:
+        zu_pruefen = zu_pruefen[: args.hoechstens]
+
     if not zu_pruefen:
+        veraltet = [d for d in mappe.dokumente if d.analyse and not d.analyse.ist_aktuell]
         print("Nichts zu analysieren. Mit --alle wird der gesamte Bestand neu geprueft.")
+        if veraltet:
+            print(
+                f"{len(veraltet)} Dokumente stammen aus einer aelteren Fassung der Analyse. "
+                "Nur diese nachholen mit: steuer analyse --nachtragen"
+            )
         mappe.speichern()
         return 0
 
@@ -814,6 +832,18 @@ def parser_bauen() -> argparse.ArgumentParser:
     p = unter.add_parser("analyse", help="Dokumente inhaltlich pruefen lassen.")
     p.add_argument("--alle", action="store_true", help="Auch bereits analysierte Dokumente erneut pruefen.")
     p.add_argument("--dokument", help="Nur ein Dokument, Angabe der Kennung.")
+    p.add_argument(
+        "--nachtragen",
+        action="store_true",
+        help="Nur Dokumente aus einer aelteren Fassung der Analyse nachholen. "
+        "Setzt einen abgebrochenen Lauf fort, ohne Fertiges erneut zu bezahlen.",
+    )
+    p.add_argument(
+        "--hoechstens",
+        type=int,
+        metavar="N",
+        help="Hoechstens N Dokumente pruefen. Fuer einen Probelauf, um die Kosten abzuschaetzen.",
+    )
     p.add_argument(
         "--modell",
         choices=[k for k, _, _ in AUSWAHL_DOKUMENT],

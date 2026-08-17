@@ -242,3 +242,13 @@ def test_lange_listen_werden_gekuerzt():
     dokumente = [beleg(f"scan-{i}.pdf", 10.0) for i in range(40)]
     text = euer.markdown_bericht(euer.aufstellen(dokumente, 2024))
     assert "und 10 weitere" in text
+
+
+def test_analyseversion_erkennt_alte_pruefungen():
+    from steuer.models import ANALYSE_VERSION
+
+    alt = Analyse.aus_dict({"dokumenttyp": "Bon"})
+    assert alt.version == 0 and not alt.ist_aktuell
+    assert Analyse(version=ANALYSE_VERSION).ist_aktuell
+    # Ueber einen Speicherzyklus muss die Version erhalten bleiben.
+    assert Analyse.aus_dict(Analyse(version=ANALYSE_VERSION).als_dict()).ist_aktuell

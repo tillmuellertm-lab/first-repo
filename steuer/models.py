@@ -27,6 +27,11 @@ EIGNUNG_LABEL = {
 
 EIGNUNG_REIHENFOLGE = [EIGNUNG_GEEIGNET, EIGNUNG_BEDINGT, EIGNUNG_UNKLAR, EIGNUNG_UNGEEIGNET]
 
+# Wird erhoeht, wenn die Analyse neue Felder erhebt. So laesst sich erkennen,
+# welche Dokumente von einer aelteren Fassung geprueft wurden und nachgeholt
+# werden muessen, ohne den gesamten Bestand erneut zu bezahlen.
+ANALYSE_VERSION = 1
+
 STATUS_NEU = "neu"
 STATUS_ANALYSIERT = "analysiert"
 STATUS_FEHLER = "fehler"
@@ -147,7 +152,13 @@ class Analyse:
     geschaeftsvorfall: str = ""  # einnahme, ausgabe, kein_betrieblicher_vorgang
     euer_posten: str = ""  # Posten-Id aus steuer.euer
     modell: str = ""
+    # 0 = vor Einfuehrung der Versionierung geprueft.
+    version: int = 0
     analysiert_am: str = field(default_factory=_heute)
+
+    @property
+    def ist_aktuell(self) -> bool:
+        return self.version >= ANALYSE_VERSION
 
     def als_dict(self) -> dict[str, Any]:
         return asdict(self)

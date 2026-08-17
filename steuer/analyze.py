@@ -12,7 +12,7 @@ from typing import Any, Callable
 
 from . import euer, prompts
 from .extract import ExtraktionsFehler, inhalt_aufbereiten
-from .models import Analyse, Position, Profil, Segment
+from .models import ANALYSE_VERSION, Analyse, Position, Profil, Segment
 from .rules import Regelwerk
 
 LOG = logging.getLogger(__name__)
@@ -413,6 +413,7 @@ def _analyse_aus_rohdaten(rohdaten: dict[str, Any]) -> Analyse:
         enthaelt_mehrere_dokumente=bool(rohdaten.get("enthaelt_mehrere_dokumente")),
         segmente=segmente,
         zahlungsart=str(rohdaten.get("zahlungsart") or "unbekannt"),
+        version=ANALYSE_VERSION,
         geschaeftsvorfall=_geschaeftsvorfall(rohdaten.get("geschaeftsvorfall")),
         euer_posten=str(rohdaten.get("euer_posten") or "").strip()
         if str(rohdaten.get("euer_posten") or "").strip() in euer.NACH_ID
