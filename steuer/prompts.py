@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from . import taxonomy
+from . import euer, taxonomy
 from .models import Profil
 from .rules import Regelwerk
 
@@ -130,7 +130,19 @@ Weitere Regeln:
   Stapelscans), setze "enthaelt_mehrere_dokumente" und gib die Seitenbereiche an.
 - "optimierungshinweise" nur, wenn sich aus genau diesem Dokument eine konkrete
   Moeglichkeit ergibt, etwa ein nicht ausgeschoepfter Hoechstbetrag oder eine
-  in der Nebenkostenabrechnung enthaltene haushaltsnahe Position."""
+  in der Nebenkostenabrechnung enthaltene haushaltsnahe Position.
+
+Betriebliche Belege (Selbstaendigkeit, Gewerbe, Freiberuflichkeit):
+- Handelt es sich um einen Geschaeftsvorfall eines Betriebs, setze
+  "geschaeftsvorfall" auf "einnahme" oder "ausgabe" und ordne den Beleg ueber
+  "euer_posten" einem Posten der Einnahmen-Ueberschuss-Rechnung zu.
+- Massgeblich ist die Sicht des Betriebs: eine Eingangsrechnung, die der Betrieb
+  bezahlt, ist eine Ausgabe; eine Ausgangsrechnung, die er stellt, eine Einnahme.
+- Bei privaten Belegen laesst du beide Felder leer oder setzt
+  "geschaeftsvorfall" auf "kein_betrieblicher_vorgang". Rate nicht: ein falsch
+  eingeordneter Beleg verfaelscht den Gewinn.
+- Verfuegbare Posten:
+{euer.postenuebersicht()}"""
 
 
 WERKZEUG_ANALYSE: dict[str, Any] = {
@@ -201,6 +213,22 @@ WERKZEUG_ANALYSE: dict[str, Any] = {
                 "description": "Konkrete legale Ansaetze, die sich aus diesem Dokument ergeben.",
             },
             "zahlungsart": {"type": "string", "enum": ["unbar", "bar", "unbekannt"]},
+            "geschaeftsvorfall": {
+                "type": "string",
+                "enum": ["einnahme", "ausgabe", "kein_betrieblicher_vorgang"],
+                "description": (
+                    "Nur bei Belegen eines Betriebs: Richtung aus Sicht des Betriebs. "
+                    "Bei privaten Belegen weglassen."
+                ),
+            },
+            "euer_posten": {
+                "type": "string",
+                "enum": euer.ids(),
+                "description": (
+                    "Nur bei betrieblichen Belegen: Posten der Einnahmen-Ueberschuss-Rechnung. "
+                    "Bei Unsicherheit weglassen statt raten."
+                ),
+            },
             "positionen": {
                 "type": "array",
                 "description": "Einzelpositionen, sofern der Beleg sie ausweist.",

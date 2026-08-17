@@ -8,7 +8,7 @@ import sys
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from . import gaps, organize, report, rules, taxonomy
+from . import euer, gaps, organize, report, rules, taxonomy
 from .formatierung import euro
 from .analyze import (
     AUSWAHL_DOKUMENT,
@@ -436,6 +436,47 @@ def _bestandseintrag(dokument: Dokument) -> dict:
     }
 
 
+def befehl_euer(args: argparse.Namespace) -> int:
+    """Erzeugt aus einer Gewerbemappe die Aufstellung fuer die EUeR."""
+    mappe = _mappe_oeffnen(args)
+    dokumente = mappe.dokumente
+    if args.kategorie:
+        dokumente = [d for d in dokumente if d.wirksame_kategorie == args.kategorie]
+        if not dokumente:
+            print(f"Keine Dokumente in der Kategorie {args.kategorie}.")
+            return 1
+
+    analysiert = [d for d in dokumente if d.analyse]
+    if not analysiert:
+        print("Keine analysierten Dokumente. Zuerst 'steuer analyse' ausfuehren.")
+        return 1
+
+    aufstellung = euer.aufstellen(analysiert, mappe.jahr)
+    name = args.name or mappe.profil.name
+
+    mappe.berichte.mkdir(parents=True, exist_ok=True)
+    csv_pfad = mappe.berichte / f"euer-aufstellung-{mappe.jahr}.csv"
+    md_pfad = mappe.berichte / f"euer-aufstellung-{mappe.jahr}.md"
+    # BOM, damit Excel die Umlaute und das Semikolon richtig liest.
+    csv_pfad.write_text(euer.csv_export(aufstellung), encoding="utf-8-sig")
+    md_pfad.write_text(euer.markdown_bericht(aufstellung, name), encoding="utf-8")
+
+    print(f"Erfasste Belege: {aufstellung.anzahl_belege}")
+    print(f"Betriebseinnahmen: {euro(aufstellung.summe_einnahmen)}")
+    print(f"Betriebsausgaben:  {euro(aufstellung.summe_ausgaben)}")
+    bezeichnung = "Verlust" if aufstellung.ist_verlust else "Gewinn"
+    print(f"Vorlaeufiges Ergebnis: {bezeichnung} {euro(abs(aufstellung.ergebnis))}")
+    if aufstellung.ungeklaert:
+        print(
+            f"\n{euer.belege(len(aufstellung.ungeklaert))} ohne klare Richtung "
+            "(nicht in den Summen enthalten)."
+        )
+    if aufstellung.ohne_betrag:
+        print(f"{euer.belege(len(aufstellung.ohne_betrag))} ohne erkennbaren Betrag.")
+    print(f"\n  {md_pfad}\n  {csv_pfad}")
+    return 0
+
+
 def befehl_ausgliedern(args: argparse.Namespace) -> int:
     """Verschiebt Dokumente nach Kategorie oder Steuerjahr in eine andere Mappe."""
     mappe = _mappe_oeffnen(args)
@@ -782,6 +823,18 @@ def parser_bauen() -> argparse.ArgumentParser:
     p.add_argument("--ohne-ungeeignete", action="store_true", help="Nicht steuerrelevante Dokumente weglassen.")
     p.add_argument("--trotzdem", action="store_true", help="Auch bei nicht analysierten Dokumenten fortfahren.")
     p.set_defaults(funktion=befehl_ordnen)
+
+    p = unter.add_parser(
+        "euer",
+        help="Aufstellung der Betriebseinnahmen und -ausgaben fuer die Anlage EUeR erzeugen.",
+    )
+    p.add_argument(
+        "--kategorie",
+        choices=taxonomy.ids(),
+        help="Nur Dokumente dieser Kategorie auswerten, fuer den Betrieb also 'selbstaendig'.",
+    )
+    p.add_argument("--name", help="Bezeichnung des Betriebs fuer den Bericht.")
+    p.set_defaults(funktion=befehl_euer)
 
     p = unter.add_parser("recht-zeigen", help="Hinterlegten Rechtsstand anzeigen.")
     p.add_argument("--jahr", type=int)

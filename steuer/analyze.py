@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
-from . import prompts
+from . import euer, prompts
 from .extract import ExtraktionsFehler, inhalt_aufbereiten
 from .models import Analyse, Position, Profil, Segment
 from .rules import Regelwerk
@@ -345,6 +345,11 @@ def _zahl(wert: Any) -> float | None:
         return None
 
 
+def _geschaeftsvorfall(wert: Any) -> str:
+    text = str(wert or "").strip().lower()
+    return text if text in (euer.EINNAHME, euer.AUSGABE, "kein_betrieblicher_vorgang") else ""
+
+
 def _analyse_aus_rohdaten(rohdaten: dict[str, Any]) -> Analyse:
     """Uebersetzt die Werkzeugausgabe in das interne Modell, tolerant gegen Luecken."""
     from . import taxonomy  # lokal, um Zirkelbezuege zu vermeiden
@@ -408,6 +413,10 @@ def _analyse_aus_rohdaten(rohdaten: dict[str, Any]) -> Analyse:
         enthaelt_mehrere_dokumente=bool(rohdaten.get("enthaelt_mehrere_dokumente")),
         segmente=segmente,
         zahlungsart=str(rohdaten.get("zahlungsart") or "unbekannt"),
+        geschaeftsvorfall=_geschaeftsvorfall(rohdaten.get("geschaeftsvorfall")),
+        euer_posten=str(rohdaten.get("euer_posten") or "").strip()
+        if str(rohdaten.get("euer_posten") or "").strip() in euer.NACH_ID
+        else "",
     )
 
 

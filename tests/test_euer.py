@@ -1,0 +1,153 @@
+from steuer import euer
+from steuer.models import Analyse, Dokument
+
+
+def beleg(
+    dateiname: str,
+    betrag: float | None = None,
+    *,
+    geschaeftsvorfall: str = "",
+    euer_posten: str = "",
+    typ: str = "",
+    aussteller: str = "",
+    eignung: str = "geeignet",
+    mit_analyse: bool = True,
+) -> Dokument:
+    doc = Dokument(id=dateiname[:12], dateiname=dateiname)
+    if mit_analyse:
+        doc.analyse = Analyse(
+            dokumenttyp=typ,
+            aussteller=aussteller,
+            betrag_gesamt=betrag,
+            eignung=eignung,
+            geschaeftsvorfall=geschaeftsvorfall,
+            euer_posten=euer_posten,
+        )
+    return doc
+
+
+def test_posten_ids_sind_eindeutig():
+    assert len(euer.ids()) == len(set(euer.ids()))
+    assert euer.SAMMELPOSTEN in euer.NACH_ID
+
+
+def test_analyse_haelt_die_neuen_felder_ueber_einen_speicherzyklus():
+    original = Analyse(geschaeftsvorfall="ausgabe", euer_posten="buero")
+    wieder = Analyse.aus_dict(original.als_dict())
+    assert wieder.geschaeftsvorfall == "ausgabe"
+    assert wieder.euer_posten == "buero"
+
+
+def test_summen_und_verlust():
+    dokumente = [
+        beleg("honorar.pdf", 1000.0, geschaeftsvorfall="einnahme", euer_posten="betriebseinnahmen"),
+        beleg("laptop.pdf", 1200.0, geschaeftsvorfall="ausgabe", euer_posten="abschreibung"),
+        beleg("porto.pdf", 300.0, geschaeftsvorfall="ausgabe", euer_posten="buero"),
+    ]
+    aufstellung = euer.aufstellen(dokumente, 2024)
+    assert aufstellung.summe_einnahmen == 1000.0
+    assert aufstellung.summe_ausgaben == 1500.0
+    assert aufstellung.ergebnis == -500.0
+    assert aufstellung.ist_verlust
+    assert aufstellung.anzahl_belege == 3
+
+
+def test_posten_aus_der_analyse_hat_vorrang_vor_stichworten():
+    # Der Dateiname deutet auf Buerobedarf, die Analyse sagt Fortbildung.
+    dokument = beleg(
+        "software-rechnung.pdf",
+        90.0,
+        geschaeftsvorfall="ausgabe",
+        euer_posten="fortbildung",
+    )
+    aufstellung = euer.aufstellen([dokument], 2024)
+    assert [z.posten.id for z in aufstellung.ausgaben] == ["fortbildung"]
+
+
+def test_posten_aus_der_analyse_wird_verworfen_wenn_die_richtung_nicht_passt():
+    dokument = beleg(
+        "zahlung.pdf",
+        90.0,
+        geschaeftsvorfall="ausgabe",
+        euer_posten="betriebseinnahmen",  # ein Einnahmeposten
+    )
+    aufstellung = euer.aufstellen([dokument], 2024)
+    assert not aufstellung.einnahmen
+    assert [z.posten.id for z in aufstellung.ausgaben] == [euer.SAMMELPOSTEN]
+
+
+def test_stichwortfallback_ohne_analysefelder():
+    dokumente = [
+        beleg("beleg-1.pdf", 60.0, typ="Tankstelle Quittung"),
+        beleg("beleg-2.pdf", 500.0, typ="Ausgangsrechnung", aussteller="Kundin"),
+    ]
+    aufstellung = euer.aufstellen(dokumente, 2024)
+    assert [z.posten.id for z in aufstellung.ausgaben] == ["fahrzeug"]
+    assert [z.posten.id for z in aufstellung.einnahmen] == ["betriebseinnahmen"]
+
+
+def test_unklare_richtung_wird_nicht_geraten():
+    aufstellung = euer.aufstellen([beleg("scan-0815.pdf", 42.0)], 2024)
+    assert aufstellung.summe_einnahmen == 0.0
+    assert aufstellung.summe_ausgaben == 0.0
+    assert [d.dateiname for d in aufstellung.ungeklaert] == ["scan-0815.pdf"]
+
+
+def test_beleg_ohne_betrag_wird_getrennt_ausgewiesen():
+    dokument = beleg("rahmenvertrag.pdf", None, geschaeftsvorfall="ausgabe", euer_posten="beratung")
+    aufstellung = euer.aufstellen([dokument], 2024)
+    assert [d.dateiname for d in aufstellung.ohne_betrag] == ["rahmenvertrag.pdf"]
+    assert aufstellung.anzahl_belege == 0
+
+
+def test_ungeeignete_und_unanalysierte_belege_bleiben_draussen():
+    dokumente = [
+        beleg("werbung.pdf", 50.0, geschaeftsvorfall="ausgabe", eignung="ungeeignet"),
+        beleg("neu.pdf", mit_analyse=False),
+    ]
+    aufstellung = euer.aufstellen(dokumente, 2024)
+    assert aufstellung.anzahl_belege == 0
+    assert not aufstellung.ungeklaert
+    assert not aufstellung.ohne_betrag
+
+
+def test_negative_betraege_zaehlen_dem_betrag_nach():
+    # Manche Belege weisen Ausgaben mit Minuszeichen aus.
+    dokument = beleg("lastschrift.pdf", -80.0, geschaeftsvorfall="ausgabe", euer_posten="buero")
+    aufstellung = euer.aufstellen([dokument], 2024)
+    assert aufstellung.summe_ausgaben == 80.0
+
+
+def test_csv_export_ist_deutsch_formatiert():
+    dokumente = [
+        beleg("honorar.pdf", 1234.5, geschaeftsvorfall="einnahme", euer_posten="betriebseinnahmen"),
+        beleg("porto.pdf", 34.5, geschaeftsvorfall="ausgabe", euer_posten="buero"),
+    ]
+    text = euer.csv_export(euer.aufstellen(dokumente, 2024))
+    zeilen = text.splitlines()
+    assert zeilen[0].startswith("art;posten;")
+    assert "1234,50" in text
+    assert "Gewinn" in text
+    assert "1200,00" in text
+
+
+def test_markdown_bericht_nennt_verlust_und_offene_punkte():
+    dokumente = [
+        beleg("honorar.pdf", 100.0, geschaeftsvorfall="einnahme", euer_posten="betriebseinnahmen"),
+        beleg("miete.pdf", 900.0, geschaeftsvorfall="ausgabe", euer_posten="raumkosten"),
+        beleg("scan-0815.pdf", 42.0),
+    ]
+    text = euer.markdown_bericht(euer.aufstellen(dokumente, 2024), name="Praxis Mustermann")
+    assert "Praxis Mustermann" in text
+    assert "Verlust: 800,00 EUR" in text
+    assert "ersetzt keine Einnahmen-Ueberschuss-Rechnung" in text
+    assert "1 Beleg ohne klare Richtung" in text
+    assert "scan-0815.pdf" in text
+    # Der ungeklaerte Beleg darf die Summe nicht beeinflussen.
+    assert "842" not in text
+
+
+def test_lange_listen_werden_gekuerzt():
+    dokumente = [beleg(f"scan-{i}.pdf", 10.0) for i in range(40)]
+    text = euer.markdown_bericht(euer.aufstellen(dokumente, 2024))
+    assert "und 10 weitere" in text

@@ -134,6 +134,7 @@ Die Originale bleiben unangetastet, die Ablage wird bei jedem Lauf frisch aufgeb
 | `steuer pruefen` | Lücken, Chancen und Warnungen |
 | `steuer trennen <Kennung>` | erkannten Sammelscan seitengenau zerlegen |
 | `steuer ordnen [--paket] [--gesamtauswertung]` | Ablage, Berichte, ZIP |
+| `steuer euer [--kategorie selbstaendig]` | Aufstellung der Betriebseinnahmen und -ausgaben für die Anlage EÜR |
 | `steuer recht-zeigen [--jahr]` | hinterlegten Rechtsstand anzeigen |
 | `steuer recht-update --jahr 2026` | Rechtsstand recherchieren, Entwurf erzeugen |
 | `steuer recht-uebernehmen --jahr 2026` | geprüften Entwurf übernehmen |
@@ -205,6 +206,32 @@ steuer ausgliedern --fremdes-jahr --nach ~/steuer-sonstige
 
 Die Zielmappe wird bei Bedarf angelegt. `--kategorie` ist mehrfach angebbar, die
 verfügbaren Kennungen listet der Befehl ohne Argumente auf.
+
+---
+
+## Aufstellung für die Einnahmen-Überschuss-Rechnung
+
+Liegen die Geschäftsbelege in einer eigenen Mappe, fasst `steuer euer` sie zu einer
+Aufstellung nach den Posten der Anlage EÜR zusammen — als Markdown zum Lesen und als
+CSV, das sich in Excel oder LibreOffice öffnen lässt:
+
+```bash
+cd ~/gewerbe-2024
+steuer euer --name "Atelier Musterfrau"
+```
+
+Beides landet in `berichte/`. Zwei Dinge sind dabei wichtig:
+
+- **Das ist keine EÜR.** Die Aufstellung ist Zuarbeit; die Anlage EÜR erstellt der
+  Steuerberater daraus. Die Zuordnung zu den Posten ist ein Vorschlag.
+- **Was unklar ist, wird nicht geraten.** Belege, bei denen sich Einnahme und Ausgabe
+  nicht sicher unterscheiden lassen, und Belege ohne erkennbaren Betrag stehen separat
+  unter „Offene Punkte“ und gehen **nicht** in die Summen ein. Eine zu schöne Summe
+  wäre schlimmer als eine unvollständige.
+
+Bei einem Verlustjahr ist die Aufstellung besonders nützlich: Der Verlust lässt sich
+mit anderen Einkünften verrechnen, bei Zusammenveranlagung auch mit denen des
+Ehepartners.
 
 ---
 
@@ -320,6 +347,7 @@ Tests laufen ohne API-Schlüssel und ohne Netzzugriff.
 | `steuer/gaps.py` | regelbasierte Auswertung ohne Modellaufruf |
 | `steuer/naming.py`, `organize.py` | Benennung und Ablage |
 | `steuer/report.py` | HTML, Markdown, CSV |
+| `steuer/euer.py` | Aufstellung der Betriebseinnahmen und -ausgaben |
 | `steuer/lawupdate.py` | Rechtsstandsrecherche und Entwurfsverwaltung |
 | `steuer/web/` | lokale Weboberfläche |
 

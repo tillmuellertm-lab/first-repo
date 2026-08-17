@@ -143,6 +143,9 @@ class Analyse:
     enthaelt_mehrere_dokumente: bool = False
     segmente: list[Segment] = field(default_factory=list)
     zahlungsart: str = ""  # unbar, bar, unbekannt
+    # Nur bei betrieblichen Belegen gefuellt; steuert die EUeR-Aufstellung.
+    geschaeftsvorfall: str = ""  # einnahme, ausgabe, kein_betrieblicher_vorgang
+    euer_posten: str = ""  # Posten-Id aus steuer.euer
     modell: str = ""
     analysiert_am: str = field(default_factory=_heute)
 
