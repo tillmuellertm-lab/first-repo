@@ -693,12 +693,65 @@ def befehl_dateien(args: argparse.Namespace) -> int:
     return 0
 
 
+def befehl_typen(args: argparse.Namespace) -> int:
+    """Verdichtet eine Kategorie auf ihre Dokumentarten.
+
+    Bei mehreren hundert Belegen ist die Einzelliste unlesbar. Die Frage, ob in
+    einem Topf etwas Verwertbares steckt, beantwortet die Verteilung der
+    Dokumentarten schneller als jeder Dateiname.
+    """
+    mappe = _mappe_oeffnen(args)
+    dokumente = [d for d in mappe.dokumente if d.analyse]
+    if args.kategorie:
+        dokumente = [d for d in dokumente if d.wirksame_kategorie == args.kategorie]
+    if not dokumente:
+        print("Keine analysierten Dokumente in dieser Auswahl.")
+        return 1
+
+    gruppen: dict[str, list[Dokument]] = {}
+    for dokument in dokumente:
+        typ = (dokument.analyse.dokumenttyp or "ohne Bezeichnung").strip()
+        gruppen.setdefault(typ, []).append(dokument)
+
+    titel = f" in {args.kategorie}" if args.kategorie else ""
+    print(f"{len(dokumente)} Dokumente{titel}, nach Dokumentart:\n")
+    print(f"{'Anzahl':>6}  {'Summe':>16}  {'Aussteller (Beispiele)':<34} Art")
+    print("-" * 100)
+
+    for typ, liste in sorted(gruppen.items(), key=lambda p: (-len(p[1]), p[0])):
+        summe = sum(
+            d.analyse.betrag_gesamt or d.analyse.betrag_abzugsfaehig or 0.0 for d in liste
+        )
+        aussteller = []
+        for dokument in liste:
+            name = (dokument.analyse.aussteller or "").strip()
+            if name and name not in aussteller:
+                aussteller.append(name)
+            if len(aussteller) == 3:
+                break
+        beispiele = ", ".join(aussteller)[:33] or "-"
+        print(f"{len(liste):>6}  {euro(summe) if summe else '':>16}  {beispiele:<34} {typ[:40]}")
+
+    gesamt = sum(
+        d.analyse.betrag_gesamt or d.analyse.betrag_abzugsfaehig or 0.0 for d in dokumente
+    )
+    print("-" * 100)
+    print(f"{len(dokumente):>6}  {euro(gesamt):>16}  Summe ueber alle Arten")
+    print(
+        "\nEinzelne Dokumente einer Art ansehen: steuer liste --kategorie <Kennung>"
+    )
+    return 0
+
+
 def befehl_liste(args: argparse.Namespace) -> int:
     mappe = _mappe_oeffnen(args)
     if not mappe.dokumente:
         print("Noch keine Dokumente aufgenommen.")
         return 0
-    for kategorie in taxonomy.KATEGORIEN:
+    kategorien = taxonomy.KATEGORIEN
+    if getattr(args, "kategorie", None):
+        kategorien = [k for k in kategorien if k.id == args.kategorie]
+    for kategorie in kategorien:
         liste = [d for d in mappe.dokumente if d.wirksame_kategorie == kategorie.id]
         if not liste:
             continue
@@ -891,7 +944,15 @@ def parser_bauen() -> argparse.ArgumentParser:
     p.set_defaults(funktion=befehl_ausgliedern)
 
     p = unter.add_parser("liste", help="Alle Dokumente nach Anlagen sortiert auflisten.")
+    p.add_argument("--kategorie", choices=taxonomy.ids(), help="Nur diese Kategorie zeigen.")
     p.set_defaults(funktion=befehl_liste)
+
+    p = unter.add_parser(
+        "typen",
+        help="Dokumentarten einer Kategorie zaehlen und summieren - Uebersicht bei vielen Belegen.",
+    )
+    p.add_argument("--kategorie", choices=taxonomy.ids(), help="Auf eine Kategorie beschraenken.")
+    p.set_defaults(funktion=befehl_typen)
 
     p = unter.add_parser("pruefen", help="Luecken, Chancen und Warnungen anzeigen.")
     p.set_defaults(funktion=befehl_pruefen)
