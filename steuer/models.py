@@ -66,6 +66,20 @@ MERKMALE: tuple[tuple[str, str], ...] = (
 
 MERKMAL_IDS = frozenset(m for m, _ in MERKMALE)
 
+# Plausible Spannen der Zahlenfelder. Sie fangen Tippfehler und fehlerhaft
+# gelesene Eingaben ab, bevor sie in die Berechnungen und in die Prompts geraten:
+# eine Entfernung von 600.000 km faellt sonst niemandem auf.
+FELDGRENZEN: dict[str, tuple[float, float, str]] = {
+    "entfernung_km": (0, 500, "Einfache Entfernung zur Arbeit in km"),
+    "arbeitstage": (0, 366, "Arbeitstage im Jahr"),
+    "homeoffice_tage": (0, 366, "Homeoffice-Tage im Jahr"),
+    "grad_der_behinderung": (0, 100, "Grad der Behinderung"),
+    "pflegegrad": (0, 5, "Pflegegrad"),
+    "bruttoarbeitslohn": (0, 5_000_000, "Bruttoarbeitslohn"),
+    "gesamtbetrag_der_einkuenfte": (-5_000_000, 5_000_000, "Gesamtbetrag der Einkuenfte"),
+    "anzahl_kinder": (0, 20, "Anzahl Kinder"),
+}
+
 
 def _heute() -> str:
     return _dt.date.today().isoformat()
@@ -96,6 +110,26 @@ class Profil:
 
     def hat(self, merkmal: str) -> bool:
         return merkmal in self.merkmale
+
+    def unplausible_werte(self) -> list[str]:
+        """Meldet Zahlenfelder ausserhalb ihrer plausiblen Spanne."""
+        meldungen: list[str] = []
+        for feld, (unten, oben, beschriftung) in FELDGRENZEN.items():
+            wert = getattr(self, feld, None)
+            if wert is None or wert == "":
+                continue
+            try:
+                zahl = float(wert)
+            except (TypeError, ValueError):
+                meldungen.append(f"{beschriftung}: '{wert}' ist keine Zahl.")
+                continue
+            if not unten <= zahl <= oben:
+                meldungen.append(
+                    f"{beschriftung}: {zahl:,.0f}".replace(",", ".")
+                    + f" liegt ausserhalb des plausiblen Bereichs ({unten:,.0f} bis {oben:,.0f})."
+                    .replace(",", ".")
+                )
+        return meldungen
 
     def als_dict(self) -> dict[str, Any]:
         return asdict(self)

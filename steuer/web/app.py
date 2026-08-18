@@ -17,7 +17,7 @@ from tempfile import TemporaryDirectory
 from typing import Any
 
 from .. import gaps, organize, report, rules, taxonomy
-from ..formatierung import euro
+from ..formatierung import eingabewert, euro, zahl_lesen
 from ..analyze import (
     AUSWAHL_DOKUMENT,
     AUSWAHL_STRATEGIE,
@@ -86,6 +86,9 @@ def anwendung_bauen(mappe: Arbeitsmappe) -> Any:
 
     app = Flask(__name__)
     app.config["MAX_CONTENT_LENGTH"] = 256 * 1024 * 1024
+    # Formularfelder muessen so gefuellt werden, dass ein erneutes Speichern
+    # denselben Wert ergibt. Die Python-Darstellung "6.0" tut das nicht.
+    app.jinja_env.filters["eingabewert"] = eingabewert
     sperre = threading.Lock()
     auftrag = Auftrag()
 
@@ -160,6 +163,24 @@ def anwendung_bauen(mappe: Arbeitsmappe) -> Any:
                 taetigkeiten=formular.get("taetigkeiten", "").strip(),
                 notizen=formular.get("notizen", "").strip(),
             )
+            fehler = neu.unplausible_werte()
+            if fehler:
+                # Nicht speichern: ein unplausibler Wert wuerde die bisherige
+                # Angabe ueberschreiben und faende sich spaeter in jeder
+                # Berechnung wieder. Das Formular zeigt die Eingabe zurueck,
+                # damit sie sich korrigieren laesst.
+                grund = grunddaten()
+                grund["profil"] = neu
+                return (
+                    render_template(
+                        "profil.html",
+                        **grund,
+                        merkmale=MERKMALE,
+                        gespeichert=None,
+                        fehler=fehler,
+                    ),
+                    400,
+                )
             mappe.profil = neu
             mappe.speichern()
             return redirect(url_for("profil", gespeichert=1))
@@ -168,6 +189,7 @@ def anwendung_bauen(mappe: Arbeitsmappe) -> Any:
             **grunddaten(),
             merkmale=MERKMALE,
             gespeichert=request.args.get("gespeichert"),
+            fehler=None,
         )
 
     @app.route("/dokument/<dokument_id>", methods=["GET", "POST"])
@@ -429,18 +451,12 @@ def _bestandseintrag(dokument) -> dict[str, Any]:
 
 
 def _ganzzahl(wert: Any) -> int | None:
-    try:
-        return int(str(wert).strip()) if str(wert or "").strip() else None
-    except ValueError:
-        return None
+    zahl = zahl_lesen(wert)
+    return int(round(zahl)) if zahl is not None else None
 
 
 def _kommazahl(wert: Any) -> float | None:
-    text = str(wert or "").strip().replace(".", "").replace(",", ".")
-    try:
-        return float(text) if text else None
-    except ValueError:
-        return None
+    return zahl_lesen(wert)
 
 
 def starten(mappe: Arbeitsmappe, host: str = "127.0.0.1", port: int = 5173, debug: bool = False) -> None:

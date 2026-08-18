@@ -9,7 +9,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from . import euer, gaps, organize, report, rules, taxonomy
-from .formatierung import euro
+from .formatierung import eingabewert, euro, zahl_lesen
 from .analyze import (
     AUSWAHL_DOKUMENT,
     AUSWAHL_STRATEGIE,
@@ -93,7 +93,7 @@ def befehl_profil(args: argparse.Namespace) -> int:
             "Familienstand (ledig/verheiratet/geschieden/verwitwet)", profil.familienstand
         )
         profil.veranlagungsart = _frage("Veranlagung (einzel/zusammen)", profil.veranlagungsart)
-        profil.anzahl_kinder = int(_frage("Anzahl Kinder", str(profil.anzahl_kinder)) or 0)
+        profil.anzahl_kinder = _int_frage("Anzahl Kinder", profil.anzahl_kinder) or 0
         print("\nZutreffendes mit j bestaetigen:\n")
         merkmale = []
         for merkmal, beschriftung in MERKMALE:
@@ -126,6 +126,19 @@ def befehl_profil(args: argparse.Namespace) -> int:
         )
         profil.taetigkeiten = _frage("Taetigkeiten", profil.taetigkeiten)
         profil.notizen = _frage("Notizen", profil.notizen)
+
+        unplausibel = profil.unplausible_werte()
+        if unplausibel:
+            print("\nDiese Angaben sehen nicht plausibel aus:", file=sys.stderr)
+            for meldung in unplausibel:
+                print(f"  {meldung}", file=sys.stderr)
+            print(
+                "\nNichts gespeichert. Bitte 'steuer profil --bearbeiten' erneut aufrufen "
+                "und die Werte korrigieren.",
+                file=sys.stderr,
+            )
+            return 1
+
         mappe.speichern()
         print("\nProfil gespeichert.")
         return 0
@@ -166,13 +179,14 @@ def _frage(text: str, vorgabe: str | None = "") -> str:
 
 
 def _zahl_frage(text: str, vorgabe: float | None) -> float | None:
-    antwort = _frage(text, str(vorgabe) if vorgabe is not None else "")
+    antwort = _frage(text, eingabewert(vorgabe))
     if not antwort:
         return None
-    try:
-        return float(antwort.replace(",", "."))
-    except ValueError:
+    wert = zahl_lesen(antwort)
+    if wert is None:
+        print(f"  '{antwort}' ist keine Zahl, der bisherige Wert bleibt stehen.", file=sys.stderr)
         return vorgabe
+    return wert
 
 
 def _int_frage(text: str, vorgabe: int | None) -> int | None:

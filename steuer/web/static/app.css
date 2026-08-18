@@ -71,6 +71,8 @@ code { background: var(--flaeche2); padding: .1rem .35rem; border-radius: .25rem
 .banner { border-radius: var(--radius); padding: .7rem 1rem; margin: 1rem auto; font-size: .9rem; }
 .banner.warnung { background: var(--achtung-flaeche); color: var(--achtung); border: 1px solid var(--achtung); }
 .banner.erfolg { background: var(--gut-flaeche); color: var(--gut); border: 1px solid var(--gut); }
+.banner.fehler { background: var(--schlecht-flaeche); color: var(--schlecht); border: 1px solid var(--schlecht); }
+.banner.fehler ul { margin: .4rem 0 .4rem 1.2rem; }
 
 /* Kacheln */
 .kacheln { display: grid; grid-template-columns: repeat(auto-fit, minmax(10.5rem, 1fr)); gap: .75rem; margin-bottom: 1.5rem; }
