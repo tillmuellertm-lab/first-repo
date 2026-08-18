@@ -171,8 +171,9 @@ class Analysedienst:
         regelwerk: Regelwerk,
         profil: Profil,
         zusatzhinweis: str = "",
+        ab_seite: int | None = None,
     ) -> Analyse:
-        inhalt = inhalt_aufbereiten(pfad, medientyp)
+        inhalt = inhalt_aufbereiten(pfad, medientyp, ab_seite)
 
         aufforderung = [
             f"Dateiname des Scans: {pfad.name}",

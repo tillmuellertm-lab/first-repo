@@ -265,3 +265,56 @@ def test_taetigkeiten_stehen_im_systemprompt():
     # Ohne Angabe darf der Block nicht erscheinen.
     ohne = prompts.system_analyse(rules.laden(2024), Profil(veranlagungsjahr=2024, name="X"))
     assert "Berufe und Betriebe im Haushalt" not in ohne
+
+
+def test_ausschnitt_eines_langen_pdf(tmp_path):
+    """Ein 42-seitiges PDF muss sich ab einer beliebigen Seite pruefen lassen."""
+    from pypdf import PdfWriter
+
+    from steuer.extract import inhalt_aufbereiten
+
+    pfad = tmp_path / "erklaerung.pdf"
+    schreiber = PdfWriter()
+    for _ in range(42):
+        schreiber.add_blank_page(width=200, height=200)
+    with pfad.open("wb") as datei:
+        schreiber.write(datei)
+
+    vorne = inhalt_aufbereiten(pfad, "application/pdf")
+    assert vorne.gekuerzt
+    assert any("ersten 30" in h for h in vorne.hinweise)
+
+    hinten = inhalt_aufbereiten(pfad, "application/pdf", ab_seite=31)
+    assert any("31 bis 42" in h for h in hinten.hinweise)
+    # Der Ausschnitt muss kleiner sein als das ganze Dokument.
+    assert hinten.bloecke[0]["source"]["data"] != vorne.bloecke[0]["source"]["data"]
+
+
+def test_gekuerzte_dokumente_werden_als_warnung_gemeldet():
+    from steuer import gaps, rules
+    from steuer.models import Profil
+
+    dokument = beleg("erklaerung-2023.pdf", 0.0, kategorie="vorjahr")
+    dokument.seiten = 42
+    dokument.analyse.hinweise = ["Nur die ersten 30 von 42 Seiten wurden analysiert."]
+    ergebnis = gaps.auswerten([dokument], rules.laden(2024), Profil(veranlagungsjahr=2024))
+    warnung = [b for b in ergebnis.warnungen if b.id == "nur_teilweise_geprueft"]
+    assert warnung, "Die Kuerzung muss auffallen"
+    assert "--ab-seite" in warnung[0].beschreibung
+
+
+def test_analysen_verbinden_verliert_nichts():
+    from steuer.cli import _analysen_verbinden
+
+    alt = Analyse(
+        zusammenfassung="Vordere Seiten: Mantelbogen.",
+        hinweise=["Nur die ersten 30 von 42 Seiten wurden analysiert."],
+        betrag_gesamt=100.0,
+        aussteller="Finanzamt Koeln-Sued",
+    )
+    neu = Analyse(zusammenfassung="Anlage V mit Gebaeude-AfA 7.177 EUR.")
+    _analysen_verbinden(alt, neu, 31)
+    assert "Mantelbogen" in neu.zusammenfassung and "Anlage V" in neu.zusammenfassung
+    assert "Nur die ersten 30 von 42 Seiten wurden analysiert." in neu.hinweise
+    assert neu.betrag_gesamt == 100.0
+    assert neu.aussteller == "Finanzamt Koeln-Sued"

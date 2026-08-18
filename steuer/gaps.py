@@ -277,6 +277,34 @@ def _dubletten_pruefen(dokumente: list[Dokument]) -> list[Befund]:
 def _dokumentwarnungen(dokumente: list[Dokument], jahr: int, regelwerk: Regelwerk) -> list[Befund]:
     befunde: list[Befund] = []
 
+    # Lange PDF werden aus Kostengruenden nur bis zu einer Seitengrenze geprueft.
+    # Gerade bei einer Steuererklaerung stehen die wertvollen Anlagen aber hinten,
+    # deshalb darf das nicht stillschweigend geschehen.
+    unvollstaendig = [
+        d
+        for d in dokumente
+        if d.analyse
+        and any("Seiten wurden analysiert" in h or "Seiten analysiert" in h for h in d.analyse.hinweise)
+    ]
+    if unvollstaendig:
+        beispiele = ", ".join(f"{d.dateiname} ({d.seiten or '?'} Seiten)" for d in unvollstaendig[:5])
+        befunde.append(
+            Befund(
+                art="warnung",
+                id="nur_teilweise_geprueft",
+                titel=f"{len(unvollstaendig)} Dokumente wurden nur teilweise gelesen",
+                beschreibung=(
+                    f"Betroffen: {beispiele}. Von diesen Dateien wurden nur die vorderen "
+                    "Seiten geprueft. Bei einer Steuererklaerung oder einem Sammelscan "
+                    "stehen die wichtigsten Anlagen jedoch hinten - eine Anlage V mit der "
+                    "Gebaeude-AfA etwa. Den hinteren Teil nachtraeglich pruefen mit: "
+                    "steuer analyse --dokument <Kennung> --ab-seite <Seite>"
+                ),
+                prioritaet="hoch",
+                betroffene_dokumente=[d.id for d in unvollstaendig],
+            )
+        )
+
     falsches_jahr = [
         d for d in dokumente
         if d.analyse and d.analyse.steuerjahr and d.analyse.steuerjahr != jahr

@@ -231,6 +231,15 @@ def befehl_analyse(args: argparse.Namespace) -> int:
     if args.hoechstens and args.hoechstens > 0:
         zu_pruefen = zu_pruefen[: args.hoechstens]
 
+    if args.ab_seite and not args.dokument:
+        print(
+            "--ab-seite prueft einen Ausschnitt eines langen Dokuments und ist deshalb "
+            "nur zusammen mit --dokument <Kennung> sinnvoll.\n"
+            "Die Kennungen zeigt: steuer liste",
+            file=sys.stderr,
+        )
+        return 1
+
     if not zu_pruefen:
         veraltet = [d for d in mappe.dokumente if d.analyse and not d.analyse.ist_aktuell]
         print("Nichts zu analysieren. Mit --alle wird der gesamte Bestand neu geprueft.")
@@ -261,8 +270,17 @@ def befehl_analyse(args: argparse.Namespace) -> int:
     def _einzeln(dokument: Dokument) -> tuple[Dokument, Exception | None]:
         try:
             analyse = dienst.dokument_analysieren(
-                mappe.pfad_zu(dokument), dokument.medientyp, regelwerk, mappe.profil, dokument.notiz
+                mappe.pfad_zu(dokument),
+                dokument.medientyp,
+                regelwerk,
+                mappe.profil,
+                dokument.notiz,
+                ab_seite=args.ab_seite,
             )
+            if args.ab_seite and dokument.analyse:
+                # Der Ausschnitt ersetzt die Pruefung der vorderen Seiten nicht,
+                # er ergaenzt sie. Was dort gefunden wurde, bleibt erhalten.
+                _analysen_verbinden(dokument.analyse, analyse, args.ab_seite)
             dokument.analyse = analyse
             dokument.status = STATUS_ANALYSIERT
             dokument.fehler = ""
@@ -297,6 +315,31 @@ def befehl_analyse(args: argparse.Namespace) -> int:
     mappe.speichern()
     print(f"\nFertig. {len(zu_pruefen) - fehlerhaft} analysiert, {fehlerhaft} fehlgeschlagen.")
     return 1 if fehlerhaft and fehlerhaft == len(zu_pruefen) else 0
+
+
+def _analysen_verbinden(alt, neu, ab_seite: int) -> None:
+    """Traegt die Erkenntnisse der vorderen Seiten in die Analyse des Ausschnitts nach.
+
+    Ein langes Dokument wird abschnittsweise geprueft. Ohne dieses Zusammenfuehren
+    wuerde der zweite Lauf den ersten stillschweigend loeschen.
+    """
+    neu.zusammenfassung = " ".join(
+        teil for teil in (alt.zusammenfassung, neu.zusammenfassung) if teil
+    ).strip()
+    for feld in ("hinweise", "fehlende_nachweise", "optimierungshinweise"):
+        vorher = list(getattr(alt, feld))
+        nachher = getattr(neu, feld)
+        for eintrag in vorher:
+            if eintrag not in nachher:
+                nachher.insert(0, eintrag)
+    neu.positionen = list(alt.positionen) + list(neu.positionen)
+    # Betraege der vorderen Seiten nicht verlieren, wenn der Ausschnitt keine nennt.
+    for feld in ("betrag_gesamt", "betrag_abzugsfaehig", "datum", "steuerjahr", "aussteller"):
+        if not getattr(neu, feld) and getattr(alt, feld):
+            setattr(neu, feld, getattr(alt, feld))
+    neu.hinweise.insert(
+        0, f"Zusammengefuehrt aus zwei Laeufen: vordere Seiten und Ausschnitt ab Seite {ab_seite}."
+    )
 
 
 def befehl_trennen(args: argparse.Namespace) -> int:
@@ -914,6 +957,13 @@ def parser_bauen() -> argparse.ArgumentParser:
         help="Modell fuer die Dokumentanalyse.",
     )
     p.add_argument("--parallel", type=int, default=3, help="Gleichzeitige Analysen, Standard 3.")
+    p.add_argument(
+        "--ab-seite",
+        type=int,
+        metavar="N",
+        help="Bei langen PDF den Abschnitt ab Seite N pruefen. Nur mit --dokument; "
+        "das Ergebnis wird mit der bisherigen Analyse zusammengefuehrt.",
+    )
     p.set_defaults(funktion=befehl_analyse)
 
     p = unter.add_parser("trennen", help="Erkannten Sammelscan in Einzeldokumente zerlegen.")

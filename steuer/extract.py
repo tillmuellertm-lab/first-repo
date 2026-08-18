@@ -100,12 +100,13 @@ def pdf_text(pfad: Path, max_seiten: int = MAX_PDF_SEITEN) -> str:
         return ""
 
 
-def _pdf_kuerzen(pfad: Path, max_seiten: int) -> bytes:
+def _pdf_kuerzen(pfad: Path, max_seiten: int, ab_seite: int = 0) -> bytes:
+    """Schneidet ``max_seiten`` Seiten heraus, beginnend bei ``ab_seite`` (0-basiert)."""
     pypdf = _pypdf()
     with pfad.open("rb") as datei:
         leser = pypdf.PdfReader(datei)
         schreiber = pypdf.PdfWriter()
-        for seite in leser.pages[:max_seiten]:
+        for seite in leser.pages[ab_seite : ab_seite + max_seiten]:
             schreiber.add_page(seite)
         puffer = io.BytesIO()
         schreiber.write(puffer)
@@ -148,14 +149,71 @@ def _bild_aufbereiten(pfad: Path, medientyp: str) -> tuple[bytes, str, list[str]
         return daten, "image/jpeg", hinweise
 
 
-def inhalt_aufbereiten(pfad: Path, medientyp: str) -> Inhalt:
-    """Baut die Inhaltsbloecke fuer einen API-Aufruf."""
+def _pdf_inhalt(
+    pfad: Path,
+    rohdaten: bytes,
+    seiten: int | None,
+    *,
+    gekuerzt: bool,
+    hinweise: list[str],
+) -> Inhalt:
+    if len(rohdaten) > MAX_PDF_BYTES:
+        raise ExtraktionsFehler(
+            f"{pfad.name} ist mit {len(rohdaten) / 1_000_000:.0f} MB zu gross fuer die "
+            "Analyse. Bitte die Datei aufteilen, am besten je Beleg eine Datei, "
+            "und erneut hochladen."
+        )
+    block = {
+        "type": "document",
+        "source": {
+            "type": "base64",
+            "media_type": "application/pdf",
+            "data": base64.standard_b64encode(rohdaten).decode("ascii"),
+        },
+    }
+    return Inhalt(
+        bloecke=[block],
+        seiten=seiten,
+        gekuerzt=gekuerzt,
+        textvorschau=pdf_text(pfad)[:2000],
+        hinweise=hinweise,
+    )
+
+
+def inhalt_aufbereiten(
+    pfad: Path, medientyp: str, ab_seite: int | None = None
+) -> Inhalt:
+    """Baut die Inhaltsbloecke fuer einen API-Aufruf.
+
+    ``ab_seite`` (1-basiert) prueft einen spaeteren Abschnitt eines langen PDF.
+    Eine Steuererklaerung hat leicht vierzig Seiten, und die wertvollen Anlagen
+    stehen hinten - ohne diese Moeglichkeit blieben sie ungelesen.
+    """
     pfad = Path(pfad)
     if not pfad.is_file():
         raise ExtraktionsFehler(f"Datei nicht gefunden: {pfad}")
 
     if medientyp == "application/pdf":
         seiten = seitenzahl(pfad)
+        if ab_seite and ab_seite > 1:
+            bis = min(ab_seite + MAX_PDF_SEITEN - 1, seiten) if seiten else ab_seite + MAX_PDF_SEITEN - 1
+            rohdaten = _pdf_kuerzen(pfad, MAX_PDF_SEITEN, ab_seite - 1)
+            if not rohdaten:
+                raise ExtraktionsFehler(
+                    f"{pfad.name} hat keine Seite {ab_seite}"
+                    + (f", das Dokument endet bei Seite {seiten}." if seiten else ".")
+                )
+            return _pdf_inhalt(
+                pfad,
+                rohdaten,
+                seiten,
+                gekuerzt=True,
+                hinweise=[
+                    f"Ausschnitt: die Seiten {ab_seite} bis {bis}"
+                    + (f" von {seiten}" if seiten else "")
+                    + ". Die vorderen Seiten wurden bereits gesondert geprueft."
+                ],
+            )
         gekuerzt = bool(seiten and seiten > MAX_PDF_SEITEN)
         hinweise = []
         if gekuerzt:
@@ -178,27 +236,7 @@ def inhalt_aufbereiten(pfad: Path, medientyp: str) -> Inhalt:
                 rohdaten = pfad.read_bytes()
         else:
             rohdaten = pfad.read_bytes()
-        if len(rohdaten) > MAX_PDF_BYTES:
-            raise ExtraktionsFehler(
-                f"{pfad.name} ist mit {len(rohdaten) / 1_000_000:.0f} MB zu gross fuer die "
-                "Analyse. Bitte die Datei aufteilen, am besten je Beleg eine Datei, "
-                "und erneut hochladen."
-            )
-        block = {
-            "type": "document",
-            "source": {
-                "type": "base64",
-                "media_type": "application/pdf",
-                "data": base64.standard_b64encode(rohdaten).decode("ascii"),
-            },
-        }
-        return Inhalt(
-            bloecke=[block],
-            seiten=seiten,
-            gekuerzt=gekuerzt,
-            textvorschau=pdf_text(pfad)[:2000],
-            hinweise=hinweise,
-        )
+        return _pdf_inhalt(pfad, rohdaten, seiten, gekuerzt=gekuerzt, hinweise=hinweise)
 
     if medientyp in BILDTYPEN:
         daten, typ, hinweise = _bild_aufbereiten(pfad, medientyp)
