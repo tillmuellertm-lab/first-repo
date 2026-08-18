@@ -75,6 +75,13 @@ def _profil_block(profil: Profil) -> str:
         wert = getattr(profil, feld)
         if wert:
             zeilen.append(f"- {beschriftung}: {wert}")
+    if profil.taetigkeiten:
+        zeilen.append(f"- Berufe und Betriebe im Haushalt: {profil.taetigkeiten}")
+        zeilen.append(
+            "  Beachte das bei der Einordnung: Waren, Werkzeuge und Material, die zu "
+            "einer dieser Taetigkeiten passen, sind im Zweifel betrieblich veranlasst "
+            "und nicht privat. Sage in der Begruendung, worauf du die Zuordnung stuetzt."
+        )
     if profil.notizen:
         zeilen.append(f"- Notizen: {profil.notizen}")
     return "\n".join(zeilen)

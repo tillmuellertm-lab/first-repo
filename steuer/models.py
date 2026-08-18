@@ -88,6 +88,10 @@ class Profil:
     pflegegrad: int | None = None
     bruttoarbeitslohn: float | None = None
     gesamtbetrag_der_einkuenfte: float | None = None
+    # Was der Betrieb herstellt oder anbietet, und welche Berufe im Haushalt
+    # ausgeuebt werden. Ohne diese Angabe kann kein Modell erkennen, dass ein
+    # Karton Wollgarn Betriebsmaterial ist und keine private Bastelei.
+    taetigkeiten: str = ""
     notizen: str = ""
 
     def hat(self, merkmal: str) -> bool:

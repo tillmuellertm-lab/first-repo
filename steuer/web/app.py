@@ -157,6 +157,7 @@ def anwendung_bauen(mappe: Arbeitsmappe) -> Any:
                 pflegegrad=_ganzzahl(formular.get("pflegegrad")),
                 bruttoarbeitslohn=_kommazahl(formular.get("bruttoarbeitslohn")),
                 gesamtbetrag_der_einkuenfte=_kommazahl(formular.get("gesamtbetrag_der_einkuenfte")),
+                taetigkeiten=formular.get("taetigkeiten", "").strip(),
                 notizen=formular.get("notizen", "").strip(),
             )
             mappe.profil = neu

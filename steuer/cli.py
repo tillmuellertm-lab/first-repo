@@ -118,6 +118,13 @@ def befehl_profil(args: argparse.Namespace) -> int:
             "Gesamtbetrag der Einkuenfte (optional, fuer die zumutbare Belastung)",
             profil.gesamtbetrag_der_einkuenfte,
         )
+        print(
+            "\nBerufe und Betriebe im Haushalt, moeglichst konkret. Das entscheidet\n"
+            "darueber, ob ein Beleg als betrieblich oder privat eingeordnet wird.\n"
+            "Beispiel: 'Ehefrau betreibt ein Tuftingstudio (Teppiche, Kerzen, Workshops),\n"
+            "Kleinunternehmerin; Ehemann angestellt im Vertrieb'.\n"
+        )
+        profil.taetigkeiten = _frage("Taetigkeiten", profil.taetigkeiten)
         profil.notizen = _frage("Notizen", profil.notizen)
         mappe.speichern()
         print("\nProfil gespeichert.")
@@ -140,6 +147,10 @@ def befehl_profil(args: argparse.Namespace) -> int:
         wert = getattr(profil, feld)
         if wert:
             print(f"  {beschriftung + ':':15} {wert}")
+    if profil.taetigkeiten:
+        print(f"  Taetigkeiten:   {profil.taetigkeiten}")
+    else:
+        print("  Taetigkeiten:   (nicht gesetzt - Belege koennen nicht betrieblich erkannt werden)")
     if profil.notizen:
         print(f"  Notizen:        {profil.notizen}")
     return 0

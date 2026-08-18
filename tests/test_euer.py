@@ -252,3 +252,16 @@ def test_analyseversion_erkennt_alte_pruefungen():
     assert Analyse(version=ANALYSE_VERSION).ist_aktuell
     # Ueber einen Speicherzyklus muss die Version erhalten bleiben.
     assert Analyse.aus_dict(Analyse(version=ANALYSE_VERSION).als_dict()).ist_aktuell
+
+
+def test_taetigkeiten_stehen_im_systemprompt():
+    from steuer import prompts, rules
+    from steuer.models import Profil
+
+    profil = Profil(veranlagungsjahr=2024, merkmale=["selbstaendig"], taetigkeiten="Tuftingstudio")
+    text = prompts.system_analyse(rules.laden(2024), profil)
+    assert "Tuftingstudio" in text
+    assert "betrieblich veranlasst" in text
+    # Ohne Angabe darf der Block nicht erscheinen.
+    ohne = prompts.system_analyse(rules.laden(2024), Profil(veranlagungsjahr=2024, name="X"))
+    assert "Berufe und Betriebe im Haushalt" not in ohne
