@@ -236,6 +236,14 @@ checkliste:
       - Grundsteuer, Versicherungen, Verwaltergebuehren
       - Reparatur- und Modernisierungsrechnungen
       - Abrechnung der Nebenkosten gegenueber den Mietern
+      - Anlage V des Vorjahres oder Anlageverzeichnis als Quelle der Gebaeude-AfA
+      - Kaufvertrag mit der Aufteilung auf Gebaeude und Grund und Boden
+      - Aufstellung der Fahrten zum Objekt (Besichtigung, Verwaltung, Reparatur)
+    hinweis: >-
+      Die Gebaeude-AfA ist meist der groesste Einzelposten der Anlage V. Ihr Betrag
+      wird aus den Vorjahren fortgeschrieben und steht nicht im Steuerbescheid,
+      sondern nur in der eingereichten Anlage V oder im Anlageverzeichnis. Fehlt
+      beides, muss sie aus dem Kaufvertrag neu ermittelt werden.
 
   - id: selbstaendig
     titel: Selbstaendige oder gewerbliche Einkuenfte
@@ -294,6 +302,28 @@ chancen:
       In fast jeder Nebenkostenabrechnung stecken Hausmeister, Treppenhausreinigung,
       Gartenpflege, Winterdienst und Schornsteinfeger. 20 % davon mindern die Steuer
       direkt. Beim Vermieter oder der Hausverwaltung eine Bescheinigung nach § 35a anfordern.
+
+  - id: gebaeude_afa_sichern
+    titel: Gebaeude-AfA lueckenlos fortschreiben
+    gilt_wenn: [vermietung]
+    potenzial_eur: 1500
+    beschreibung: >-
+      Die Abschreibung des Gebaeudes laeuft ueber Jahrzehnte und ist meist der
+      groesste Posten der Anlage V. Sie steht nicht im Steuerbescheid, sondern nur
+      in der Anlage V des Vorjahres oder im Anlageverzeichnis. Liegt beides nicht
+      vor, beim bisherigen Steuerberater anfordern. Ersatzweise aus dem Kaufvertrag
+      neu berechnen: Anschaffungskosten des Gebaeudes ohne Grund und Boden,
+      Fertigstellungsjahr, Beginn der Vermietung, spaetere Baumassnahmen.
+
+  - id: fahrten_zum_mietobjekt
+    titel: Fahrten zum Mietobjekt ansetzen
+    gilt_wenn: [vermietung]
+    potenzial_eur: 200
+    beschreibung: >-
+      Fahrten zur Besichtigung, zu Reparaturen, zu Eigentuemerversammlungen und zur
+      Uebergabe sind Werbungskosten bei Vermietung. Ohne Aufzeichnung gehen sie
+      verloren: Datum, Anlass und gefahrene Kilometer genuegen, Tank- und
+      Bahnbelege der betreffenden Tage stuetzen die Angabe.
 
   - id: guenstigerpruefung_kap
     titel: Guenstigerpruefung bei Kapitalertraegen

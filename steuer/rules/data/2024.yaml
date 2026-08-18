@@ -201,6 +201,38 @@ werte:
     rechtsgrundlage: "§ 6 Abs. 2 EStG"
     hinweis: "952 EUR brutto bei 19 % USt. Darueber Abschreibung ueber die Nutzungsdauer."
 
+  gebaeude_afa_ab_1925:
+    label: Gebaeude-AfA Wohngebaeude, Fertigstellung ab 1925 bis 2022
+    wert: 2
+    einheit: prozent_pro_jahr
+    rechtsgrundlage: "§ 7 Abs. 4 Satz 1 Nr. 2a EStG"
+    hinweis: >-
+      Bemessungsgrundlage sind die Anschaffungs- oder Herstellungskosten des
+      Gebaeudes ohne Grund und Boden. Der Wert wird aus den Vorjahren
+      fortgeschrieben und steht nur in der Anlage V oder im Anlageverzeichnis,
+      nicht im Steuerbescheid.
+
+  gebaeude_afa_vor_1925:
+    label: Gebaeude-AfA Wohngebaeude, Fertigstellung vor 1925
+    wert: 2.5
+    einheit: prozent_pro_jahr
+    rechtsgrundlage: "§ 7 Abs. 4 Satz 1 Nr. 2b EStG"
+
+  gebaeude_afa_neubau:
+    label: Gebaeude-AfA Wohngebaeude, Bauantrag oder Kaufvertrag ab 2023
+    wert: 3
+    einheit: prozent_pro_jahr
+    rechtsgrundlage: "§ 7 Abs. 4 Satz 1 Nr. 2a EStG"
+
+  gebaeude_afa_degressiv:
+    label: Degressive Gebaeude-AfA fuer neue Wohngebaeude
+    wert: 5
+    einheit: prozent_pro_jahr
+    rechtsgrundlage: "§ 7 Abs. 5a EStG"
+    hinweis: >-
+      Nur fuer Wohngebaeude mit Baubeginn zwischen dem 01.10.2023 und dem
+      30.09.2029. Wahlrecht; ein Wechsel zur linearen AfA ist moeglich.
+
   arbeitsmittel_nichtbeanstandungsgrenze:
     label: Arbeitsmittel ohne Einzelnachweis (Verwaltungspraxis)
     wert: 110
