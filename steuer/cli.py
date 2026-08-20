@@ -340,10 +340,11 @@ def datum_aus_dateiname(name: str) -> str | None:
 
 
 def befehl_jahr_aus_dateiname(args: argparse.Namespace) -> int:
-    """Uebernimmt das Steuerjahr aus dem Datum im Dateinamen.
+    """Leitet das Steuerjahr aus einem ablesbaren Datum ab.
 
-    Viele Scan-Programme stellen das Belegdatum voran. Wo das der Fall ist, muss
-    niemand raten und niemand von Hand nachtragen - die Angabe steht schon da.
+    Zwei Quellen: das Datum im Dateinamen, das viele Scan-Programme voranstellen,
+    und ersatzweise das Belegdatum aus der Analyse. Beides ist abgelesen, nicht
+    geschaetzt - wo nichts steht, bleibt das Jahr offen.
     """
     mappe = _mappe_oeffnen(args)
     gefunden: list[tuple] = []
@@ -351,9 +352,17 @@ def befehl_jahr_aus_dateiname(args: argparse.Namespace) -> int:
     for dokument in mappe.dokumente:
         if dokument.gehoert_ins_jahr is not None and not args.auch_erkannte:
             continue
+        # Zwei Quellen, beide abgelesen statt geraten. Der Dateiname hat
+        # Vorrang: Ihn hat ein Mensch vergeben, das Belegdatum hat ein Modell
+        # aus dem Scan gelesen.
         datum = datum_aus_dateiname(dokument.dateiname)
+        quelle = "Dateiname"
+        if not datum and dokument.analyse and dokument.analyse.datum:
+            gelesen = str(dokument.analyse.datum).strip()[:10]
+            if re.fullmatch(r"(?:19|20)\d{2}-\d{2}-\d{2}", gelesen):
+                datum, quelle = gelesen, "Belegdatum"
         if datum:
-            gefunden.append((dokument, datum))
+            gefunden.append((dokument, datum, quelle))
         else:
             ohne_datum.append(dokument)
 
@@ -362,30 +371,35 @@ def befehl_jahr_aus_dateiname(args: argparse.Namespace) -> int:
         return 0
 
     verteilung: dict[str, int] = {}
-    for _, datum in gefunden:
+    quellen: dict[str, int] = {}
+    for _, datum, quelle in gefunden:
         jahr = datum[:4]
         verteilung[jahr] = verteilung.get(jahr, 0) + 1
+        quellen[quelle] = quellen.get(quelle, 0) + 1
 
-    print(f"In {len(gefunden)} Dateinamen steht ein Datum. Daraus ergibt sich:\n")
+    herkunft = ", ".join(f"{anzahl} aus dem {quelle}" for quelle, anzahl in quellen.items())
+    print(f"Fuer {len(gefunden)} Dokumente ist ein Datum ablesbar ({herkunft}).\nDaraus ergibt sich:\n")
     for jahr, anzahl in sorted(verteilung.items()):
         markierung = "  <- Jahr dieser Mappe" if jahr == str(mappe.jahr) else ""
         print(f"  {anzahl:>5}  {jahr}{markierung}")
 
     print("\n  Beispiele:")
-    for dokument, datum in gefunden[:8]:
-        print(f"    {datum}   {dokument.dateiname[:58]}")
+    for dokument, datum, quelle in gefunden[:8]:
+        print(f"    {datum}  {quelle:<11}  {dokument.dateiname[:48]}")
     if len(gefunden) > 8:
         print(f"    ... und {len(gefunden) - 8} weitere")
 
     if ohne_datum:
-        print(f"\n  Bei {len(ohne_datum)} Dateinamen steht kein Datum; sie bleiben ohne Jahr.")
+        print(
+            f"\n  Bei {len(ohne_datum)} Dokumenten ist kein Datum ablesbar; sie bleiben ohne Jahr."
+        )
 
     if args.probelauf:
         print("\nProbelauf, es wurde nichts veraendert.")
         print("Zum Ausfuehren denselben Befehl ohne --probelauf aufrufen.")
         return 0
 
-    for dokument, datum in gefunden:
+    for dokument, datum, _ in gefunden:
         dokument.herkunft_jahr = int(datum[:4])
     mappe.speichern()
     ansicht = mappe.jahresansicht()
@@ -1395,7 +1409,7 @@ def parser_bauen() -> argparse.ArgumentParser:
 
     p = unter.add_parser(
         "jahr-aus-dateiname",
-        help="Das Steuerjahr aus dem Datum im Dateinamen uebernehmen.",
+        help="Das Steuerjahr aus Dateiname oder Belegdatum ableiten.",
     )
     p.add_argument(
         "--auch-erkannte", action="store_true",

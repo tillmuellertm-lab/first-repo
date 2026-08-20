@@ -234,3 +234,24 @@ def test_datum_aus_dateiname_nimmt_das_erste_datum():
 
     # Der vorangestellte Zeitstempel gilt, nicht ein spaeter erwaehntes Datum.
     assert lesen("2024-02-01_Kassenzettel vom 31.01.2024.pdf") == "2024-02-01"
+
+
+def test_belegdatum_dient_als_zweite_quelle(tmp_path):
+    """Wo der Dateiname schweigt, zaehlt das aus dem Scan gelesene Belegdatum."""
+    mappe = Arbeitsmappe.anlegen(tmp_path / "mappe", 2024)
+    aus_name = Dokument(id="a", dateiname="2024-06-24_Umzug.pdf")
+    aus_name.analyse = Analyse(datum="2019-01-01")  # der Dateiname hat Vorrang
+    aus_beleg = Dokument(id="b", dateiname="Kassenbon.pdf")
+    aus_beleg.analyse = Analyse(datum="2024-02-01")
+    unlesbar = Dokument(id="c", dateiname="scan.pdf")
+    unlesbar.analyse = Analyse(datum="unleserlich")
+    mappe.dokumente += [aus_name, aus_beleg, unlesbar]
+
+    from steuer.cli import datum_aus_dateiname
+
+    assert datum_aus_dateiname(aus_name.dateiname) == "2024-06-24"
+    assert datum_aus_dateiname(aus_beleg.dateiname) is None
+    # Ein unleserliches Feld darf nicht als Datum durchgehen.
+    import re
+
+    assert not re.fullmatch(r"(?:19|20)\d{2}-\d{2}-\d{2}", unlesbar.analyse.datum)
