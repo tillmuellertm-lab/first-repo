@@ -1173,20 +1173,65 @@ def befehl_typen(args: argparse.Namespace) -> int:
     return 0
 
 
-def _offen_schluessel(text: str) -> str:
-    """Vereinheitlicht eine Fehlanzeige, damit gleiche Ursachen zusammenfinden."""
+# Wonach sich die offenen Punkte buendeln lassen. Das Modell formuliert jede
+# Fehlanzeige neu ("Kontoauszug mit tatsaechlicher Abbuchung der vier Raten"),
+# weshalb wortgleiches Gruppieren nichts zusammenbringt: 180 Einzelangaben
+# ergaben 180 Gruppen. Entscheidend ist nicht der Wortlaut, sondern die
+# Besorgung dahinter - und die wiederholt sich sehr wohl.
+# Reihenfolge = Vorrang; die erste zutreffende Zeile gewinnt.
+# Die Muster binden nur am Wortanfang: Im Deutschen wachsen die Woerter
+# hinten weiter ("Kontoauszuege", "Versicherungsbestaetigung"), eine
+# schliessende Wortgrenze wuerde genau diese Faelle verfehlen.
+OFFEN_THEMEN: tuple[tuple[str, str, str], ...] = (
+    ("frage", r"\b(kl[aä]rung|klarstellung|zuordnung|angabe, ob|klären, ob|umrechnen)",
+     "Rueckfrage - keine Besorgung, sondern eine Auskunft von Ihnen"),
+    ("zahlung", r"\b(kontoausz|zahlungsnachweis|[uü]berweisungsbeleg|lastschrift|paypal|"
+                r"abbuchung|einzahlungsquittung|zahlungsbest[aä]tigung)",
+     "Zahlungsnachweis - Kontoauszug oder Ueberweisungsbeleg"),
+    ("lohn", r"\b(lohnsteuerbescheinigung|gehaltsabrechnung|lohnabrechnung|"
+             r"lohn-/gehaltsabrechnung)",
+     "Lohnsteuerbescheinigung oder Gehaltsabrechnung"),
+    ("nebenkosten", r"\b(nebenkostenabrechnung|betriebskostenabrechnung|grundsteuerbescheid)",
+     "Nebenkosten- oder Betriebskostenabrechnung"),
+    ("mietvertrag", r"\b(mietvertrag|renovierungsklausel|renovierungspflicht|"
+                    r"renovierungsverpflichtung|kaution|[uü]bergabeprotokoll)",
+     "Mietvertrag, Kautions- oder Uebergabeunterlagen"),
+    ("arzt", r"\b([aä]rztliche|attest|verordnung|rezept|medizinische[rn]? notwendigkeit|"
+             r"krankenkasse|erstattung)",
+     "Aerztliche Verordnung oder Nachweis der Erstattung"),
+    ("beruflich", r"\b(berufliche[rn]? (veranlassung|nutzung)|betriebliche[rn]? nutzung|"
+                  r"nutzungsanteil|nutzungsnachweis|fahrtenbuch|arbeitgeberbest[aä]tigung)",
+     "Nachweis der beruflichen Veranlassung oder Nutzung"),
+    ("umzug", r"\b(umzugskosten|doppelte[rn]? miete|doppelmiete|bukg)",
+     "Umzugsunterlagen"),
+    ("betrieb", r"\b(e[uü]er|gesch[aä]ftskonto|eingangsrechnung|ausgangsrechnung|"
+                r"abschreibungstabelle|geringwertige)",
+     "Unterlagen aus dem Gewerbe Ihrer Frau"),
+    ("versicherung", r"\b(versicherung|direktversicherung|beitrags|jahrespr[aä]mie|"
+                     r"entgeltumwandlung|bav)",
+     "Bescheinigung der Versicherung"),
+    ("rechnung", r"\b(rechnung|aufschl[uü]sselung|aufteilung|detailaufl|leistungsnachweis|"
+                 r"beitragsrechnung)",
+     "Rechnung oder Aufschluesselung der Posten"),
+)
+
+
+def _offen_thema(text: str) -> tuple[str, str]:
+    """Ordnet eine Fehlanzeige der Besorgung zu, die sie aufloest."""
     vereinfacht = re.sub(r"\s+", " ", text.strip().lower())
-    vereinfacht = re.sub(r"[.;,:!?]+$", "", vereinfacht)
-    return vereinfacht
+    for kennung, muster, beschriftung in OFFEN_THEMEN:
+        if re.search(muster, vereinfacht):
+            return kennung, beschriftung
+    return "sonstiges", "Sonstiges - Einzelfaelle ohne gemeinsame Ursache"
 
 
 def befehl_offen(args: argparse.Namespace) -> int:
-    """Buendelt die offenen Punkte nach ihrer Ursache.
+    """Buendelt die offenen Punkte nach der Besorgung, die sie aufloest.
 
-    Eine Liste von 64 Belegen mit je einer Fehlanzeige ist keine Arbeitsanweisung,
-    sondern eine Zumutung. Interessant ist nicht, welcher Beleg etwas vermisst,
-    sondern welche Ursache sich wiederholt: Ein einziger fehlender Kontoauszug
-    kann vierzig Belege auf einmal ungeklaert lassen.
+    Eine Liste mit 180 Fehlanzeigen ist keine Arbeitsanweisung, sondern eine
+    Zumutung. Interessant ist nicht, welcher Beleg etwas vermisst, sondern
+    welche Besorgung sich wiederholt: Ein einziger Kontoauszug kann vierzig
+    Belege auf einmal klaeren.
     """
     mappe = _mappe_oeffnen(args)
     ansicht = mappe.jahresansicht()
@@ -1196,37 +1241,60 @@ def befehl_offen(args: argparse.Namespace) -> int:
         return 1
 
     gruppen: dict[str, list[tuple[str, Dokument]]] = {}
+    beschriftungen: dict[str, str] = {}
     for dokument in dokumente:
         for fehlend in dokument.analyse.fehlende_nachweise:
-            schluessel = _offen_schluessel(fehlend)
-            if schluessel:
-                gruppen.setdefault(schluessel, []).append((fehlend.strip(), dokument))
+            text = fehlend.strip()
+            if not text:
+                continue
+            kennung, beschriftung = _offen_thema(text)
+            beschriftungen[kennung] = beschriftung
+            gruppen.setdefault(kennung, []).append((text, dokument))
 
-    betroffen = {d.id for eintraege in gruppen.values() for _, d in eintraege}
-    print(f"{len(dokumente)} Dokumente aus {mappe.jahr}, davon {len(betroffen)} mit offenen Punkten.\n")
     if not gruppen:
-        print("Kein Dokument vermisst einen Nachweis.")
+        print(f"Kein Dokument aus {mappe.jahr} vermisst einen Nachweis.")
         return 0
 
-    print(f"{'Belege':>6}  {'Summe':>16}  Was fehlt")
+    if args.thema:
+        if args.thema not in gruppen:
+            vorhanden = ", ".join(sorted(gruppen))
+            print(f"Kein Thema '{args.thema}'. Vorhanden: {vorhanden}", file=sys.stderr)
+            return 1
+        eintraege = gruppen[args.thema]
+        print(f"{beschriftungen[args.thema]}\n")
+        for text, dokument in sorted(eintraege, key=lambda p: p[1].dateiname):
+            name = dokument.zieldateiname or dokument.dateiname
+            print(f"  {name}")
+            print(f"      {text}")
+        return 0
+
+    einzelangaben = sum(len(e) for e in gruppen.values())
+    betroffen = {d.id for eintraege in gruppen.values() for _, d in eintraege}
+    print(
+        f"{len(dokumente)} Dokumente aus {mappe.jahr}, davon {len(betroffen)} mit offenen "
+        f"Punkten.\n{einzelangaben} Einzelangaben, gebuendelt zu {len(gruppen)} Besorgungen.\n"
+    )
+    print(f"{'Belege':>6}  {'Summe':>16}  {'Kennung':<12} Was zu besorgen ist")
     print("-" * 100)
-    for _, eintraege in sorted(gruppen.items(), key=lambda p: (-len(p[1]), p[0])):
+
+    for kennung, eintraege in sorted(gruppen.items(), key=lambda p: (-len(p[1]), p[0])):
+        # Ein Dokument kann mehrere Fehlanzeigen desselben Themas tragen; fuer
+        # die Summe zaehlt es trotzdem nur einmal.
+        je_dokument = {d.id: d for _, d in eintraege}
         summe = sum(
             d.analyse.betrag_abzugsfaehig or d.analyse.betrag_gesamt or 0.0
-            for _, d in eintraege
+            for d in je_dokument.values()
         )
-        # Die haeufigste Schreibweise steht stellvertretend fuer die Gruppe.
-        schreibweisen: dict[str, int] = {}
-        for text, _ in eintraege:
-            schreibweisen[text] = schreibweisen.get(text, 0) + 1
-        text = max(schreibweisen.items(), key=lambda p: p[1])[0]
-        print(f"{len(eintraege):>6}  {euro(summe) if summe else '':>16}  {text[:70]}")
+        print(
+            f"{len(je_dokument):>6}  {euro(summe) if summe else '':>16}  "
+            f"{kennung:<12} {beschriftungen[kennung]}"
+        )
 
     print("-" * 100)
     print(
-        "\nJede Zeile ist eine Besorgung, nicht 64 einzelne. Die oberste Zeile\n"
-        "loest die meisten Belege auf einmal.\n"
-        "Einzelne Belege dazu: steuer liste --kategorie <Kennung>"
+        "\nJede Zeile ist eine Besorgung, nicht hunderte. Die Summe ist der Betrag\n"
+        "der betroffenen Belege - nicht das, was sie an Steuer bringen.\n"
+        "Einzelne Punkte eines Themas: steuer offen --thema <Kennung>"
     )
     return 0
 
@@ -1525,6 +1593,10 @@ def parser_bauen() -> argparse.ArgumentParser:
     p = unter.add_parser(
         "offen",
         help="Offene Punkte nach Ursache buendeln - zeigt, welche Besorgung am meisten bringt.",
+    )
+    p.add_argument(
+        "--thema",
+        help="Einzelne Punkte eines Themas auflisten (Kennung aus der Uebersicht).",
     )
     p.set_defaults(funktion=befehl_offen)
 

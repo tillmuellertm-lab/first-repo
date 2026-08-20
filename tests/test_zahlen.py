@@ -112,3 +112,59 @@ def test_kontextpruefsumme_ignoriert_belangloses():
     a = Profil(veranlagungsjahr=2024, name="Till", taetigkeiten="Tuftingstudio  Koeln")
     b = Profil(veranlagungsjahr=2024, name="T. Mueller", taetigkeiten="Tuftingstudio Koeln")
     assert a.kontext_pruefsumme() == b.kontext_pruefsumme()
+
+
+# --- Listenfelder aus der Modellantwort -------------------------------------
+
+
+def test_string_wird_nicht_buchstabenweise_zerlegt():
+    """Der Fehler, der 180 Fehlanzeigen in Buchstaben verwandelt hat.
+
+    Das Modell soll ein Array liefern, schickt aber manchmal einen String.
+    ``[str(x) for x in "abc"]`` ergibt ``["a", "b", "c"]`` - eine Liste von
+    Strings, formal einwandfrei, inhaltlich Schrott.
+    """
+    from steuer.models import textliste
+
+    assert textliste("Zahlungsnachweis fehlt") == ["Zahlungsnachweis fehlt"]
+    assert textliste("Rechnung fehlt; Kontoauszug fehlt") == [
+        "Rechnung fehlt",
+        "Kontoauszug fehlt",
+    ]
+    assert textliste("Erste Zeile\nZweite Zeile") == ["Erste Zeile", "Zweite Zeile"]
+
+
+def test_zerlegter_satz_wird_beim_laden_wieder_zusammengesetzt():
+    """Gespeicherte Buchstabenlisten sind heilbar - die Reihenfolge blieb erhalten."""
+    from steuer.models import Analyse, textliste
+
+    zerlegt = list("Kontoauszug mit tatsaechlicher Abbuchung")
+    assert textliste(zerlegt) == ["Kontoauszug mit tatsaechlicher Abbuchung"]
+
+    analyse = Analyse.aus_dict({"fehlende_nachweise": zerlegt, "hinweise": list("Zwei Seiten")})
+    assert analyse.fehlende_nachweise == ["Kontoauszug mit tatsaechlicher Abbuchung"]
+    assert analyse.hinweise == ["Zwei Seiten"]
+
+
+def test_echte_listen_bleiben_unangetastet():
+    """Die Heilung darf keine gueltige Liste zusammenkleben."""
+    from steuer.models import textliste
+
+    echt = ["Rechnung fehlt", "Kontoauszug fehlt", "Attest fehlt", "Mietvertrag fehlt"]
+    assert textliste(echt) == echt
+    # Kurze Eintraege, aber nicht alle einzeichig: keine zerlegte Zeichenkette.
+    assert textliste(["a", "bc", "d", "e"]) == ["a", "bc", "d", "e"]
+    # Weniger als vier Zeichen bleiben, wie sie sind.
+    assert textliste(["a", "b"]) == ["a", "b"]
+    assert textliste([]) == []
+    assert textliste(None) == []
+
+
+def test_analyse_aus_der_api_zerlegt_keinen_string():
+    """Die Stelle, an der der Fehler entstand."""
+    from steuer.analyze import _analyse_aus_rohdaten
+
+    analyse = _analyse_aus_rohdaten(
+        {"kategorie_id": "unklar", "fehlende_nachweise": "Zahlungsnachweis fehlt"}
+    )
+    assert analyse.fehlende_nachweise == ["Zahlungsnachweis fehlt"]

@@ -12,7 +12,7 @@ from typing import Any, Callable
 
 from . import euer, prompts
 from .extract import ExtraktionsFehler, inhalt_aufbereiten
-from .models import ANALYSE_VERSION, Analyse, Position, Profil, Segment
+from .models import ANALYSE_VERSION, Analyse, Position, Profil, Segment, textliste
 from .rules import Regelwerk
 
 LOG = logging.getLogger(__name__)
@@ -382,7 +382,7 @@ def _analyse_aus_rohdaten(rohdaten: dict[str, Any]) -> Analyse:
             )
         )
 
-    segmente = []
+    segmente: list[Segment] = []
     for eintrag in rohdaten.get("segmente") or []:
         if not isinstance(eintrag, dict):
             continue
@@ -417,9 +417,9 @@ def _analyse_aus_rohdaten(rohdaten: dict[str, Any]) -> Analyse:
         eignung_begruendung=str(rohdaten.get("eignung_begruendung", "")).strip(),
         vertrauen=vertrauen,
         zusammenfassung=str(rohdaten.get("zusammenfassung", "")).strip(),
-        hinweise=[str(h) for h in rohdaten.get("hinweise") or []],
-        fehlende_nachweise=[str(h) for h in rohdaten.get("fehlende_nachweise") or []],
-        optimierungshinweise=[str(h) for h in rohdaten.get("optimierungshinweise") or []],
+        hinweise=textliste(rohdaten.get("hinweise")),
+        fehlende_nachweise=textliste(rohdaten.get("fehlende_nachweise")),
+        optimierungshinweise=textliste(rohdaten.get("optimierungshinweise")),
         positionen=positionen,
         enthaelt_mehrere_dokumente=bool(rohdaten.get("enthaelt_mehrere_dokumente")),
         segmente=segmente,

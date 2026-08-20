@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import datetime as _dt
 import hashlib as _hashlib
+import re
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
@@ -183,6 +184,41 @@ class Profil:
         return profil
 
 
+def textliste(wert: Any) -> list[str]:
+    """Macht aus dem, was das Modell liefert, eine Liste von Saetzen.
+
+    Das Modell soll ein Array liefern, schickt aber gelegentlich einen einzelnen
+    String. Ein String ist iterierbar, und die naheliegende Schreibweise
+    ``[str(x) for x in wert]`` zerlegt ihn dann buchstabenweise: Aus
+    "Zahlungsnachweis fehlt" werden 22 Eintraege "Z", "a", "h", ... Der Fehler
+    faellt nirgends auf, weil weiterhin eine Liste von Strings herauskommt.
+    """
+    if wert is None or wert == "":
+        return []
+    if isinstance(wert, str):
+        teile = re.split(r"[\n;]+", wert)
+        return [t.strip() for t in teile if t.strip()]
+    if isinstance(wert, (list, tuple)):
+        # Vor dem Saeubern zusammensetzen: die Leerzeichen des zerlegten Satzes
+        # stehen als eigene Eintraege in der Liste und werden sonst weggeworfen.
+        zusammengesetzt = zerlegtes_zusammensetzen([str(e) for e in wert])
+        return [t.strip() for t in zusammengesetzt if t.strip()]
+    return [str(wert).strip()]
+
+
+def zerlegtes_zusammensetzen(eintraege: list[str]) -> list[str]:
+    """Fuegt einen buchstabenweise zerlegten Satz wieder zusammen.
+
+    Rettet Analysen, die vor der Korrektur entstanden sind: Die Buchstaben
+    stehen in der urspruenglichen Reihenfolge in der Liste, der Satz laesst sich
+    also verlustfrei wiederherstellen. Eine echte Liste besteht nie aus lauter
+    einzelnen Zeichen.
+    """
+    if len(eintraege) >= 4 and all(len(e) == 1 for e in eintraege):
+        return [zusammen] if (zusammen := "".join(eintraege).strip()) else []
+    return eintraege
+
+
 @dataclass
 class Position:
     """Einzelner Betrag innerhalb eines Dokuments, etwa der Lohnanteil einer Rechnung."""
@@ -250,6 +286,11 @@ class Analyse:
         segmente = [Segment(**s) for s in daten.pop("segmente", []) or []]
         bekannt = {f for f in cls.__dataclass_fields__}
         gefiltert = {k: v for k, v in daten.items() if k in bekannt}
+        # Analysen aus der Zeit vor der Korrektur enthalten buchstabenweise
+        # zerlegte Saetze. Beim Laden zusammensetzen erspart ein Neuanalysieren.
+        for feld in ("hinweise", "fehlende_nachweise", "optimierungshinweise"):
+            if feld in gefiltert:
+                gefiltert[feld] = textliste(gefiltert[feld])
         analyse = cls(**gefiltert)
         analyse.positionen = positionen
         analyse.segmente = segmente
