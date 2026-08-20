@@ -9,6 +9,7 @@ Dokument gespeichert hat.
 from __future__ import annotations
 
 import datetime as _dt
+import hashlib as _hashlib
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
@@ -111,6 +112,30 @@ class Profil:
     def hat(self, merkmal: str) -> bool:
         return merkmal in self.merkmale
 
+    def kontext_pruefsumme(self) -> str:
+        """Kennzeichnet den Wissensstand, mit dem ein Dokument geprueft wurde.
+
+        Nur Angaben, die tatsaechlich in den Analyseauftrag einfliessen. Aendert
+        sich eine davon, sind die vorhandenen Analysen ueberholt: Derselbe Beleg
+        wird anders eingeordnet, wenn bekannt wird, dass im Haushalt ein Betrieb
+        gefuehrt wird oder ein Umzug stattfand.
+        """
+        teile = [
+            self.familienstand,
+            self.veranlagungsart,
+            str(self.anzahl_kinder),
+            ",".join(sorted(self.merkmale)),
+            str(self.entfernung_km or ""),
+            str(self.arbeitstage or ""),
+            str(self.homeoffice_tage or ""),
+            str(self.grad_der_behinderung or ""),
+            str(self.pflegegrad or ""),
+            " ".join((self.taetigkeiten or "").split()),
+            " ".join((self.notizen or "").split()),
+        ]
+        roh = "|".join(teile).encode("utf-8")
+        return _hashlib.sha256(roh).hexdigest()[:12]
+
     def unplausible_werte(self) -> list[str]:
         """Meldet Zahlenfelder ausserhalb ihrer plausiblen Spanne."""
         meldungen: list[str] = []
@@ -192,6 +217,8 @@ class Analyse:
     modell: str = ""
     # 0 = vor Einfuehrung der Versionierung geprueft.
     version: int = 0
+    # Wissensstand des Profils zur Pruefzeit; siehe Profil.kontext_pruefsumme.
+    kontext: str = ""
     analysiert_am: str = field(default_factory=_heute)
 
     @property

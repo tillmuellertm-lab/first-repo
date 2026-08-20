@@ -231,14 +231,11 @@ def befehl_analyse(args: argparse.Namespace) -> int:
     elif args.alle:
         zu_pruefen = list(mappe.dokumente)
     elif args.nachtragen:
-        # Alles, was eine aeltere Fassung der Analyse gesehen hat. Ein
-        # abgebrochener Lauf laesst sich damit fortsetzen, ohne die bereits
-        # bezahlten Dokumente ein zweites Mal zu pruefen.
-        zu_pruefen = [
-            d
-            for d in mappe.dokumente
-            if d.analyse is None or d.status == STATUS_FEHLER or not d.analyse.ist_aktuell
-        ]
+        # Alles, was eine aeltere Fassung der Analyse gesehen hat oder einen
+        # aelteren Wissensstand ueber den Haushalt. Ein abgebrochener Lauf und
+        # eine Profilaenderung lassen sich damit nachholen, ohne die bereits
+        # bezahlten und weiterhin gueltigen Dokumente erneut zu pruefen.
+        zu_pruefen = mappe.nachzutragen()
     else:
         zu_pruefen = [d for d in mappe.dokumente if d.analyse is None or d.status == STATUS_FEHLER]
 
@@ -255,11 +252,11 @@ def befehl_analyse(args: argparse.Namespace) -> int:
         return 1
 
     if not zu_pruefen:
-        veraltet = [d for d in mappe.dokumente if d.analyse and not d.analyse.ist_aktuell]
+        veraltet = mappe.nachzutragen()
         print("Nichts zu analysieren. Mit --alle wird der gesamte Bestand neu geprueft.")
         if veraltet:
             print(
-                f"{len(veraltet)} Dokumente stammen aus einer aelteren Fassung der Analyse. "
+                f"{len(veraltet)} Dokumente wurden mit einem aelteren Stand geprueft. "
                 "Nur diese nachholen mit: steuer analyse --nachtragen"
             )
         mappe.speichern()
@@ -415,6 +412,15 @@ def befehl_status(args: argparse.Namespace) -> int:
     print(f"  Luecken   {len(auswertung.luecken)}")
     print(f"  Chancen   {len(auswertung.chancen)}")
     print(f"  Warnungen {len(auswertung.warnungen)}")
+
+    nachzutragen = mappe.nachzutragen()
+    if nachzutragen:
+        print(
+            f"\n  {len(nachzutragen)} Dokumente wurden mit einem aelteren Stand geprueft.\n"
+            "  Seitdem hat sich das Profil oder die Analyse geaendert; dieselben Belege\n"
+            "  wuerden heute womoeglich anders eingeordnet.\n"
+            "  Nachholen mit: steuer analyse --nachtragen"
+        )
     return 0
 
 

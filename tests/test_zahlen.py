@@ -87,3 +87,28 @@ def test_deutsche_ausgabe_bleibt_unveraendert():
     assert zahl(1234.5) == "1.234,50"
     assert euro(1234.5) == "1.234,50 EUR"
     assert euro(None) == "—"
+
+
+def test_kontextpruefsumme_reagiert_auf_inhaltliche_aenderungen():
+    """Der Wissensstand muss sich aendern, wenn sich das Wissen aendert."""
+    basis = Profil(veranlagungsjahr=2024, merkmale=["angestellt"])
+    unveraendert = Profil(veranlagungsjahr=2024, merkmale=["angestellt"])
+    assert basis.kontext_pruefsumme() == unveraendert.kontext_pruefsumme()
+
+    mit_betrieb = Profil(
+        veranlagungsjahr=2024, merkmale=["angestellt"], taetigkeiten="Tuftingstudio"
+    )
+    assert mit_betrieb.kontext_pruefsumme() != basis.kontext_pruefsumme()
+
+    mit_umzug = Profil(veranlagungsjahr=2024, merkmale=["angestellt", "umzug"])
+    assert mit_umzug.kontext_pruefsumme() != basis.kontext_pruefsumme()
+
+    mit_notiz = Profil(veranlagungsjahr=2024, merkmale=["angestellt"], notizen="Umzug 2024")
+    assert mit_notiz.kontext_pruefsumme() != basis.kontext_pruefsumme()
+
+
+def test_kontextpruefsumme_ignoriert_belangloses():
+    """Name und Leerraum aendern den Analyseauftrag nicht."""
+    a = Profil(veranlagungsjahr=2024, name="Till", taetigkeiten="Tuftingstudio  Koeln")
+    b = Profil(veranlagungsjahr=2024, name="T. Mueller", taetigkeiten="Tuftingstudio Koeln")
+    assert a.kontext_pruefsumme() == b.kontext_pruefsumme()

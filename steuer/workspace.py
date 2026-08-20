@@ -264,6 +264,24 @@ class Arbeitsmappe:
     def offene_dokumente(self) -> list[Dokument]:
         return [d for d in self.dokumente if d.analyse is None or d.status != "analysiert"]
 
+    def nachzutragen(self) -> list[Dokument]:
+        """Dokumente, deren Analyse nicht mehr zum aktuellen Stand passt.
+
+        Drei Gruende: noch nie geprueft, beim letzten Versuch fehlgeschlagen,
+        oder mit einem aelteren Wissensstand geprueft - sei es eine aeltere
+        Fassung der Analysefelder oder ein Profil, das den Betrieb im Haushalt
+        noch nicht kannte. Derselbe Beleg wird dann heute anders eingeordnet.
+        """
+        kontext = self.profil.kontext_pruefsumme()
+        return [
+            d
+            for d in self.dokumente
+            if d.analyse is None
+            or d.status == "fehler"
+            or not d.analyse.ist_aktuell
+            or d.analyse.kontext != kontext
+        ]
+
 
 def _freier_name(ordner: Path, wunschname: str) -> str:
     ziel = ordner / wunschname

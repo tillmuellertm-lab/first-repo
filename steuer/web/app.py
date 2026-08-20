@@ -114,6 +114,8 @@ def anwendung_bauen(mappe: Arbeitsmappe) -> Any:
             # zuletzt getroffene Wahl, damit das Auswahlfeld sie wieder anzeigt
             "modell_dokument": modell_dokument_pruefen(mappe.einstellungen.get("modell_dokument")),
             "modell_strategie": modell_strategie_pruefen(mappe.einstellungen.get("modell_strategie")),
+            # Dokumente, deren Analyse einen aelteren Wissensstand hat.
+            "nachzutragen": len(mappe.nachzutragen()),
         }
 
     # ----------------------------------------------------------- Ansichten --

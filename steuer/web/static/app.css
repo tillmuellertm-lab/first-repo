@@ -199,3 +199,6 @@ ul.fehlt li { color: var(--achtung); }
 .fussleiste { border-top: 1px solid var(--rahmen); padding-top: 1rem; padding-bottom: 2rem; color: var(--gedaempft); font-size: .82rem; }
 .fussleiste p { margin: .3rem 0; }
 .pfad { word-break: break-all; }
+
+.modellhinweis.nachtrag { color: var(--achtung); background: var(--achtung-flaeche);
+  border: 1px solid var(--achtung); border-radius: var(--radius); padding: .5rem .7rem; margin-top: .6rem; }

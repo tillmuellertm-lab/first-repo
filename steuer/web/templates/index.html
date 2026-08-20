@@ -78,6 +78,14 @@
           Alles neu analysieren
         </button>
       </div>
+      {% if nachzutragen %}
+      <p class="modellhinweis nachtrag">
+        <strong>{{ nachzutragen }} Dokumente</strong> wurden mit einem aelteren Stand geprueft.
+        Seither hat sich das Profil oder die Analyse geaendert &mdash; dieselben Belege
+        wuerden heute womoeglich anders eingeordnet.
+        &bdquo;Alles neu analysieren&ldquo; holt sie nach.
+      </p>
+      {% endif %}
     </div>
 
     <div class="stufe">

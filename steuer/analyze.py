@@ -222,6 +222,7 @@ class Analysedienst:
 
         rohdaten = self._werkzeugergebnis(antwort, "dokument_analyse")
         analyse = _analyse_aus_rohdaten(rohdaten)
+        analyse.kontext = profil.kontext_pruefsumme()
         analyse.modell = self.modell_dokument
         if inhalt.gekuerzt:
             analyse.hinweise.append(
