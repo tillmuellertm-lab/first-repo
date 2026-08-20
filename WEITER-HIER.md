@@ -1,6 +1,7 @@
 # Hier geht es weiter
 
-Stand: 20. August 2026, nach dem Umbau in vier Punkten.
+Stand: 20. August 2026, abends. Die Ablage ist fertig, das Paket fuer
+Dr. Hagn liegt bereit. Offen sind nur noch Rueckfragen und Besorgungen.
 
 ---
 
@@ -13,11 +14,23 @@ Verspätungszuschlag wird in Kauf genommen. **Kein Thema mehr.**
 
 ## Was noch fehlt und nur Menschen beschaffen können
 
-1. **Bescheinigung nach § 35a vom Kölner Vermieter** — die haushaltsnahen
-   Anteile aus der Nebenkostenabrechnung (Hausmeister, Treppenhausreinigung,
-   Gartenpflege, Schornsteinfeger). Dazu ist er auf Verlangen verpflichtet.
-   Ohne sie stehen die haushaltsnahen Kosten weiter bei 0,00 EUR.
-2. **Nebenkostenabrechnung Leipzig 2024** — beantragt, laeuft.
+1. **Aufschlüsselung nach § 35a — für Köln *und* Leipzig.** Das ist keine
+   eigene Urkunde, sondern die Nebenkostenabrechnung mit gesondert
+   ausgewiesenem **Lohnanteil**: Hausmeister, Treppenhausreinigung,
+   Gartenpflege, Winterdienst, Schornsteinfeger, Heizungswartung. Nur der
+   Arbeitslohn zählt, nicht das Material. 20 % davon mindern die Steuer direkt
+   (höchstens 4.000 € haushaltsnahe Dienstleistungen, zusätzlich 1.200 €
+   Handwerkerleistungen). Eine Pauschale gibt es dafür **nicht** — ohne
+   Aufschlüsselung bleibt es bei 0,00 €. Ein Satz an den Vermieter genügt:
+   *„Bitte weisen Sie mir für die Nebenkostenabrechnung 2024 die nach § 35a
+   EStG begünstigten Lohnanteile gesondert aus."* Weigert er sich: als Mieter
+   Belegeinsicht verlangen und die Lohnanteile selbst herausschreiben.
+2. **Nebenkostenabrechnung Leipzig 2024** — beantragt, läuft. Den Satz aus
+   Punkt 1 nachreichen, sonst kommt die Abrechnung ohne die Aufteilung.
+   **Wichtig:** Bei Mietern zählt nach Verwaltungsauffassung meist das Jahr, in
+   dem die Abrechnung *vorliegt*. Für die Erklärung 2024 wäre also die
+   Abrechnung über **2023** die maßgebliche — die, die 2024 ins Haus kam. Falls
+   die noch irgendwo liegt, ist sie wertvoller als die erwartete.
 3. **Von der Ehefrau:** EÜR 2024 als PDF-Export aus der Rechnungs-App,
    Kontoauszüge des Geschäftskontos 2024, und die Klärung der Differenz
    zwischen −5.882,02 € (Screenshot) und −4.880,02 € (12.680,01 − 17.560,03).
@@ -33,42 +46,110 @@ das für 2024 weg.
 
 ---
 
-## Nächster Schritt am Werkzeug
+## Genau hier weitermachen
 
-Server beenden (`Strg` + `C`), dann diese eine Zeile:
+Konsole oeffnen, eine Zeile:
 
 ```bash
-cd ~/first-repo-claude-tax-return-document-tool-jesqdh && source .venv/bin/activate && git pull origin claude/tax-return-document-tool-jesqdh && pip install -e . && cd steuer-2024 && steuer jahre && steuer status
+cd ~/first-repo-claude-tax-return-document-tool-jesqdh && source .venv/bin/activate && cd steuer-2024 && git pull origin claude/tax-return-document-tool-jesqdh && steuer beantworten --erneut
 ```
 
-`steuer jahre` zeigt, wie sich die 269 Dokumente auf die Veranlagungsjahre
-verteilen. Die Kennzahlen stützen sich seit dem Umbau **nur noch auf Belege des
-Jahres 2024** — die Werbungskosten können deshalb unter 12.871,04 € gefallen
-sein. Das wäre kein Fehler, sondern die Korrektur einer stillen Ungenauigkeit.
+Das legt die offenen **Rueckfragen** einzeln vor, der teuerste Beleg zuerst,
+Kleinbetraege unter 50 EUR bleiben aussen vor. Antwort tippen, Enter. Leer =
+ueberspringen, `-` = Anmerkung loeschen, `x` = abbrechen. Nach jeder Antwort
+wird gespeichert; ein Abbruch kostet nichts.
 
-Danach im Browser unter **Stammdaten** eintragen:
+**Die erste Frage ist schon beantwortet, sie muss nur eingetippt werden.** An
+der ERGO-Rechnung ueber 269,19 EUR steht faelschlich ein Konsolenbefehl als
+Anmerkung. Richtige Antwort:
 
-| Feld | Wert | Fundstelle |
-| --- | --- | --- |
-| Gebäude-AfA, Jahresbetrag | 7177 | ESt-Erklärung 2023, Anlage V, Zeile 33 |
-| Gebäude-AfA, Satz | 2 | § 7 Abs. 4 Satz 1 Nr. 2a EStG |
-| Vermietetes Objekt | Bickbargen 153a, 25469 Halstenbek | |
-| Objekt angeschafft am | 02.08.2017 | Anlage V 2023, Zeile 7 |
-| Objekt fertiggestellt am | 15.01.2018 | Anlage V 2023, Zeile 7 |
-| Einheitswert-Aktenzeichen | 912937151516102 | Anlage V 2023, Zeile 6 |
-| AfA bewegliche Wirtschaftsgüter | 920 | Anlage V 2023, Zeile 42 |
-| Verlustvortrag aus Kapitalvermögen | 157 | Steuerbescheid 2023, Seite 3 |
-| Steuernummer | 219/5230/3521 | |
-| Zuständiges Finanzamt | Köln-Süd | |
+> Privat angeschafft, Pendelstrecke. Durch Entfernungspauschale abgegolten,
+> nicht zusaetzlich ansetzen.
 
-**Danach nicht neu analysieren.** Das Werkzeug wird melden, dass alle 269
-Dokumente mit einem älteren Stand geprüft wurden — technisch richtig, praktisch
-belanglos: Die Stammdaten betreffen die Anlage V, nicht die Einordnung von
-Kassenbons. Der Zähler ist ein Hinweis, keine Aufforderung. Ein Neulauf kostet
-5 bis 15 Euro für ein nahezu identisches Ergebnis.
+Begruendung: Die Entfernungspauschale gilt saemtliche Fahrzeugkosten ab —
+Anschaffung, Sprit, Versicherung, Steuer, Reparaturen (§ 9 Abs. 2 Satz 1 EStG).
+Zusaetzlich bleiben nur Unfallkosten auf dem Arbeitsweg und Fahrkarten fuer Bus
+und Bahn oberhalb der Pauschale.
 
-Gelohnt hat er sich einmal, als das Werkzeug nichts vom Tuftingstudio und vom
-Umzug wusste: plus 3.070 € Werbungskosten.
+**Zweite Frage, NUeRNBERGER Direktversicherung 1.509,24 EUR:** Gefragt ist, ob
+neben dem Arbeitgeberbeitrag etwas aus dem Netto gezahlt wurde. Steht auf der
+Gehaltsabrechnung ein Abzug „Direktversicherung" oder „Entgeltumwandlung"
+*nach* der Steuerberechnung, dann ja. Steht er davor, war es Entgeltumwandlung
+und damit bereits steuerfrei — dann lautet die Antwort „nur Arbeitgeberbeitrag,
+keine private Zahlung".
+
+Wenn Konsole nicht behagt: `steuer web` starten und die Anmerkung im Browser
+bei jedem Dokument eintragen. Langsamer, aber der Scan steht daneben.
+
+---
+
+## Danach
+
+```bash
+steuer offen
+```
+
+Die Uebersicht buendelt die offenen Punkte nach Besorgung. Zuletzt sah sie so
+aus (156 Einzelangaben, 12 Besorgungen):
+
+| Belege | Summe | Besorgung |
+| ---: | ---: | --- |
+| 51 | 50.577,72 € | Zahlungsnachweis — Kontoauszug oder Ueberweisungsbeleg |
+| 27 | 37.375,87 € | Rueckfragen — Auskunft, kein Dokument |
+| 15 | −1.500,80 € | Sonstiges |
+| 9 | 188.712,92 € | Lohnsteuerbescheinigung oder Gehaltsabrechnung |
+| 9 | 163,71 € | Rechnung oder Aufschluesselung |
+| 7 | 581,56 € | Aerztliche Verordnung oder Erstattungsnachweis |
+
+Zu den **51 Zahlungsnachweisen:** Das waeren Ihre privaten Kontoauszuege 2024
+plus PayPal. Fuer die meisten dieser Belege ist der Nachweis kein Muss, sondern
+eine Absicherung fuer den Fall einer Rueckfrage. Zwingend ist er bei § 35a und
+bei groesseren unbaren Zahlungen. Offene Frage an mich: welche der 51 ihn
+wirklich brauchen — das kann ich durchgehen, wenn gewuenscht.
+
+Ganz zum Schluss, wenn Antworten dazugekommen sind:
+
+```bash
+steuer ordnen --paket
+```
+
+Das kostet nichts und schreibt Ablage, Berichte und
+`berichte/Steuerunterlagen_2024.zip` neu. Die Anmerkungen stehen dann im
+Bericht unter der Frage, die sie beantworten.
+
+---
+
+## Erledigt an diesem Abend
+
+- **Ablage folgt der Jahressicht.** Vorher lagen 271 Dokumente im Paket, waehrend
+  die Kennzahlen nur 102 auswerteten. Jetzt sind es beidemal 102.
+- **Zerlegte Fehlanzeigen repariert.** Das Modell schickte manchmal einen String
+  statt einer Liste; der Code zerlegte ihn buchstabenweise. In der Uebersicht
+  standen Zeilen wie „154 Belege: e". Die Saetze wurden beim Laden verlustfrei
+  wiederhergestellt, ohne neu zu analysieren.
+- **BUHA-Sammelscan getrennt und analysiert** (4 Teile, darunter der
+  Kontoauszug-Export des Geschaeftskontos).
+- **Warnung eingebaut:** Fahrzeugkosten neben der Entfernungspauschale sind ein
+  doppelter Ansatz. Betraf die 269,19 EUR der ERGO-Rechnung.
+- **Stammdaten** sind eingetragen.
+
+---
+
+## Zahlen, Stand heute
+
+| | |
+| --- | ---: |
+| Dokumente 2024 | 102 |
+| davon einreichbar | 7 |
+| mit offenen Punkten | 64 |
+| nicht verwertbar | 27 |
+| Werbungskosten | 12.871,04 € |
+| Arbeitnehmer-Pauschbetrag | 1.230 € |
+| Haushaltsnahe Kosten | 0,00 € |
+| Ergebnis Gewerbe der Ehefrau | Verlust 5.882,02 € |
+
+Die Werbungskosten koennen nach der Kfz-Klaerung um 269,19 € sinken. Das waere
+kein Verlust, sondern die Vermeidung eines Fehlers.
 
 ---
 
@@ -76,7 +157,7 @@ Umzug wusste: plus 3.070 € Werbungskosten.
 
 | Mappe | Inhalt |
 | --- | --- |
-| `~/first-repo-claude-.../steuer-2024` | 269 private Dokumente, Veranlagung 2024 |
+| `~/first-repo-claude-.../steuer-2024` | 274 Dokumente, davon 102 fuer 2024 |
 | `~/gewerbe-2024` | 19 Belege des Tuftingstudios, davon nur wenige aus 2024 |
 | `~/gewerbe-2025` | 541 Belege des Folgejahres |
 | `~/steuer-sonstige` | 224 Dokumente anderer Jahre, überwiegend 2025 |
@@ -118,5 +199,8 @@ in die Auswertung eingehen.
 - **In Platzhaltern nur den Platzhalter ersetzen.** Bei
   `steuer euer --name "So Lems"` bleibt `euer` stehen, es ist der Befehl.
 - **Lange Texte im Browser eingeben**, nicht in der Konsole.
+- **Wenn die Konsole eine Frage stellt (`>`), wartet sie auf eine Antwort,
+  nicht auf einen Befehl.** Eingefuegte Befehlszeilen werden dort seit dem
+  20.08. abgewiesen, aber der Beleg kommt dann erst beim naechsten Lauf wieder.
 - **Der API-Schlüssel gehört in keinen Screenshot und in keinen Chat.** Er läuft
   30 Tage; danach meldet das Werkzeug `authentication_error`.
