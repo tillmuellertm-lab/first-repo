@@ -1323,6 +1323,24 @@ def befehl_offen(args: argparse.Namespace) -> int:
     return 0
 
 
+# Woerter, mit denen eine Antwort nie beginnt, eine Konsolenzeile aber sehr wohl.
+BEFEHLSWOERTER = frozenset(
+    "git steuer cd source pip python ls cat sudo export unzip xdg-open mkdir rm chmod".split()
+)
+
+
+def _sieht_aus_wie_befehl(text: str) -> bool:
+    """Erkennt eine versehentlich eingefuegte Konsolenzeile.
+
+    Beim Einfuegen mehrerer Zeilen verschluckt die Konsole den Zeilenumbruch,
+    und die zweite Zeile landet in der naechsten Eingabeaufforderung. So wurde
+    aus der Antwort zur Kfz-Versicherung schon einmal
+    "git pull origin ... && steuer beantworten".
+    """
+    erstes = text.strip().split(maxsplit=1)[0].lower() if text.strip() else ""
+    return erstes in BEFEHLSWOERTER
+
+
 def befehl_beantworten(args: argparse.Namespace) -> int:
     """Stellt die offenen Rueckfragen einzeln und haelt die Antworten fest.
 
@@ -1337,32 +1355,58 @@ def befehl_beantworten(args: argparse.Namespace) -> int:
     mappe = _mappe_oeffnen(args)
     dokumente = [d for d in mappe.jahresansicht().eigene if d.analyse]
 
-    aufgaben: list[tuple[Dokument, list[str]]] = []
-    for dokument in sorted(dokumente, key=lambda d: d.dateiname):
+    aufgaben: list[tuple[Dokument, list[str], float]] = []
+    uebergangen = 0
+    uebergangene_summe = 0.0
+    for dokument in dokumente:
         fragen = [
             text.strip()
             for text in dokument.analyse.fehlende_nachweise
             if text.strip() and _offen_thema(text)[0] == args.thema
         ]
-        if fragen and (args.erneut or not dokument.notiz):
-            aufgaben.append((dokument, fragen))
+        if not fragen or (dokument.notiz and not args.erneut):
+            continue
+        betrag = abs(
+            float(dokument.analyse.betrag_abzugsfaehig or dokument.analyse.betrag_gesamt or 0.0)
+        )
+        if betrag < args.ab_betrag:
+            uebergangen += 1
+            uebergangene_summe += betrag
+            continue
+        aufgaben.append((dokument, fragen, betrag))
+
+    # Der teuerste Beleg zuerst: Eine Frage zu einem Abo ueber 29,99 EUR ist
+    # dieselbe Minute Arbeit wert wie eine zu 35.000 EUR Darlehenszinsen, bringt
+    # aber ein Tausendstel. So kann jederzeit aufgehoert werden, ohne dass etwas
+    # Wichtiges unbeantwortet zurueckbleibt.
+    aufgaben.sort(key=lambda a: (-a[2], a[0].dateiname))
 
     if not aufgaben:
-        offen = sum(1 for d in dokumente if d.notiz)
         print(f"Nichts offen unter '{args.thema}'.")
-        if offen and not args.erneut:
-            print(f"{offen} Belege haben bereits eine Anmerkung. Erneut vorlegen: --erneut")
+        if uebergangen:
+            print(
+                f"{uebergangen} Fragen betreffen Betraege unter {euro(args.ab_betrag)} "
+                f"(zusammen {euro(uebergangene_summe)}). Auch die stellen: --ab-betrag 0"
+            )
+        vorhanden = sum(1 for d in dokumente if d.notiz)
+        if vorhanden and not args.erneut:
+            print(f"{vorhanden} Belege haben bereits eine Anmerkung. Erneut vorlegen: --erneut")
         return 0
 
     print(
-        f"{len(aufgaben)} offene Punkte unter '{args.thema}'.\n"
-        "Antwort eingeben und Enter. Leer lassen = ueberspringen. 'x' = abbrechen.\n"
+        f"{len(aufgaben)} offene Punkte unter '{args.thema}', der teuerste Beleg zuerst.\n"
+        "Antwort eingeben und Enter. Leer lassen = ueberspringen. "
+        "'-' loescht eine Anmerkung. 'x' = abbrechen.\n"
     )
+    if uebergangen:
+        print(
+            f"({uebergangen} weitere Fragen betreffen Betraege unter {euro(args.ab_betrag)}, "
+            f"zusammen {euro(uebergangene_summe)}. Mit --ab-betrag 0 kommen sie dazu.)\n"
+        )
 
     beantwortet = 0
-    for nummer, (dokument, fragen) in enumerate(aufgaben, start=1):
+    for nummer, (dokument, fragen, betrag) in enumerate(aufgaben, start=1):
         analyse = dokument.analyse
-        betrag = analyse.betrag_abzugsfaehig or analyse.betrag_gesamt
         kopf = f"[{nummer}/{len(aufgaben)}] {_belegname(dokument)}"
         if betrag:
             kopf += f"  ({euro(betrag)})"
@@ -1385,9 +1429,14 @@ def befehl_beantworten(args: argparse.Namespace) -> int:
             break
         if not antwort:
             continue
-        dokument.notiz = (
-            f"{dokument.notiz} | {antwort}".strip(" |") if args.erneut and dokument.notiz else antwort
-        )
+        if _sieht_aus_wie_befehl(antwort):
+            print(
+                "        Das sieht nach einem Konsolenbefehl aus und wurde nicht\n"
+                "        gespeichert. Beim Einfuegen mehrerer Zeilen landet die zweite\n"
+                "        hier. Der Beleg kommt beim naechsten Lauf wieder.\n"
+            )
+            continue
+        dokument.notiz = "" if antwort == "-" else antwort
         beantwortet += 1
         # Nach jeder Antwort sichern: ein Abbruch mittendrin darf nichts kosten.
         mappe.speichern()
@@ -1716,6 +1765,12 @@ def parser_bauen() -> argparse.ArgumentParser:
         "--erneut",
         action="store_true",
         help="Auch Belege vorlegen, zu denen schon eine Anmerkung vorliegt.",
+    )
+    p.add_argument(
+        "--ab-betrag",
+        type=float,
+        default=50.0,
+        help="Nur Belege ab diesem Betrag vorlegen (Standard: 50 EUR, 0 = alle).",
     )
     p.set_defaults(funktion=befehl_beantworten)
 

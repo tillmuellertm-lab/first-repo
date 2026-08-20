@@ -207,7 +207,7 @@ def test_antworten_werden_am_beleg_festgehalten(tmp_path, capsys, monkeypatch):
     antworten = iter(["beruflich, fuer die Wohnungssuche in Koeln", ""])
     monkeypatch.setattr("builtins.input", lambda *_: next(antworten))
 
-    befehl_beantworten(argparse.Namespace(mappe=str(mappe.wurzel), jahr=None, thema="frage", erneut=False))
+    befehl_beantworten(argparse.Namespace(mappe=str(mappe.wurzel), jahr=None, thema="frage", erneut=False, ab_betrag=0.0))
     ausgabe = capsys.readouterr().out
 
     assert "2 offene Punkte" in ausgabe, "die Kontoauszug-Zeile gehoert nicht dazu"
@@ -225,7 +225,7 @@ def test_abbruch_behaelt_das_bereits_gegebene(tmp_path, capsys, monkeypatch):
     antworten = iter(["privat genutzt", "x"])
     monkeypatch.setattr("builtins.input", lambda *_: next(antworten))
 
-    befehl_beantworten(argparse.Namespace(mappe=str(mappe.wurzel), jahr=None, thema="frage", erneut=False))
+    befehl_beantworten(argparse.Namespace(mappe=str(mappe.wurzel), jahr=None, thema="frage", erneut=False, ab_betrag=0.0))
     assert "Abgebrochen" in capsys.readouterr().out
 
     wieder = Arbeitsmappe.laden(mappe.wurzel)
@@ -237,11 +237,11 @@ def test_beantwortete_belege_kommen_nicht_wieder(tmp_path, capsys, monkeypatch):
 
     mappe = _mappe_mit_fragen(tmp_path)
     monkeypatch.setattr("builtins.input", lambda *_: "erste Antwort")
-    befehl_beantworten(argparse.Namespace(mappe=str(mappe.wurzel), jahr=None, thema="frage", erneut=False))
+    befehl_beantworten(argparse.Namespace(mappe=str(mappe.wurzel), jahr=None, thema="frage", erneut=False, ab_betrag=0.0))
     capsys.readouterr()
 
     monkeypatch.setattr("builtins.input", lambda *_: "")
-    befehl_beantworten(argparse.Namespace(mappe=str(mappe.wurzel), jahr=None, thema="frage", erneut=False))
+    befehl_beantworten(argparse.Namespace(mappe=str(mappe.wurzel), jahr=None, thema="frage", erneut=False, ab_betrag=0.0))
     assert "Nichts offen" in capsys.readouterr().out
 
 
@@ -258,3 +258,87 @@ def test_anmerkung_steht_im_bericht(tmp_path):
     text = report.markdown_bericht(mappe.dokumente, auswertung, werk, mappe.profil)
     assert "beruflich, fuer die Wohnungssuche in Koeln" in text
     assert "Anmerkung des Mandanten" in text
+
+
+def test_eingefuegter_konsolenbefehl_wird_nicht_als_antwort_gespeichert(tmp_path, capsys, monkeypatch):
+    """Beim Einfuegen mehrerer Zeilen landet die zweite in der Eingabeaufforderung."""
+    from steuer.cli import befehl_beantworten
+
+    mappe = _mappe_mit_fragen(tmp_path)
+    eingaben = iter(["git pull origin claude/tax-return-document-tool-jesqdh && steuer beantworten", "x"])
+    monkeypatch.setattr("builtins.input", lambda *_: next(eingaben))
+
+    befehl_beantworten(
+        argparse.Namespace(mappe=str(mappe.wurzel), jahr=None, thema="frage", erneut=False, ab_betrag=0.0)
+    )
+    assert "nicht\n        gespeichert" in capsys.readouterr().out
+
+    wieder = Arbeitsmappe.laden(mappe.wurzel)
+    assert not [d.notiz for d in wieder.dokumente if d.notiz], "der Befehl darf nirgends stehen"
+
+
+def test_falsche_anmerkung_laesst_sich_loeschen(tmp_path, capsys, monkeypatch):
+    from steuer.cli import befehl_beantworten
+
+    mappe = _mappe_mit_fragen(tmp_path)
+    mappe.dokumente[0].notiz = "git pull origin ..."
+    mappe.speichern()
+
+    monkeypatch.setattr("builtins.input", lambda *_: "-")
+    befehl_beantworten(
+        argparse.Namespace(mappe=str(mappe.wurzel), jahr=None, thema="frage", erneut=True, ab_betrag=0.0)
+    )
+    capsys.readouterr()
+
+    wieder = Arbeitsmappe.laden(mappe.wurzel)
+    assert not [d.notiz for d in wieder.dokumente if d.notiz]
+
+
+def test_teuerster_beleg_kommt_zuerst(tmp_path, capsys, monkeypatch):
+    """Eine Frage zu 29,99 EUR ist dieselbe Minute Arbeit wie eine zu 35.000 EUR."""
+    from steuer.cli import befehl_beantworten
+
+    mappe = Arbeitsmappe.anlegen(tmp_path / "mappe", 2024)
+    for name, betrag in (("klein.txt", 29.99), ("gross.txt", 35000.0), ("mittel.txt", 500.0)):
+        pfad = tmp_path / name
+        pfad.write_text(name, encoding="utf-8")
+        dokument, _ = mappe.datei_aufnehmen(pfad, herkunft_jahr=2024)
+        dokument.analyse = Analyse(
+            kategorie_id="werbungskosten_sonstige",
+            dokumenttyp=name,
+            betrag_gesamt=betrag,
+            fehlende_nachweise=["Klärung, ob beruflich veranlasst"],
+        )
+    mappe.speichern()
+
+    monkeypatch.setattr("builtins.input", lambda *_: "")
+    befehl_beantworten(
+        argparse.Namespace(mappe=str(mappe.wurzel), jahr=None, thema="frage", erneut=False, ab_betrag=0.0)
+    )
+    zeilen = [z for z in capsys.readouterr().out.splitlines() if z.startswith("[")]
+    assert "gross" in zeilen[0] and "klein" in zeilen[-1], zeilen
+
+
+def test_kleinbetraege_bleiben_standardmaessig_aussen_vor(tmp_path, capsys, monkeypatch):
+    from steuer.cli import befehl_beantworten
+
+    mappe = Arbeitsmappe.anlegen(tmp_path / "mappe", 2024)
+    for name, betrag in (("klein.txt", 29.99), ("gross.txt", 500.0)):
+        pfad = tmp_path / name
+        pfad.write_text(name, encoding="utf-8")
+        dokument, _ = mappe.datei_aufnehmen(pfad, herkunft_jahr=2024)
+        dokument.analyse = Analyse(
+            kategorie_id="werbungskosten_sonstige",
+            dokumenttyp=name,
+            betrag_gesamt=betrag,
+            fehlende_nachweise=["Klärung, ob beruflich veranlasst"],
+        )
+    mappe.speichern()
+
+    monkeypatch.setattr("builtins.input", lambda *_: "")
+    befehl_beantworten(
+        argparse.Namespace(mappe=str(mappe.wurzel), jahr=None, thema="frage", erneut=False, ab_betrag=50.0)
+    )
+    ausgabe = capsys.readouterr().out
+    assert "1 offene Punkte" in ausgabe
+    assert "1 weitere Fragen betreffen Betraege unter" in ausgabe
