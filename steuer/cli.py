@@ -279,6 +279,61 @@ def befehl_stammdaten(args: argparse.Namespace) -> int:
     return 0
 
 
+def befehl_jahre(args: argparse.Namespace) -> int:
+    """Zeigt, wie sich der Bestand auf die Veranlagungsjahre verteilt."""
+    mappe = _mappe_oeffnen(args)
+    if not mappe.dokumente:
+        print("Noch keine Dokumente aufgenommen.")
+        return 0
+
+    ansicht = mappe.jahresansicht()
+    print(f"Arbeitsmappe {mappe.wurzel}  ·  Sicht auf {mappe.jahr}\n")
+    for jahr, anzahl in sorted(mappe.jahresverteilung().items()):
+        markierung = "  <- dieses Jahr" if jahr == str(mappe.jahr) else ""
+        print(f"  {anzahl:>5}  {jahr}{markierung}")
+
+    print(
+        f"\n  In die Auswertung fuer {mappe.jahr} gehen {len(ansicht.eigene)} Dokumente ein."
+    )
+    if ansicht.fremde:
+        print(
+            f"  {len(ansicht.fremde)} gehoeren in andere Jahre und bleiben aussen vor -\n"
+            "  sie bleiben aber im Bestand und stehen ihrem Jahr zur Verfuegung."
+        )
+    if ansicht.ohne_jahr:
+        print(
+            f"  {len(ansicht.ohne_jahr)} haben kein erkennbares Jahr und gehen in keine Summe ein.\n"
+            "  Das Jahr laesst sich beim Aufnehmen mit --jahr angeben oder je Dokument\n"
+            "  in der Weboberflaeche setzen."
+        )
+    return 0
+
+
+def befehl_zusammenfuehren(args: argparse.Namespace) -> int:
+    """Nimmt eine andere Arbeitsmappe in diese auf - die Gegenrichtung zu ausgliedern."""
+    mappe = _mappe_oeffnen(args)
+    quelle = Arbeitsmappe.laden(Path(args.quelle))
+    if quelle.wurzel == mappe.wurzel:
+        print("Quelle und Ziel sind dieselbe Mappe.", file=sys.stderr)
+        return 1
+
+    print(f"Quelle: {quelle.wurzel} ({len(quelle.dokumente)} Dokumente)")
+    print(f"Ziel:   {mappe.wurzel} ({len(mappe.dokumente)} Dokumente)\n")
+    if args.probelauf:
+        vorhanden = {d.sha256 for d in mappe.dokumente}
+        neu = [d for d in quelle.dokumente if d.sha256 not in vorhanden]
+        print(f"{len(neu)} Dokumente wuerden uebernommen, {len(quelle.dokumente) - len(neu)} sind schon da.")
+        print("Probelauf, es wurde nichts veraendert.")
+        return 0
+
+    uebernommen, uebersprungen = mappe.uebernehmen_aus(quelle)
+    mappe.speichern()
+    print(f"{uebernommen} Dokumente uebernommen, {uebersprungen} uebersprungen.")
+    print("Die Analysen wurden mituebernommen, eine erneute Pruefung ist nicht noetig.")
+    print(f"Die Quellmappe bleibt unveraendert: {quelle.wurzel}")
+    return 0
+
+
 def befehl_hinzufuegen(args: argparse.Namespace) -> int:
     mappe = _mappe_oeffnen(args)
     dateien = dateien_sammeln([Path(p) for p in args.pfade])
@@ -514,7 +569,7 @@ def befehl_status(args: argparse.Namespace) -> int:
     mappe.eingang_einlesen()
     mappe.speichern()
     regelwerk = _regelwerk(mappe)
-    auswertung = gaps.auswerten(mappe.dokumente, regelwerk, mappe.profil, stammdaten=mappe.stammdaten)
+    auswertung = gaps.auswerten(mappe.jahresansicht().eigene, regelwerk, mappe.profil, stammdaten=mappe.stammdaten)
     zahlen = auswertung.kennzahlen
 
     print(f"Arbeitsmappe {mappe.wurzel}  ·  Veranlagungszeitraum {mappe.jahr}")
@@ -534,6 +589,16 @@ def befehl_status(args: argparse.Namespace) -> int:
     print(f"  Chancen   {len(auswertung.chancen)}")
     print(f"  Warnungen {len(auswertung.warnungen)}")
 
+    ansicht = mappe.jahresansicht()
+    if ansicht.fremde or ansicht.ohne_jahr:
+        print()
+        if ansicht.fremde:
+            teile = ", ".join(f"{anzahl}x {jahr}" for jahr, anzahl in ansicht.fremde_jahre().items())
+            print(f"  {len(ansicht.fremde)} Dokumente gehoeren in andere Jahre ({teile}).")
+        if ansicht.ohne_jahr:
+            print(f"  {len(ansicht.ohne_jahr)} Dokumente ohne erkennbares Jahr.")
+        print("  Sie bleiben im Bestand. Verteilung ansehen mit: steuer jahre")
+
     nachzutragen = mappe.nachzutragen()
     if nachzutragen:
         print(
@@ -548,7 +613,7 @@ def befehl_status(args: argparse.Namespace) -> int:
 def befehl_pruefen(args: argparse.Namespace) -> int:
     mappe = _mappe_oeffnen(args)
     regelwerk = _regelwerk(mappe)
-    auswertung = gaps.auswerten(mappe.dokumente, regelwerk, mappe.profil, stammdaten=mappe.stammdaten)
+    auswertung = gaps.auswerten(mappe.jahresansicht().eigene, regelwerk, mappe.profil, stammdaten=mappe.stammdaten)
 
     def _ausgeben(titel: str, befunde: list) -> None:
         if not befunde:
@@ -589,7 +654,7 @@ def befehl_ordnen(args: argparse.Namespace) -> int:
         )
         return 1
 
-    auswertung = gaps.auswerten(mappe.dokumente, regelwerk, mappe.profil, stammdaten=mappe.stammdaten)
+    auswertung = gaps.auswerten(mappe.jahresansicht().eigene, regelwerk, mappe.profil, stammdaten=mappe.stammdaten)
     modellauswertung = None
     if args.gesamtauswertung:
         if not schluessel_vorhanden():
@@ -1180,6 +1245,21 @@ def parser_bauen() -> argparse.ArgumentParser:
         help="Nur anzeigen, was verschoben wuerde, ohne etwas zu aendern.",
     )
     p.set_defaults(funktion=befehl_ausgliedern)
+
+    p = unter.add_parser(
+        "jahre", help="Verteilung des Bestands auf die Veranlagungsjahre anzeigen."
+    )
+    p.set_defaults(funktion=befehl_jahre)
+
+    p = unter.add_parser(
+        "zusammenfuehren",
+        help="Eine andere Arbeitsmappe in diese aufnehmen, samt Analysen.",
+    )
+    p.add_argument("quelle", help="Pfad der Mappe, die uebernommen werden soll.")
+    p.add_argument(
+        "--probelauf", action="store_true", help="Nur anzeigen, was uebernommen wuerde."
+    )
+    p.set_defaults(funktion=befehl_zusammenfuehren)
 
     p = unter.add_parser("liste", help="Alle Dokumente nach Anlagen sortiert auflisten.")
     p.add_argument("--kategorie", choices=taxonomy.ids(), help="Nur diese Kategorie zeigen.")

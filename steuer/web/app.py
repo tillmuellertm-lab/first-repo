@@ -99,7 +99,7 @@ def anwendung_bauen(mappe: Arbeitsmappe) -> Any:
         return rules.laden(mappe.jahr)
 
     def auswertung() -> gaps.Auswertung:
-        return gaps.auswerten(mappe.dokumente, regelwerk(), mappe.profil, stammdaten=mappe.stammdaten)
+        return gaps.auswerten(mappe.jahresansicht().eigene, regelwerk(), mappe.profil, stammdaten=mappe.stammdaten)
 
     def grunddaten() -> dict[str, Any]:
         werk = regelwerk()
@@ -120,6 +120,7 @@ def anwendung_bauen(mappe: Arbeitsmappe) -> Any:
             "modell_strategie": modell_strategie_pruefen(mappe.einstellungen.get("modell_strategie")),
             # Dokumente, deren Analyse einen aelteren Wissensstand hat.
             "nachzutragen": len(mappe.nachzutragen()),
+            "jahresansicht": mappe.jahresansicht(),
         }
 
     # ----------------------------------------------------------- Ansichten --
@@ -127,7 +128,7 @@ def anwendung_bauen(mappe: Arbeitsmappe) -> Any:
     @app.get("/")
     def uebersicht():
         werk = regelwerk()
-        ergebnis = gaps.auswerten(mappe.dokumente, werk, mappe.profil, stammdaten=mappe.stammdaten)
+        ergebnis = gaps.auswerten(mappe.jahresansicht().eigene, werk, mappe.profil, stammdaten=mappe.stammdaten)
         gruppen = []
         for kategorie in taxonomy.KATEGORIEN:
             liste = [d for d in mappe.dokumente if d.wirksame_kategorie == kategorie.id]
@@ -248,6 +249,14 @@ def anwendung_bauen(mappe: Arbeitsmappe) -> Any:
         if request.method == "POST":
             eintrag.manuelle_kategorie = request.form.get("kategorie", "").strip()
             eintrag.notiz = request.form.get("notiz", "").strip()
+            # Das Jahr von Hand setzen: Ihre Angabe hat Vorrang vor dem, was
+            # die Analyse aus dem Dokument gelesen hat.
+            gesetztes_jahr = _ganzzahl(request.form.get("herkunft_jahr"))
+            eintrag.herkunft_jahr = (
+                gesetztes_jahr if gesetztes_jahr and 1990 <= gesetztes_jahr <= 2100 else None
+            )
+            gewaehlte_herkunft = (request.form.get("herkunft") or "").strip()
+            eintrag.herkunft = gewaehlte_herkunft if gewaehlte_herkunft in HERKUNFT_IDS else ""
             mappe.speichern()
             return redirect(url_for("dokument", dokument_id=dokument_id, gespeichert=1))
         return render_template(
@@ -271,7 +280,7 @@ def anwendung_bauen(mappe: Arbeitsmappe) -> Any:
     @app.get("/bericht")
     def bericht():
         werk = regelwerk()
-        ergebnis = gaps.auswerten(mappe.dokumente, werk, mappe.profil, stammdaten=mappe.stammdaten)
+        ergebnis = gaps.auswerten(mappe.jahresansicht().eigene, werk, mappe.profil, stammdaten=mappe.stammdaten)
         return report.html_bericht(mappe.dokumente, ergebnis, werk, mappe.profil, _letzte_gesamtauswertung())
 
     # ---------------------------------------------------------------- API --
@@ -420,7 +429,7 @@ def anwendung_bauen(mappe: Arbeitsmappe) -> Any:
         def lauf() -> None:
             try:
                 werk = regelwerk()
-                ergebnis = gaps.auswerten(mappe.dokumente, werk, mappe.profil, stammdaten=mappe.stammdaten)
+                ergebnis = gaps.auswerten(mappe.jahresansicht().eigene, werk, mappe.profil, stammdaten=mappe.stammdaten)
                 modellauswertung = None
                 if daten.get("gesamtauswertung") and schluessel_vorhanden():
                     auftrag.aktuell = f"Gesamtauswertung laeuft ({modell})"

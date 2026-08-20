@@ -49,6 +49,28 @@ class ArbeitsmappenFehler(RuntimeError):
     pass
 
 
+@dataclass
+class Jahresansicht:
+    """Der Bestand einer Mappe aus Sicht eines Veranlagungsjahres."""
+
+    jahr: int
+    eigene: list[Dokument] = field(default_factory=list)
+    fremde: list[Dokument] = field(default_factory=list)
+    ohne_jahr: list[Dokument] = field(default_factory=list)
+
+    @property
+    def anzahl_gesamt(self) -> int:
+        return len(self.eigene) + len(self.fremde) + len(self.ohne_jahr)
+
+    def fremde_jahre(self) -> dict[int, int]:
+        verteilung: dict[int, int] = {}
+        for dokument in self.fremde:
+            jahr = dokument.gehoert_ins_jahr
+            if jahr:
+                verteilung[jahr] = verteilung.get(jahr, 0) + 1
+        return dict(sorted(verteilung.items()))
+
+
 def sichere_bezeichnung(text: str, maxlaenge: int = 60) -> str:
     """Macht aus beliebigem Text einen dateisystemtauglichen Bestandteil."""
     # Erst die Umlaute ersetzen, dann zerlegen: nach NFKD steht das Trema als
@@ -300,6 +322,55 @@ class Arbeitsmappe:
             if pfad.exists():
                 pfad.unlink()
         return True
+
+    def jahresansicht(self, jahr: int | None = None) -> "Jahresansicht":
+        """Teilt den Bestand nach Zugehoerigkeit zum Veranlagungsjahr auf.
+
+        Ein Eingang, mehrere Jahre: Dokumente wandern nicht zwischen Mappen,
+        sie gehoeren einfach zu einem anderen Jahr. Was keinem Jahr zugeordnet
+        ist, bleibt sichtbar, geht aber in keine Summe ein - Raten waere hier
+        besonders teuer, weil ein falsches Jahr den Abzug ganz kosten kann.
+        """
+        jahr = jahr or self.jahr
+        eigene: list[Dokument] = []
+        fremde: list[Dokument] = []
+        ohne: list[Dokument] = []
+        for dokument in self.dokumente:
+            zugehoerig = dokument.gehoert_ins_jahr
+            if zugehoerig is None:
+                ohne.append(dokument)
+            elif zugehoerig == jahr:
+                eigene.append(dokument)
+            else:
+                fremde.append(dokument)
+        return Jahresansicht(jahr=jahr, eigene=eigene, fremde=fremde, ohne_jahr=ohne)
+
+    def jahresverteilung(self) -> dict[str, int]:
+        """Wie viele Dokumente auf welches Jahr entfallen."""
+        verteilung: dict[str, int] = {}
+        for dokument in self.dokumente:
+            kennung = str(dokument.gehoert_ins_jahr or "ohne Jahresangabe")
+            verteilung[kennung] = verteilung.get(kennung, 0) + 1
+        return verteilung
+
+    def uebernehmen_aus(self, quelle: "Arbeitsmappe") -> tuple[int, int]:
+        """Fuehrt eine andere Mappe in diese ein, ohne Analysen zu verlieren.
+
+        Rueckgabe: uebernommen, uebersprungen. Die Gegenrichtung zu
+        ``ausgliedern`` - wer den Bestand versehentlich zerteilt hat, kann ihn
+        wieder zusammenfuehren.
+        """
+        uebernommen = uebersprungen = 0
+        for dokument in quelle.dokumente:
+            quelldatei = quelle.pfad_zu(dokument)
+            if not quelldatei.exists():
+                uebersprungen += 1
+                continue
+            if self.dokument_uebernehmen(dokument, quelldatei):
+                uebernommen += 1
+            else:
+                uebersprungen += 1
+        return uebernommen, uebersprungen
 
     def offene_dokumente(self) -> list[Dokument]:
         return [d for d in self.dokumente if d.analyse is None or d.status != "analysiert"]

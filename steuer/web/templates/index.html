@@ -41,6 +41,22 @@
   </div>
 </section>
 
+{% if jahresansicht.fremde or jahresansicht.ohne_jahr %}
+<div class="banner warnung">
+  Die Kennzahlen oben gelten fuer <strong>{{ jahr }}</strong> und stuetzen sich auf
+  {{ jahresansicht.eigene | length }} Dokumente.
+  {% if jahresansicht.fremde %}
+  {{ jahresansicht.fremde | length }} gehoeren in andere Jahre
+  ({% for j, anzahl in jahresansicht.fremde_jahre().items() %}{{ anzahl }}&times;&nbsp;{{ j }}{% if not loop.last %}, {% endif %}{% endfor %})
+  und bleiben aussen vor.
+  {% endif %}
+  {% if jahresansicht.ohne_jahr %}
+  Bei {{ jahresansicht.ohne_jahr | length }} ist kein Jahr erkennbar; sie gehen in keine Summe ein.
+  {% endif %}
+  Alle bleiben im Bestand &mdash; das Jahr laesst sich auf der Seite eines Dokuments setzen.
+</div>
+{% endif %}
+
 <section class="werkbank">
   <div id="ablage" class="ablage">
     <p class="gross">Scans hierher ziehen</p>

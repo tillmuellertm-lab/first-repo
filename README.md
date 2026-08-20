@@ -131,6 +131,8 @@ Die Originale bleiben unangetastet, die Ablage wird bei jedem Lauf frisch aufgeb
 | `steuer liste` | alle Dokumente nach Anlagen sortiert |
 | `steuer dateien` | Größe und Seitenzahl aller Dateien, findet Ausreißer |
 | `steuer ausgliedern` | Dokumente nach Herkunft, Kategorie oder Steuerjahr in eine andere Mappe verschieben |
+| `steuer jahre` | Verteilung des Bestands auf die Veranlagungsjahre |
+| `steuer zusammenfuehren <Mappe>` | eine andere Arbeitsmappe aufnehmen, samt Analysen |
 | `steuer status` | Kennzahlen auf einen Blick |
 | `steuer pruefen` | Lücken, Chancen und Warnungen |
 | `steuer trennen <Kennung>` | erkannten Sammelscan seitengenau zerlegen |
@@ -238,6 +240,34 @@ trennt sie später in einem Zug heraus.
 
 In der Weboberfläche stehen dieselben beiden Felder direkt unter dem
 Ablagebereich und gelten für den nächsten Stapel.
+
+---
+
+## Ein Bestand, mehrere Jahre
+
+Ein Dokument muss die Mappe nicht wechseln, wenn es in ein anderes Jahr gehört — es
+gehört einfach zu einem anderen Jahr. Die Auswertung schaut immer nur auf das
+Veranlagungsjahr der Mappe:
+
+```bash
+steuer jahre        # wie sich der Bestand verteilt
+```
+
+Was in ein anderes Jahr fällt, bleibt im Bestand, geht aber in keine Kennzahl und in
+keinen Bericht dieses Jahres ein. Was **kein** erkennbares Jahr hat, bleibt ebenfalls
+sichtbar und ebenfalls außerhalb der Summen — ein geratenes Jahr kann den Abzug ganz
+kosten, deshalb wird hier nicht geraten.
+
+Das Jahr eines einzelnen Belegs korrigieren Sie in der Weboberfläche auf seiner Seite;
+Ihre Angabe hat Vorrang vor dem, was die Analyse gelesen hat.
+
+Und falls ein Bestand versehentlich zerteilt wurde, führt der Gegenbefehl ihn wieder
+zusammen, ohne dass Analysen verlorengehen:
+
+```bash
+steuer zusammenfuehren ~/steuer-sonstige --probelauf
+steuer zusammenfuehren ~/steuer-sonstige
+```
 
 ---
 

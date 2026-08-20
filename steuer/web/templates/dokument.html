@@ -98,6 +98,22 @@
           {% endfor %}
         </select>
       </label>
+      <label>Steuerjahr ueberschreiben
+        <input type="number" name="herkunft_jahr" min="1990" max="2100"
+               placeholder="{{ dokument.analyse.steuerjahr if dokument.analyse and dokument.analyse.steuerjahr else 'aus der Analyse' }}"
+               value="{{ dokument.herkunft_jahr if dokument.herkunft_jahr else '' }}">
+        <small>Ihre Angabe hat Vorrang. Leer lassen heisst: das Jahr aus der Analyse gilt.
+          Dokumente anderer Jahre bleiben im Bestand, gehen aber nicht in die Auswertung
+          dieses Jahres ein.</small>
+      </label>
+      <label>Herkunft
+        <select name="herkunft">
+          <option value="">— nicht angegeben —</option>
+          {% for kennung, beschriftung in herkuenfte %}
+          <option value="{{ kennung }}" {% if dokument.herkunft == kennung %}selected{% endif %}>{{ beschriftung }}</option>
+          {% endfor %}
+        </select>
+      </label>
       <label>Notiz
         <textarea name="notiz" rows="3"
                   placeholder="Zusatzinformation, die bei einer erneuten Analyse mitgegeben wird">{{ dokument.notiz }}</textarea>

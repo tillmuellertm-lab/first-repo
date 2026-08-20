@@ -112,3 +112,63 @@ def test_herkunftskennungen_sind_stabil():
     # Die Kennungen stehen in gespeicherten Mappen; sie duerfen sich nicht
     # unbemerkt aendern.
     assert HERKUNFT_IDS == {"privat", "gewerbe", "vermietung", "gemischt"}
+
+
+def test_jahresansicht_teilt_den_bestand(tmp_path):
+    mappe = Arbeitsmappe.anlegen(tmp_path / "mappe", 2024)
+    for name, jahr in (("a.pdf", 2024), ("b.pdf", 2025), ("c.pdf", None)):
+        dokument = Dokument(id=name[0], dateiname=name, herkunft_jahr=jahr)
+        mappe.dokumente.append(dokument)
+
+    ansicht = mappe.jahresansicht()
+    assert [d.dateiname for d in ansicht.eigene] == ["a.pdf"]
+    assert [d.dateiname for d in ansicht.fremde] == ["b.pdf"]
+    assert [d.dateiname for d in ansicht.ohne_jahr] == ["c.pdf"]
+    assert ansicht.anzahl_gesamt == 3
+    assert ansicht.fremde_jahre() == {2025: 1}
+
+
+def test_jahresansicht_folgt_der_analyse_wenn_nichts_gesetzt_ist(tmp_path):
+    mappe = Arbeitsmappe.anlegen(tmp_path / "mappe", 2024)
+    dokument = Dokument(id="a", dateiname="a.pdf")
+    dokument.analyse = Analyse(steuerjahr=2025)
+    mappe.dokumente.append(dokument)
+    assert len(mappe.jahresansicht().fremde) == 1
+
+    # Die Angabe des Nutzers holt es zurueck.
+    dokument.herkunft_jahr = 2024
+    assert len(mappe.jahresansicht().eigene) == 1
+
+
+def test_jahresverteilung(tmp_path):
+    mappe = Arbeitsmappe.anlegen(tmp_path / "mappe", 2024)
+    for name, jahr in (("a", 2024), ("b", 2024), ("c", 2025), ("d", None)):
+        mappe.dokumente.append(Dokument(id=name, dateiname=f"{name}.pdf", herkunft_jahr=jahr))
+    assert mappe.jahresverteilung() == {"2024": 2, "2025": 1, "ohne Jahresangabe": 1}
+
+
+def test_zusammenfuehren_uebernimmt_analysen(tmp_path):
+    quelle = Arbeitsmappe.anlegen(tmp_path / "quelle", 2025)
+    quelle.datei_aufnehmen(_datei(tmp_path, "gewerbe.txt"), herkunft="gewerbe", herkunft_jahr=2025)
+    quelle.dokumente[0].analyse = Analyse(dokumenttyp="Ausgangsrechnung", betrag_gesamt=320.0)
+    quelle.speichern()
+
+    ziel = Arbeitsmappe.anlegen(tmp_path / "ziel", 2024)
+    uebernommen, uebersprungen = ziel.uebernehmen_aus(quelle)
+
+    assert (uebernommen, uebersprungen) == (1, 0)
+    assert ziel.dokumente[0].analyse.dokumenttyp == "Ausgangsrechnung"
+    assert ziel.dokumente[0].herkunft == "gewerbe"
+    assert ziel.dokumente[0].herkunft_jahr == 2025
+    # Die Quelle bleibt unangetastet.
+    assert len(quelle.dokumente) == 1
+
+
+def test_zusammenfuehren_erkennt_dubletten(tmp_path):
+    quelle = Arbeitsmappe.anlegen(tmp_path / "quelle", 2025)
+    quelle.datei_aufnehmen(_datei(tmp_path, "beleg.txt"))
+    ziel = Arbeitsmappe.anlegen(tmp_path / "ziel", 2024)
+    ziel.uebernehmen_aus(quelle)
+    uebernommen, uebersprungen = ziel.uebernehmen_aus(quelle)
+    assert (uebernommen, uebersprungen) == (0, 1)
+    assert len(ziel.dokumente) == 1
