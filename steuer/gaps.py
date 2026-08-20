@@ -418,6 +418,54 @@ def _dokumentwarnungen(dokumente: list[Dokument], jahr: int, regelwerk: Regelwer
     return befunde
 
 
+def _fahrzeugkosten_pruefen(dokumente: list[Dokument], profil: Profil) -> list[Befund]:
+    """Warnt, wenn Fahrzeugkosten neben der Entfernungspauschale stehen.
+
+    Die Entfernungspauschale gilt alle Aufwendungen fuer den Weg zur Arbeit ab -
+    Anschaffung, Sprit, Versicherung, Steuer, Reparaturen (§ 9 Abs. 2 Satz 1
+    EStG). Wer sie zusaetzlich ansetzt, rechnet zweimal dasselbe. Das Werkzeug
+    zaehlt solche Belege aber stumpf zu den Werbungskosten, weil in der Kategorie
+    'werbungskosten_fahrten' auch berechtigte Posten liegen (Bahnticket ueber der
+    Pauschale, Unfallkosten). Deshalb keine stille Korrektur, sondern ein Hinweis.
+    """
+    if not profil.hat("pendler"):
+        return []
+    betroffen = [
+        d
+        for d in dokumente
+        if d.wirksame_kategorie == "werbungskosten_fahrten"
+        and d.analyse
+        and (d.analyse.betrag_abzugsfaehig or d.analyse.betrag_gesamt)
+    ]
+    if not betroffen:
+        return []
+    summe = round(_summe(betroffen), 2)
+    if not summe:
+        return []
+    return [
+        Befund(
+            art="warnung",
+            id="fahrzeugkosten_neben_entfernungspauschale",
+            titel="Fahrzeugkosten koennen nicht neben die Entfernungspauschale treten",
+            beschreibung=(
+                f"{len(betroffen)} Belege unter 'Fahrten' ergeben {summe:.2f} EUR. "
+                "Die Entfernungspauschale gilt saemtliche Aufwendungen fuer den Weg "
+                "zur ersten Taetigkeitsstaette ab: Anschaffung, Kraftstoff, "
+                "Versicherung, Kfz-Steuer, Reparaturen und Wertverlust "
+                "(§ 9 Abs. 2 Satz 1 EStG). Ein privat angeschafftes Fahrzeug, mit "
+                "dem gependelt wird, aendert daran nichts. Zusaetzlich absetzbar "
+                "bleiben nur Unfallkosten auf dem Arbeitsweg sowie Fahrkarten fuer "
+                "oeffentliche Verkehrsmittel, soweit sie ueber der Pauschale liegen. "
+                "Diese Belege gehen derzeit in die Werbungskosten ein - bitte "
+                "einzeln pruefen, welche davon wirklich hinzukommen."
+            ),
+            anlage="Anlage N",
+            prioritaet="hoch",
+            betroffene_dokumente=[d.id for d in betroffen],
+        )
+    ]
+
+
 def _rechnerische_chancen(
     zahlen: dict[str, Any], regelwerk: Regelwerk, profil: Profil
 ) -> list[Befund]:
@@ -842,6 +890,7 @@ def auswerten(
 
     befunde.extend(_rechnerische_chancen(zahlen, regelwerk, profil))
     befunde.extend(_dokumentwarnungen(dokumente, regelwerk.jahr, regelwerk))
+    befunde.extend(_fahrzeugkosten_pruefen(dokumente, profil))
     befunde.extend(_dubletten_pruefen(dokumente))
     befunde.extend(_frist_pruefen(regelwerk, heute))
     befunde.extend(_stammdaten_hinweis(stammdaten))

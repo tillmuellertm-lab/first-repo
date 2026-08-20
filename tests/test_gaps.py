@@ -254,3 +254,43 @@ def test_kleiner_bestand_bleibt_unveraendert():
     bestand = [{"kategorie": "sonderausgaben", "eignung": "geeignet"} for _ in range(10)]
     gekuerzt, weggelassen = _bestand_begrenzen(bestand)
     assert gekuerzt == bestand and weggelassen == 0
+
+
+# --- Fahrzeugkosten neben der Entfernungspauschale ---------------------------
+
+
+def _fahrtbeleg(betrag: float, kategorie: str = "werbungskosten_fahrten") -> Dokument:
+    dokument = Dokument(id=f"kfz{betrag}", dateiname="kfz.pdf")
+    dokument.analyse = Analyse(
+        kategorie_id=kategorie,
+        dokumenttyp="Kfz-Rechnung",
+        eignung="bedingt_geeignet",
+        betrag_gesamt=betrag,
+    )
+    return dokument
+
+
+def test_fahrzeugkosten_werden_als_doppelter_ansatz_gemeldet():
+    """Die Entfernungspauschale gilt alle Fahrzeugkosten ab (§ 9 Abs. 2 EStG)."""
+    profil = Profil(merkmale=["angestellt", "pendler"], entfernung_km=6)
+    auswertung = gaps.auswerten([_fahrtbeleg(269.19)], REGELWERK, profil)
+
+    treffer = [b for b in auswertung.warnungen if b.id == "fahrzeugkosten_neben_entfernungspauschale"]
+    assert treffer, "der doppelte Ansatz muss auffallen"
+    assert treffer[0].prioritaet == "hoch"
+    assert "269" in treffer[0].beschreibung
+
+
+def test_ohne_pendlerpauschale_keine_warnung():
+    """Wer nicht pendelt, kann auch nichts doppelt ansetzen."""
+    profil = Profil(merkmale=["angestellt"])
+    auswertung = gaps.auswerten([_fahrtbeleg(269.19)], REGELWERK, profil)
+    assert not [b for b in auswertung.warnungen if b.id == "fahrzeugkosten_neben_entfernungspauschale"]
+
+
+def test_belege_ohne_betrag_loesen_keine_warnung_aus():
+    profil = Profil(merkmale=["angestellt", "pendler"])
+    ohne_betrag = _fahrtbeleg(0.0)
+    ohne_betrag.analyse.betrag_gesamt = None
+    auswertung = gaps.auswerten([ohne_betrag], REGELWERK, profil)
+    assert not [b for b in auswertung.warnungen if b.id == "fahrzeugkosten_neben_entfernungspauschale"]
