@@ -125,11 +125,11 @@ Die Originale bleiben unangetastet, die Ablage wird bei jedem Lauf frisch aufgeb
 | --- | --- |
 | `steuer init --jahr 2025` | Arbeitsmappe anlegen |
 | `steuer profil [--bearbeiten]` | Ausgangslage anzeigen oder erfassen |
-| `steuer hinzufuegen <Pfade>` | Dateien oder Ordner aufnehmen, Dubletten werden erkannt |
-| `steuer analyse [--alle]` | Dokumente prüfen; ohne `--alle` nur die neuen |
+| `steuer hinzufuegen <Pfade> [--herkunft] [--jahr]` | Dateien oder Ordner aufnehmen; Herkunft und Steuerjahr des Stapels gleich mitgeben |
+| `steuer analyse [--alle] [--nachtragen] [--hoechstens N]` | Dokumente prüfen; `--nachtragen` holt nur nach, was mit älterem Stand geprüft wurde |
 | `steuer liste` | alle Dokumente nach Anlagen sortiert |
 | `steuer dateien` | Größe und Seitenzahl aller Dateien, findet Ausreißer |
-| `steuer ausgliedern` | Dokumente nach Kategorie oder Steuerjahr in eine andere Mappe verschieben |
+| `steuer ausgliedern` | Dokumente nach Herkunft, Kategorie oder Steuerjahr in eine andere Mappe verschieben |
 | `steuer status` | Kennzahlen auf einen Blick |
 | `steuer pruefen` | Lücken, Chancen und Warnungen |
 | `steuer trennen <Kennung>` | erkannten Sammelscan seitengenau zerlegen |
@@ -181,6 +181,28 @@ vorschlagen dürfen, aber nicht unbemerkt verändern.
 
 Fehlt für ein Jahr eine Datei, lädt das Werkzeug ersatzweise das jüngste vorhandene Jahr
 und weist in jeder Ausgabe und in jedem Bericht sichtbar darauf hin.
+
+---
+
+## Woher ein Stapel stammt
+
+Die wirksamste Sortierung kostet nichts: Sie kommt von Ihnen. Wer beim Aufnehmen
+sagt, wem ein Stapel gehört und in welches Jahr er fällt, erspart dem Werkzeug
+das Raten — und sich selbst die Analysekosten für Belege, die gar nicht zu
+diesem Jahr gehören.
+
+```bash
+steuer hinzufuegen ~/Scans/Gewerbe2025/ --herkunft gewerbe --jahr 2025
+steuer hinzufuegen ~/Scans/Privat2024/  --herkunft privat  --jahr 2024
+```
+
+Die Angabe wirkt an drei Stellen: Sie steht im Analyseauftrag und hat dort
+Vorrang vor dem Eindruck des Modells; Dokumente eines fremden Jahres werden
+übersprungen und kosten nichts; und `steuer ausgliedern --herkunft gewerbe`
+trennt sie später in einem Zug heraus.
+
+In der Weboberfläche stehen dieselben beiden Felder direkt unter dem
+Ablagebereich und gelten für den nächsten Stapel.
 
 ---
 

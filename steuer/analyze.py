@@ -172,6 +172,7 @@ class Analysedienst:
         profil: Profil,
         zusatzhinweis: str = "",
         ab_seite: int | None = None,
+        herkunft: str = "",
     ) -> Analyse:
         inhalt = inhalt_aufbereiten(pfad, medientyp, ab_seite)
 
@@ -183,6 +184,14 @@ class Analysedienst:
             aufforderung.append(f"Seitenzahl: {inhalt.seiten}")
         for hinweis in inhalt.hinweise:
             aufforderung.append(f"Verarbeitungshinweis: {hinweis}")
+        if herkunft:
+            # Die Angabe stammt vom Mandanten und ist verlaesslicher als jede
+            # Ableitung aus dem Dokument selbst.
+            aufforderung.append(
+                f"Herkunft des Stapels laut Mandant: {herkunft}. Diese Angabe hat "
+                "Vorrang vor deinem Eindruck aus dem Dokument; weiche nur davon ab, "
+                "wenn das Dokument ihr eindeutig widerspricht, und sage dann warum."
+            )
         if zusatzhinweis:
             aufforderung.append(f"Zusatzinformation des Mandanten: {zusatzhinweis}")
         aufforderung.append(

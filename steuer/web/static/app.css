@@ -202,3 +202,9 @@ ul.fehlt li { color: var(--achtung); }
 
 .modellhinweis.nachtrag { color: var(--achtung); background: var(--achtung-flaeche);
   border: 1px solid var(--achtung); border-radius: var(--radius); padding: .5rem .7rem; margin-top: .6rem; }
+
+.stapelangabe { margin-top: 1rem; padding-top: .8rem; border-top: 1px solid var(--rahmen);
+  display: flex; flex-wrap: wrap; gap: .8rem; align-items: flex-end; justify-content: center; }
+.stapelangabe > p { flex-basis: 100%; margin: 0 0 .2rem; }
+.stapelangabe label { display: flex; flex-direction: column; gap: .2rem; text-align: left; }
+.stapelangabe select, .stapelangabe input { padding: .3rem .4rem; }

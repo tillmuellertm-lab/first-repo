@@ -67,6 +67,21 @@ MERKMALE: tuple[tuple[str, str], ...] = (
 
 MERKMAL_IDS = frozenset(m for m, _ in MERKMALE)
 
+# Woher ein Stapel stammt. Diese Angabe macht der Nutzer beim Aufnehmen; sie
+# kostet nichts und trennt zuverlaessiger als jede Textanalyse. In einem realen
+# Bestand lagen 540 Gewerbebelege und 747 Dokumente fremder Jahre zwischen den
+# privaten Unterlagen - alle wurden analysiert und bezahlt, bevor auffiel, dass
+# sie nicht hingehoerten.
+HERKUENFTE: tuple[tuple[str, str], ...] = (
+    ("privat", "Privat - eigene Steuererklaerung"),
+    ("gewerbe", "Gewerbe oder Selbstaendigkeit"),
+    ("vermietung", "Vermietete Immobilie"),
+    ("gemischt", "Gemischt - muss noch getrennt werden"),
+)
+
+HERKUNFT_IDS = frozenset(h for h, _ in HERKUENFTE)
+HERKUNFT_LABEL = dict(HERKUENFTE)
+
 # Plausible Spannen der Zahlenfelder. Sie fangen Tippfehler und fehlerhaft
 # gelesene Eingaben ab, bevor sie in die Berechnungen und in die Prompts geraten:
 # eine Entfernung von 600.000 km faellt sonst niemandem auf.
@@ -259,6 +274,22 @@ class Dokument:
     zielordner: str = ""
     manuelle_kategorie: str = ""  # setzt die Kategorie der Analyse ausser Kraft
     notiz: str = ""
+    # Angaben des Nutzers beim Aufnehmen des Stapels, siehe HERKUENFTE.
+    herkunft: str = ""
+    herkunft_jahr: int | None = None
+
+    @property
+    def gehoert_ins_jahr(self) -> int | None:
+        """Steuerjahr, soweit bekannt. Die Angabe des Nutzers hat Vorrang.
+
+        Sie stammt aus der Kenntnis des Stapels und ist damit verlaesslicher als
+        ein Datum, das aus einem Kassenbon gelesen wurde.
+        """
+        if self.herkunft_jahr:
+            return self.herkunft_jahr
+        if self.analyse and self.analyse.steuerjahr:
+            return self.analyse.steuerjahr
+        return None
 
     @property
     def wirksame_kategorie(self) -> str:

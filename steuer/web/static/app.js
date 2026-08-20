@@ -75,6 +75,13 @@ async function lade(dateien) {
   const formular = new FormData();
   for (const datei of dateien) formular.append("dateien", datei);
 
+  // Angaben zum ganzen Stapel: Sie sind verlaesslicher als jede Ableitung
+  // aus dem einzelnen Dokument und ersparen die Pruefung fremder Jahre.
+  const herkunft = document.getElementById("herkunft");
+  const herkunftJahr = document.getElementById("herkunft-jahr");
+  if (herkunft && herkunft.value) formular.append("herkunft", herkunft.value);
+  if (herkunftJahr && herkunftJahr.value) formular.append("herkunft_jahr", herkunftJahr.value);
+
   zeigeFortschritt(true);
   fortschrittText.textContent = `${dateien.length} Dateien werden uebertragen ...`;
   protokoll.textContent = "";

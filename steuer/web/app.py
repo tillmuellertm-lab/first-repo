@@ -31,6 +31,9 @@ from ..models import (
     EIGNUNG_GEEIGNET,
     EIGNUNG_LABEL,
     EIGNUNG_UNGEEIGNET,
+    HERKUENFTE,
+    HERKUNFT_IDS,
+    HERKUNFT_LABEL,
     MERKMALE,
     STATUS_ANALYSIERT,
     STATUS_FEHLER,
@@ -111,6 +114,7 @@ def anwendung_bauen(mappe: Arbeitsmappe) -> Any:
             "auftrag_laeuft": auftrag.laeuft,
             "auswahl_dokument": AUSWAHL_DOKUMENT,
             "auswahl_strategie": AUSWAHL_STRATEGIE,
+            "herkuenfte": HERKUENFTE,
             # zuletzt getroffene Wahl, damit das Auswahlfeld sie wieder anzeigt
             "modell_dokument": modell_dokument_pruefen(mappe.einstellungen.get("modell_dokument")),
             "modell_strategie": modell_strategie_pruefen(mappe.einstellungen.get("modell_strategie")),
@@ -235,6 +239,15 @@ def anwendung_bauen(mappe: Arbeitsmappe) -> Any:
         dateien = request.files.getlist("dateien")
         if not dateien:
             return jsonify({"fehler": "Keine Dateien empfangen."}), 400
+        # Angaben zum ganzen Stapel: Sie kommen vom Nutzer und sind
+        # verlaesslicher als jede Ableitung aus dem Dokument.
+        herkunft = request.form.get("herkunft", "").strip()
+        if herkunft not in HERKUNFT_IDS:
+            herkunft = ""
+        herkunft_jahr = _ganzzahl(request.form.get("herkunft_jahr"))
+        if herkunft_jahr is not None and not 1990 <= herkunft_jahr <= 2100:
+            herkunft_jahr = None
+
         aufgenommen, dubletten, abgelehnt = [], [], []
         with TemporaryDirectory() as temp:
             for datei in dateien:
@@ -243,7 +256,12 @@ def anwendung_bauen(mappe: Arbeitsmappe) -> Any:
                 zwischenpfad = Path(temp) / Path(datei.filename).name
                 datei.save(zwischenpfad)
                 try:
-                    eintrag, ist_neu = mappe.datei_aufnehmen(zwischenpfad, Path(datei.filename).name)
+                    eintrag, ist_neu = mappe.datei_aufnehmen(
+                        zwischenpfad,
+                        Path(datei.filename).name,
+                        herkunft=herkunft,
+                        herkunft_jahr=herkunft_jahr,
+                    )
                 except ArbeitsmappenFehler as fehler:
                     abgelehnt.append({"datei": datei.filename, "grund": str(fehler)})
                     continue
@@ -278,6 +296,13 @@ def anwendung_bauen(mappe: Arbeitsmappe) -> Any:
                 zu_pruefen = list(mappe.dokumente)
             else:
                 zu_pruefen = [d for d in mappe.dokumente if d.analyse is None or d.status == STATUS_FEHLER]
+            if not nur:
+                # Was der Nutzer selbst einem anderen Jahr zugeordnet hat,
+                # wird nicht geprueft und kostet nichts.
+                zu_pruefen = [
+                    d for d in zu_pruefen
+                    if not (d.herkunft_jahr and d.herkunft_jahr != mappe.jahr)
+                ]
             if not zu_pruefen:
                 return jsonify({"fehler": "Es gibt nichts zu analysieren."}), 400
             auftrag.art = "analyse"
@@ -298,7 +323,12 @@ def anwendung_bauen(mappe: Arbeitsmappe) -> Any:
                     auftrag.aktuell = eintrag.dateiname
                     try:
                         eintrag.analyse = dienst.dokument_analysieren(
-                            mappe.pfad_zu(eintrag), eintrag.medientyp, werk, mappe.profil, eintrag.notiz
+                            mappe.pfad_zu(eintrag),
+                            eintrag.medientyp,
+                            werk,
+                            mappe.profil,
+                            eintrag.notiz,
+                            herkunft=HERKUNFT_LABEL.get(eintrag.herkunft, ""),
                         )
                         eintrag.status = STATUS_ANALYSIERT
                         eintrag.fehler = ""

@@ -53,6 +53,25 @@
     <button type="button" class="knopf leise" data-aktion="eingang-einlesen">
       Eingangsordner einlesen
     </button>
+
+    <div class="stapelangabe">
+      <p class="klein">
+        Gilt fuer den naechsten Stapel. Ihre Angabe hat Vorrang vor der Analyse &mdash;
+        und was in ein anderes Jahr gehoert, wird nicht geprueft und kostet nichts.
+      </p>
+      <label class="klein">Herkunft
+        <select id="herkunft">
+          <option value="">nicht angegeben</option>
+          {% for kennung, beschriftung in herkuenfte %}
+          <option value="{{ kennung }}">{{ beschriftung }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label class="klein">Steuerjahr
+        <input type="number" id="herkunft-jahr" min="1990" max="2100"
+               placeholder="{{ jahr }}" value="">
+      </label>
+    </div>
   </div>
 
   <div class="aktionen">

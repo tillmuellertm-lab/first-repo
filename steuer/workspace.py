@@ -170,11 +170,18 @@ class Arbeitsmappe:
                 return dokument
         return None
 
-    def datei_aufnehmen(self, quelle: Path, originalname: str | None = None) -> tuple[Dokument, bool]:
+    def datei_aufnehmen(
+        self,
+        quelle: Path,
+        originalname: str | None = None,
+        herkunft: str = "",
+        herkunft_jahr: int | None = None,
+    ) -> tuple[Dokument, bool]:
         """Kopiert eine Datei in den Eingang.
 
         Rueckgabe ist das Dokument und ob es neu ist. Dubletten werden anhand
-        des SHA-256 erkannt und nicht erneut aufgenommen.
+        des SHA-256 erkannt und nicht erneut aufgenommen. ``herkunft`` und
+        ``herkunft_jahr`` gelten fuer den ganzen Stapel und stammen vom Nutzer.
         """
         quelle = Path(quelle)
         if not quelle.is_file():
@@ -188,6 +195,12 @@ class Arbeitsmappe:
         pruefsumme = sha256_datei(quelle)
         for vorhanden in self.dokumente:
             if vorhanden.sha256 == pruefsumme:
+                # Dublette: die Datei nicht erneut aufnehmen, aber eine bisher
+                # fehlende Herkunftsangabe nachtragen.
+                if herkunft and not vorhanden.herkunft:
+                    vorhanden.herkunft = herkunft
+                if herkunft_jahr and not vorhanden.herkunft_jahr:
+                    vorhanden.herkunft_jahr = herkunft_jahr
                 return vorhanden, False
 
         self.eingang.mkdir(parents=True, exist_ok=True)
@@ -201,6 +214,8 @@ class Arbeitsmappe:
             sha256=pruefsumme,
             groesse_bytes=ziel.stat().st_size,
             medientyp=MEDIENTYPEN.get(endung, "application/octet-stream"),
+            herkunft=herkunft,
+            herkunft_jahr=herkunft_jahr,
         )
         self.dokumente.append(dokument)
         return dokument, True

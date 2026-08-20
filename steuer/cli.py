@@ -24,6 +24,8 @@ from .models import (
     EIGNUNG_BEDINGT,
     EIGNUNG_GEEIGNET,
     EIGNUNG_UNGEEIGNET,
+    HERKUENFTE,
+    HERKUNFT_LABEL,
     MERKMALE,
     STATUS_ANALYSIERT,
     STATUS_FEHLER,
@@ -200,10 +202,25 @@ def befehl_hinzufuegen(args: argparse.Namespace) -> int:
     if not dateien:
         print("Keine unterstuetzten Dateien gefunden.")
         return 1
+    if args.herkunft:
+        print(
+            f"Stapel wird aufgenommen als: {HERKUNFT_LABEL[args.herkunft]}"
+            + (f", Steuerjahr {args.jahr}" if args.jahr else "")
+        )
+    else:
+        print(
+            "Hinweis: Ohne --herkunft muss spaeter die Analyse entscheiden, wohin\n"
+            "         die Belege gehoeren. Das kostet Geld und ist ungenauer als\n"
+            "         Ihre eigene Angabe. Moegliche Werte: "
+            + ", ".join(h for h, _ in HERKUENFTE)
+        )
+
     neu = uebersprungen = 0
     for datei in dateien:
         try:
-            dokument, ist_neu = mappe.datei_aufnehmen(datei)
+            dokument, ist_neu = mappe.datei_aufnehmen(
+                datei, herkunft=args.herkunft or "", herkunft_jahr=args.jahr
+            )
         except ArbeitsmappenFehler as fehler:
             print(f"  uebersprungen: {fehler}")
             uebersprungen += 1
@@ -216,6 +233,11 @@ def befehl_hinzufuegen(args: argparse.Namespace) -> int:
             print(f"  Dublette:    {datei.name} (identisch mit {dokument.dateiname})")
     mappe.speichern()
     print(f"\n{neu} neu, {uebersprungen} uebersprungen. Insgesamt {len(mappe.dokumente)} Dokumente.")
+    if args.jahr and args.jahr != mappe.jahr:
+        print(
+            f"Der Stapel gehoert ins Jahr {args.jahr}, die Mappe ist fuer {mappe.jahr}.\n"
+            "Diese Dokumente werden bei der Analyse uebersprungen und kosten nichts."
+        )
     return 0
 
 
@@ -238,6 +260,19 @@ def befehl_analyse(args: argparse.Namespace) -> int:
         zu_pruefen = mappe.nachzutragen()
     else:
         zu_pruefen = [d for d in mappe.dokumente if d.analyse is None or d.status == STATUS_FEHLER]
+
+    # Belege, die der Nutzer selbst einem anderen Jahr zugeordnet hat, werden
+    # nicht geprueft. Sie bleiben in der Mappe und stehen spaeteren Jahren zur
+    # Verfuegung - nur bezahlt wird fuer sie jetzt nichts.
+    fremdes_jahr = [
+        d for d in zu_pruefen if d.herkunft_jahr and d.herkunft_jahr != mappe.jahr
+    ]
+    if fremdes_jahr and not args.dokument:
+        zu_pruefen = [d for d in zu_pruefen if d not in fremdes_jahr]
+        print(
+            f"{len(fremdes_jahr)} Dokumente gehoeren laut Ihrer Angabe in ein anderes "
+            f"Jahr und werden uebersprungen.\n"
+        )
 
     if args.hoechstens and args.hoechstens > 0:
         zu_pruefen = zu_pruefen[: args.hoechstens]
@@ -287,6 +322,7 @@ def befehl_analyse(args: argparse.Namespace) -> int:
                 mappe.profil,
                 dokument.notiz,
                 ab_seite=args.ab_seite,
+                herkunft=HERKUNFT_LABEL.get(dokument.herkunft, ""),
             )
             if args.ab_seite and dokument.analyse:
                 # Der Ausschnitt ersetzt die Pruefung der vorderen Seiten nicht,
@@ -602,17 +638,24 @@ def _kategorienverteilung(mappe: Arbeitsmappe) -> None:
     """Zeigt, wie sich die Dokumente tatsaechlich auf die Kategorien verteilen."""
     verteilung: dict[str, int] = {}
     jahre: dict[str, int] = {}
+    herkuenfte: dict[str, int] = {}
     for dokument in mappe.dokumente:
         kennung = dokument.wirksame_kategorie if dokument.analyse else "(nicht analysiert)"
         verteilung[kennung] = verteilung.get(kennung, 0) + 1
-        if dokument.analyse:
-            jahr = str(dokument.analyse.steuerjahr or "ohne Jahresangabe")
-            jahre[jahr] = jahre.get(jahr, 0) + 1
+        jahr = str(dokument.gehoert_ins_jahr or "ohne Jahresangabe")
+        jahre[jahr] = jahre.get(jahr, 0) + 1
+        quelle = dokument.herkunft or "(nicht angegeben)"
+        herkuenfte[quelle] = herkuenfte.get(quelle, 0) + 1
 
     print(f"So verteilen sich die {len(mappe.dokumente)} Dokumente dieser Mappe:\n")
     for kennung, anzahl in sorted(verteilung.items(), key=lambda p: -p[1]):
         label = taxonomy.NACH_ID[kennung].label if kennung in taxonomy.NACH_ID else ""
         print(f"  {anzahl:>5}  {kennung:34} {label}")
+
+    if len(herkuenfte) > 1 or "(nicht angegeben)" not in herkuenfte:
+        print("\nNach Herkunft (Ihre Angabe beim Aufnehmen):\n")
+        for quelle, anzahl in sorted(herkuenfte.items(), key=lambda p: -p[1]):
+            print(f"  {anzahl:>5}  {HERKUNFT_LABEL.get(quelle, quelle)}")
 
     if jahre:
         print(f"\nNach Steuerjahr (Mappe ist fuer {mappe.jahr}):\n")
@@ -628,10 +671,11 @@ def _kategorienverteilung(mappe: Arbeitsmappe) -> None:
 def befehl_ausgliedern(args: argparse.Namespace) -> int:
     """Verschiebt Dokumente nach Kategorie oder Steuerjahr in eine andere Mappe."""
     mappe = _mappe_oeffnen(args)
-    if not args.kategorie and not args.fremdes_jahr:
+    if not args.kategorie and not args.fremdes_jahr and not args.herkunft:
         print(
             "Bitte angeben, was ausgegliedert werden soll:\n"
-            "  --kategorie <Kennung>   z. B. selbstaendig\n"
+            "  --herkunft <Kennung>    z. B. gewerbe, nach Ihrer Angabe beim Aufnehmen\n"
+            "  --kategorie <Kennung>   z. B. selbstaendig, nach der Einordnung der Analyse\n"
             "  --fremdes-jahr          alles, was nicht ins Jahr der Mappe gehoert\n"
         )
         _kategorienverteilung(mappe)
@@ -645,15 +689,16 @@ def befehl_ausgliedern(args: argparse.Namespace) -> int:
     betroffen = []
     for dokument in mappe.dokumente:
         grund = ""
-        if args.kategorie and dokument.wirksame_kategorie in args.kategorie:
+        if args.herkunft and dokument.herkunft == args.herkunft:
+            grund = HERKUNFT_LABEL[args.herkunft]
+        elif args.kategorie and dokument.wirksame_kategorie in args.kategorie:
             grund = taxonomy.kategorie(dokument.wirksame_kategorie).label
         elif (
             args.fremdes_jahr
-            and dokument.analyse
-            and dokument.analyse.steuerjahr
-            and dokument.analyse.steuerjahr != mappe.jahr
+            and dokument.gehoert_ins_jahr
+            and dokument.gehoert_ins_jahr != mappe.jahr
         ):
-            grund = f"Steuerjahr {dokument.analyse.steuerjahr}"
+            grund = f"Steuerjahr {dokument.gehoert_ins_jahr}"
         if grund:
             betroffen.append((dokument, grund))
 
@@ -953,6 +998,16 @@ def parser_bauen() -> argparse.ArgumentParser:
     p.set_defaults(funktion=befehl_profil)
 
     p = unter.add_parser("hinzufuegen", help="Scans aufnehmen (Dateien oder Ordner).")
+    p.add_argument(
+        "--herkunft",
+        choices=[h for h, _ in HERKUENFTE],
+        help="Wem der Stapel gehoert. Ihre Angabe hat Vorrang vor der Analyse.",
+    )
+    p.add_argument(
+        "--jahr",
+        type=int,
+        help="Steuerjahr des Stapels. Fremde Jahre werden nicht analysiert und kosten nichts.",
+    )
     p.add_argument("pfade", nargs="+")
     p.set_defaults(funktion=befehl_hinzufuegen)
 
@@ -1013,6 +1068,11 @@ def parser_bauen() -> argparse.ArgumentParser:
         "--fremdes-jahr",
         action="store_true",
         help="Alle Dokumente verschieben, die in ein anderes Steuerjahr gehoeren.",
+    )
+    p.add_argument(
+        "--herkunft",
+        choices=[h for h, _ in HERKUENFTE],
+        help="Alle Dokumente dieser Herkunft verschieben, nach Ihrer Angabe beim Aufnehmen.",
     )
     p.add_argument("--nach", metavar="PFAD", help="Zielmappe; wird bei Bedarf angelegt.")
     p.add_argument("--jahr", type=int, help="Veranlagungsjahr der neuen Zielmappe.")

@@ -23,6 +23,10 @@ from .models import EIGNUNG_UNGEEIGNET, Dokument
 EINNAHME = "einnahme"
 AUSGABE = "ausgabe"
 
+# Herkunftsangaben des Nutzers, siehe models.HERKUENFTE.
+HERKUNFT_GEWERBE = "gewerbe"
+HERKUNFT_PRIVAT = frozenset({"privat", "vermietung"})
+
 
 @dataclass(frozen=True)
 class Posten:
@@ -314,7 +318,15 @@ def aufstellen(dokumente: Iterable[Dokument], jahr: int) -> Aufstellung:
         analyse = dokument.analyse
         if not analyse or analyse.eignung == EIGNUNG_UNGEEIGNET:
             continue
-        if dokument.wirksame_kategorie in PRIVATE_KATEGORIEN:
+        # Die Herkunftsangabe des Nutzers hat Vorrang vor der Kategorie: Er
+        # weiss, dass ein Kassenbon zum Betrieb gehoert, auch wenn ihm das
+        # niemand ansieht. Fehlt die Angabe, entscheidet wie bisher die
+        # Kategorie - neutrale wie "unklar" bleiben dabei auswertbar.
+        if dokument.herkunft == HERKUNFT_GEWERBE:
+            pass
+        elif dokument.herkunft in HERKUNFT_PRIVAT or (
+            dokument.wirksame_kategorie in PRIVATE_KATEGORIEN
+        ):
             aufstellung.privat.append(dokument)
             continue
         betrag = _betrag(dokument)
