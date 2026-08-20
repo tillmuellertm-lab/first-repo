@@ -132,6 +132,7 @@ Die Originale bleiben unangetastet, die Ablage wird bei jedem Lauf frisch aufgeb
 | `steuer dateien` | Größe und Seitenzahl aller Dateien, findet Ausreißer |
 | `steuer ausgliedern` | Dokumente nach Herkunft, Kategorie oder Steuerjahr in eine andere Mappe verschieben |
 | `steuer jahre` | Verteilung des Bestands auf die Veranlagungsjahre |
+| `steuer jahr-setzen --auf 2024` | ein Steuerjahr für viele Dokumente auf einmal eintragen |
 | `steuer zusammenfuehren <Mappe>` | eine andere Arbeitsmappe aufnehmen, samt Analysen |
 | `steuer status` | Kennzahlen auf einen Blick |
 | `steuer pruefen` | Lücken, Chancen und Warnungen |

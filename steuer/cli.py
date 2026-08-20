@@ -309,6 +309,62 @@ def befehl_jahre(args: argparse.Namespace) -> int:
     return 0
 
 
+def befehl_jahr_setzen(args: argparse.Namespace) -> int:
+    """Traegt ein Steuerjahr fuer mehrere Dokumente auf einmal ein.
+
+    Gedacht fuer den haeufigen Fall, dass ein Stapel erkennbar zu einem Jahr
+    gehoert, die einzelnen Belege es aber nicht ausweisen - ein Kassenbon nennt
+    selten ein Jahr. Die Angabe kommt vom Nutzer und ist damit keine Schaetzung
+    des Werkzeugs; standardmaessig werden nur Dokumente angefasst, bei denen
+    ueberhaupt kein Jahr erkennbar ist.
+    """
+    mappe = _mappe_oeffnen(args)
+    betroffen = []
+    for dokument in mappe.dokumente:
+        if args.kategorie and dokument.wirksame_kategorie not in args.kategorie:
+            continue
+        if args.herkunft and dokument.herkunft != args.herkunft:
+            continue
+        if dokument.gehoert_ins_jahr is not None and not args.auch_erkannte:
+            continue
+        if dokument.herkunft_jahr == args.auf:
+            continue
+        betroffen.append(dokument)
+
+    if not betroffen:
+        print("Kein Dokument passt auf diese Auswahl.")
+        return 0
+
+    mit_erkanntem_jahr = [d for d in betroffen if d.analyse and d.analyse.steuerjahr]
+    print(f"{len(betroffen)} von {len(mappe.dokumente)} Dokumenten bekommen das Jahr {args.auf}.")
+    if mit_erkanntem_jahr:
+        print(
+            f"  Darunter {len(mit_erkanntem_jahr)}, bei denen die Analyse bereits ein Jahr "
+            "gelesen hat.\n  Ihre Angabe setzt es ausser Kraft."
+        )
+    print("\n  Beispiele:")
+    for dokument in betroffen[:8]:
+        erkannt = dokument.analyse.steuerjahr if dokument.analyse else None
+        zusatz = f"  (Analyse las {erkannt})" if erkannt else ""
+        print(f"    {dokument.dateiname[:60]}{zusatz}")
+    if len(betroffen) > 8:
+        print(f"    ... und {len(betroffen) - 8} weitere")
+
+    if args.probelauf:
+        print("\nProbelauf, es wurde nichts veraendert.")
+        print("Zum Ausfuehren denselben Befehl ohne --probelauf aufrufen.")
+        return 0
+
+    for dokument in betroffen:
+        dokument.herkunft_jahr = args.auf
+    mappe.speichern()
+    ansicht = mappe.jahresansicht()
+    print(f"\nGesetzt. In die Auswertung fuer {mappe.jahr} gehen jetzt {len(ansicht.eigene)} Dokumente ein.")
+    print("Rueckgaengig: dieselben Dokumente in der Weboberflaeche einzeln leeren,")
+    print("oder das Jahr erneut setzen.")
+    return 0
+
+
 def befehl_zusammenfuehren(args: argparse.Namespace) -> int:
     """Nimmt eine andere Arbeitsmappe in diese auf - die Gegenrichtung zu ausgliedern."""
     mappe = _mappe_oeffnen(args)
@@ -1250,6 +1306,26 @@ def parser_bauen() -> argparse.ArgumentParser:
         "jahre", help="Verteilung des Bestands auf die Veranlagungsjahre anzeigen."
     )
     p.set_defaults(funktion=befehl_jahre)
+
+    p = unter.add_parser(
+        "jahr-setzen",
+        help="Ein Steuerjahr fuer viele Dokumente auf einmal eintragen.",
+    )
+    p.add_argument("--auf", type=int, required=True, metavar="JAHR", help="Das zu setzende Jahr.")
+    p.add_argument(
+        "--kategorie", action="append", choices=taxonomy.ids(), metavar="KENNUNG",
+        help="Nur diese Kategorie. Mehrfach angebbar.",
+    )
+    p.add_argument(
+        "--herkunft", choices=[h for h, _ in HERKUENFTE],
+        help="Nur Dokumente dieser Herkunft.",
+    )
+    p.add_argument(
+        "--auch-erkannte", action="store_true",
+        help="Auch Dokumente ueberschreiben, bei denen die Analyse bereits ein Jahr gelesen hat.",
+    )
+    p.add_argument("--probelauf", action="store_true", help="Nur anzeigen, was passieren wuerde.")
+    p.set_defaults(funktion=befehl_jahr_setzen)
 
     p = unter.add_parser(
         "zusammenfuehren",

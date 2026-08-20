@@ -172,3 +172,36 @@ def test_zusammenfuehren_erkennt_dubletten(tmp_path):
     uebernommen, uebersprungen = ziel.uebernehmen_aus(quelle)
     assert (uebernommen, uebersprungen) == (0, 1)
     assert len(ziel.dokumente) == 1
+
+
+def _mappe_mit_bestand(tmp_path):
+    mappe = Arbeitsmappe.anlegen(tmp_path / "mappe", 2024)
+    ohne = Dokument(id="a", dateiname="bon.pdf")
+    ohne.analyse = Analyse(kategorie_id="unklar", eignung="geeignet")
+    mit_jahr = Dokument(id="b", dateiname="rechnung.pdf")
+    mit_jahr.analyse = Analyse(kategorie_id="unklar", eignung="geeignet", steuerjahr=2025)
+    mappe.dokumente += [ohne, mit_jahr]
+    return mappe, ohne, mit_jahr
+
+
+def test_jahr_setzen_fasst_nur_dokumente_ohne_jahr_an(tmp_path):
+    """Vorsichtiger Standard: was ein Jahr hat, bleibt unberuehrt."""
+    mappe, ohne, mit_jahr = _mappe_mit_bestand(tmp_path)
+    betroffen = [
+        d for d in mappe.dokumente if d.gehoert_ins_jahr is None
+    ]
+    assert [d.dateiname for d in betroffen] == ["bon.pdf"]
+
+    for dokument in betroffen:
+        dokument.herkunft_jahr = 2024
+    assert ohne.gehoert_ins_jahr == 2024
+    assert mit_jahr.gehoert_ins_jahr == 2025, "das erkannte Jahr bleibt stehen"
+    assert len(mappe.jahresansicht().eigene) == 1
+
+
+def test_gesetztes_jahr_ueberlebt_das_speichern(tmp_path):
+    mappe, ohne, _ = _mappe_mit_bestand(tmp_path)
+    ohne.herkunft_jahr = 2024
+    mappe.speichern()
+    wieder = Arbeitsmappe.laden(mappe.wurzel)
+    assert wieder.dokument("a").gehoert_ins_jahr == 2024
