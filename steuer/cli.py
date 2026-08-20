@@ -1173,6 +1173,64 @@ def befehl_typen(args: argparse.Namespace) -> int:
     return 0
 
 
+def _offen_schluessel(text: str) -> str:
+    """Vereinheitlicht eine Fehlanzeige, damit gleiche Ursachen zusammenfinden."""
+    vereinfacht = re.sub(r"\s+", " ", text.strip().lower())
+    vereinfacht = re.sub(r"[.;,:!?]+$", "", vereinfacht)
+    return vereinfacht
+
+
+def befehl_offen(args: argparse.Namespace) -> int:
+    """Buendelt die offenen Punkte nach ihrer Ursache.
+
+    Eine Liste von 64 Belegen mit je einer Fehlanzeige ist keine Arbeitsanweisung,
+    sondern eine Zumutung. Interessant ist nicht, welcher Beleg etwas vermisst,
+    sondern welche Ursache sich wiederholt: Ein einziger fehlender Kontoauszug
+    kann vierzig Belege auf einmal ungeklaert lassen.
+    """
+    mappe = _mappe_oeffnen(args)
+    ansicht = mappe.jahresansicht()
+    dokumente = [d for d in ansicht.eigene if d.analyse]
+    if not dokumente:
+        print(f"Keine analysierten Dokumente fuer {mappe.jahr}.")
+        return 1
+
+    gruppen: dict[str, list[tuple[str, Dokument]]] = {}
+    for dokument in dokumente:
+        for fehlend in dokument.analyse.fehlende_nachweise:
+            schluessel = _offen_schluessel(fehlend)
+            if schluessel:
+                gruppen.setdefault(schluessel, []).append((fehlend.strip(), dokument))
+
+    betroffen = {d.id for eintraege in gruppen.values() for _, d in eintraege}
+    print(f"{len(dokumente)} Dokumente aus {mappe.jahr}, davon {len(betroffen)} mit offenen Punkten.\n")
+    if not gruppen:
+        print("Kein Dokument vermisst einen Nachweis.")
+        return 0
+
+    print(f"{'Belege':>6}  {'Summe':>16}  Was fehlt")
+    print("-" * 100)
+    for _, eintraege in sorted(gruppen.items(), key=lambda p: (-len(p[1]), p[0])):
+        summe = sum(
+            d.analyse.betrag_abzugsfaehig or d.analyse.betrag_gesamt or 0.0
+            for _, d in eintraege
+        )
+        # Die haeufigste Schreibweise steht stellvertretend fuer die Gruppe.
+        schreibweisen: dict[str, int] = {}
+        for text, _ in eintraege:
+            schreibweisen[text] = schreibweisen.get(text, 0) + 1
+        text = max(schreibweisen.items(), key=lambda p: p[1])[0]
+        print(f"{len(eintraege):>6}  {euro(summe) if summe else '':>16}  {text[:70]}")
+
+    print("-" * 100)
+    print(
+        "\nJede Zeile ist eine Besorgung, nicht 64 einzelne. Die oberste Zeile\n"
+        "loest die meisten Belege auf einmal.\n"
+        "Einzelne Belege dazu: steuer liste --kategorie <Kennung>"
+    )
+    return 0
+
+
 def befehl_liste(args: argparse.Namespace) -> int:
     mappe = _mappe_oeffnen(args)
     if not mappe.dokumente:
@@ -1463,6 +1521,12 @@ def parser_bauen() -> argparse.ArgumentParser:
     )
     p.add_argument("--kategorie", choices=taxonomy.ids(), help="Auf eine Kategorie beschraenken.")
     p.set_defaults(funktion=befehl_typen)
+
+    p = unter.add_parser(
+        "offen",
+        help="Offene Punkte nach Ursache buendeln - zeigt, welche Besorgung am meisten bringt.",
+    )
+    p.set_defaults(funktion=befehl_offen)
 
     p = unter.add_parser("pruefen", help="Luecken, Chancen und Warnungen anzeigen.")
     p.set_defaults(funktion=befehl_pruefen)
