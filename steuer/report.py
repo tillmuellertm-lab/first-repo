@@ -139,8 +139,21 @@ def markdown_bericht(
             a("**Offene Punkte:**")
             a("")
             for dokument in offene:
+                name = dokument.zieldateiname or dokument.dateiname
                 for fehlend in dokument.analyse.fehlende_nachweise:  # type: ignore[union-attr]
-                    a(f"- {dokument.zieldateiname or dokument.dateiname}: {fehlend}")
+                    a(f"- {name}: {fehlend}")
+                # Die Antwort des Mandanten steht direkt unter der Frage. Sonst
+                # sucht der Steuerberater eine Auskunft, die laengst vorliegt.
+                if dokument.notiz:
+                    a(f"  - Anmerkung des Mandanten: {dokument.notiz}")
+            a("")
+
+        beantwortet = [d for d in liste if d.notiz and not (d.analyse and d.analyse.fehlende_nachweise)]
+        if beantwortet:
+            a("**Anmerkungen des Mandanten:**")
+            a("")
+            for dokument in beantwortet:
+                a(f"- {dokument.zieldateiname or dokument.dateiname}: {dokument.notiz}")
             a("")
 
     def _befunde(titel: str, befunde: list[Befund]) -> None:
@@ -355,6 +368,12 @@ def html_bericht(
                 a(
                     "<br><span class='zeile'><strong>Fehlt noch:</strong> "
                     + _e("; ".join(analyse.fehlende_nachweise))
+                    + "</span>"
+                )
+            if dokument.notiz:
+                a(
+                    "<br><span class='zeile'><strong>Anmerkung des Mandanten:</strong> "
+                    + _e(dokument.notiz)
                     + "</span>"
                 )
             a("</td>")

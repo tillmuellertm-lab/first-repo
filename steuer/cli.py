@@ -1216,6 +1216,20 @@ OFFEN_THEMEN: tuple[tuple[str, str, str], ...] = (
 )
 
 
+def _belegname(dokument: Dokument) -> str:
+    """Der Name, unter dem der Nutzer den Beleg wiedererkennt."""
+    analyse = dokument.analyse
+    if analyse and analyse.dokumenttyp:
+        aussteller = (analyse.aussteller or "").strip()
+        return f"{analyse.dokumenttyp}, {aussteller}" if aussteller else analyse.dokumenttyp
+    return dokument.zieldateiname or dokument.dateiname
+
+
+def _kurz(text: str, breite: int) -> str:
+    text = re.sub(r"\s+", " ", text.strip())
+    return text if len(text) <= breite else text[: breite - 1].rstrip() + "…"
+
+
 def _offen_thema(text: str) -> tuple[str, str]:
     """Ordnet eine Fehlanzeige der Besorgung zu, die sie aufloest."""
     vereinfacht = re.sub(r"\s+", " ", text.strip().lower())
@@ -1261,11 +1275,16 @@ def befehl_offen(args: argparse.Namespace) -> int:
             print(f"Kein Thema '{args.thema}'. Vorhanden: {vorhanden}", file=sys.stderr)
             return 1
         eintraege = gruppen[args.thema]
-        print(f"{beschriftungen[args.thema]}\n")
-        for text, dokument in sorted(eintraege, key=lambda p: p[1].dateiname):
-            name = dokument.zieldateiname or dokument.dateiname
-            print(f"  {name}")
-            print(f"      {text}")
+        print(f"{beschriftungen[args.thema]}  ({len(eintraege)} Punkte)\n")
+        breite = 999 if args.voll else 62
+        for nummer, (text, dokument) in enumerate(
+            sorted(eintraege, key=lambda p: p[1].dateiname), start=1
+        ):
+            print(f"{nummer:>4}. {_kurz(_belegname(dokument), 34)}  {_kurz(text, breite)}")
+        if not args.voll:
+            print("\nGanze Saetze: dieselbe Zeile mit --voll")
+        if args.thema == "frage":
+            print("Der Reihe nach beantworten: steuer beantworten")
         return 0
 
     einzelangaben = sum(len(e) for e in gruppen.values())
@@ -1301,6 +1320,84 @@ def befehl_offen(args: argparse.Namespace) -> int:
         "der betroffenen Belege - nicht das, was sie an Steuer bringen.\n"
         "Einzelne Punkte eines Themas: steuer offen --thema <Kennung>"
     )
+    return 0
+
+
+def befehl_beantworten(args: argparse.Namespace) -> int:
+    """Stellt die offenen Rueckfragen einzeln und haelt die Antworten fest.
+
+    Eine Rueckfrage braucht kein Dokument, sondern eine Auskunft: War die Fahrt
+    beruflich? Gehoert das Abo zur Wohnungssuche? Als Textwand in der Konsole
+    ist das unbeantwortbar. Einzeln gestellt, mit dem Beleg davor, ist es eine
+    Minute Arbeit je Frage.
+
+    Die Antwort landet in der Notiz des Belegs. Von dort geht sie in den Bericht
+    fuer den Steuerberater und in eine spaetere Neuanalyse ein.
+    """
+    mappe = _mappe_oeffnen(args)
+    dokumente = [d for d in mappe.jahresansicht().eigene if d.analyse]
+
+    aufgaben: list[tuple[Dokument, list[str]]] = []
+    for dokument in sorted(dokumente, key=lambda d: d.dateiname):
+        fragen = [
+            text.strip()
+            for text in dokument.analyse.fehlende_nachweise
+            if text.strip() and _offen_thema(text)[0] == args.thema
+        ]
+        if fragen and (args.erneut or not dokument.notiz):
+            aufgaben.append((dokument, fragen))
+
+    if not aufgaben:
+        offen = sum(1 for d in dokumente if d.notiz)
+        print(f"Nichts offen unter '{args.thema}'.")
+        if offen and not args.erneut:
+            print(f"{offen} Belege haben bereits eine Anmerkung. Erneut vorlegen: --erneut")
+        return 0
+
+    print(
+        f"{len(aufgaben)} offene Punkte unter '{args.thema}'.\n"
+        "Antwort eingeben und Enter. Leer lassen = ueberspringen. 'x' = abbrechen.\n"
+    )
+
+    beantwortet = 0
+    for nummer, (dokument, fragen) in enumerate(aufgaben, start=1):
+        analyse = dokument.analyse
+        betrag = analyse.betrag_abzugsfaehig or analyse.betrag_gesamt
+        kopf = f"[{nummer}/{len(aufgaben)}] {_belegname(dokument)}"
+        if betrag:
+            kopf += f"  ({euro(betrag)})"
+        print(kopf)
+        print(f"        Datei: {dokument.zieldateiname or dokument.dateiname}")
+        if analyse.zusammenfassung:
+            print(f"        {_kurz(analyse.zusammenfassung, 90)}")
+        for frage in fragen:
+            print(f"        ? {frage}")
+        if dokument.notiz:
+            print(f"        bisher: {dokument.notiz}")
+        try:
+            antwort = input("        > ").strip()
+        except EOFError:
+            print("\nAbgebrochen.")
+            break
+        print()
+        if antwort.lower() == "x":
+            print("Abgebrochen.")
+            break
+        if not antwort:
+            continue
+        dokument.notiz = (
+            f"{dokument.notiz} | {antwort}".strip(" |") if args.erneut and dokument.notiz else antwort
+        )
+        beantwortet += 1
+        # Nach jeder Antwort sichern: ein Abbruch mittendrin darf nichts kosten.
+        mappe.speichern()
+
+    print(f"{beantwortet} Antworten festgehalten.")
+    if beantwortet:
+        print(
+            "Sie stehen im Bericht unter dem jeweiligen Beleg.\n"
+            "In die Uebersicht uebernehmen: steuer ordnen --paket"
+        )
     return 0
 
 
@@ -1603,7 +1700,24 @@ def parser_bauen() -> argparse.ArgumentParser:
         "--thema",
         help="Einzelne Punkte eines Themas auflisten (Kennung aus der Uebersicht).",
     )
+    p.add_argument("--voll", action="store_true", help="Ganze Saetze statt gekuerzter Zeilen.")
     p.set_defaults(funktion=befehl_offen)
+
+    p = unter.add_parser(
+        "beantworten",
+        help="Offene Rueckfragen einzeln stellen und die Antworten festhalten.",
+    )
+    p.add_argument(
+        "--thema",
+        default="frage",
+        help="Welches Thema abgearbeitet wird (Standard: frage).",
+    )
+    p.add_argument(
+        "--erneut",
+        action="store_true",
+        help="Auch Belege vorlegen, zu denen schon eine Anmerkung vorliegt.",
+    )
+    p.set_defaults(funktion=befehl_beantworten)
 
     p = unter.add_parser("pruefen", help="Luecken, Chancen und Warnungen anzeigen.")
     p.set_defaults(funktion=befehl_pruefen)

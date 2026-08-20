@@ -74,7 +74,7 @@ def _mappe_mit_offenen_punkten(tmp_path: Path) -> Arbeitsmappe:
 
 def test_uebersicht_buendelt_deutlich(tmp_path, capsys):
     mappe = _mappe_mit_offenen_punkten(tmp_path)
-    befehl_offen(argparse.Namespace(mappe=str(mappe.wurzel), jahr=None, thema=None))
+    befehl_offen(argparse.Namespace(mappe=str(mappe.wurzel), jahr=None, thema=None, voll=False))
     ausgabe = capsys.readouterr().out
 
     assert f"{len(ECHTE_FAELLE)} Einzelangaben" in ausgabe
@@ -97,7 +97,7 @@ def test_uebersicht_buendelt_deutlich(tmp_path, capsys):
 
 def test_ein_thema_zeigt_seine_einzelnen_punkte(tmp_path, capsys):
     mappe = _mappe_mit_offenen_punkten(tmp_path)
-    befehl_offen(argparse.Namespace(mappe=str(mappe.wurzel), jahr=None, thema="zahlung"))
+    befehl_offen(argparse.Namespace(mappe=str(mappe.wurzel), jahr=None, thema="zahlung", voll=True))
     ausgabe = capsys.readouterr().out
 
     assert "Kontoauszuege Geschaeftskonto 2024" in ausgabe
@@ -106,7 +106,7 @@ def test_ein_thema_zeigt_seine_einzelnen_punkte(tmp_path, capsys):
 
 def test_unbekanntes_thema_meldet_die_vorhandenen(tmp_path, capsys):
     mappe = _mappe_mit_offenen_punkten(tmp_path)
-    code = befehl_offen(argparse.Namespace(mappe=str(mappe.wurzel), jahr=None, thema="quatsch"))
+    code = befehl_offen(argparse.Namespace(mappe=str(mappe.wurzel), jahr=None, thema="quatsch", voll=False))
     assert code == 1
     assert "zahlung" in capsys.readouterr().err
 
@@ -128,7 +128,7 @@ def test_ein_dokument_zaehlt_je_thema_nur_einmal(tmp_path, capsys):
     )
     mappe.speichern()
 
-    befehl_offen(argparse.Namespace(mappe=str(mappe.wurzel), jahr=None, thema=None))
+    befehl_offen(argparse.Namespace(mappe=str(mappe.wurzel), jahr=None, thema=None, voll=False))
     ausgabe = capsys.readouterr().out
     assert "3 Einzelangaben" in ausgabe
     zeile = next(z for z in ausgabe.splitlines() if "zahlung" in z and "EUR" in z)
@@ -161,8 +161,100 @@ def test_reihenfolge_passt_zur_angezeigten_zahl(tmp_path, capsys):
         beleg(f"arzt{n}.txt", ["Aerztliche Verordnung"])
 
     mappe.speichern()
-    befehl_offen(argparse.Namespace(mappe=str(mappe.wurzel), jahr=None, thema=None))
+    befehl_offen(argparse.Namespace(mappe=str(mappe.wurzel), jahr=None, thema=None, voll=False))
 
     zeilen = [z for z in capsys.readouterr().out.splitlines() if " EUR  " in z]
     zahlen = [int(z.strip().split()[0]) for z in zeilen]
     assert zahlen == sorted(zahlen, reverse=True), zeilen
+
+
+# --- Rueckfragen beantworten -------------------------------------------------
+
+
+def _mappe_mit_fragen(tmp_path: Path) -> Arbeitsmappe:
+    mappe = Arbeitsmappe.anlegen(tmp_path / "mappe", 2024)
+    for nummer, frage in enumerate(
+        [
+            "Klärung, ob die App beruflich oder privat genutzt wird",
+            "Zuordnung zu einer konkreten Fahrt (Datum, Start/Ziel, Zweck)",
+        ]
+    ):
+        pfad = tmp_path / f"frage{nummer}.txt"
+        pfad.write_text(str(nummer), encoding="utf-8")
+        dokument, _ = mappe.datei_aufnehmen(pfad, herkunft_jahr=2024)
+        dokument.analyse = Analyse(
+            kategorie_id="werbungskosten_sonstige",
+            dokumenttyp="Rechnung",
+            aussteller="Beispiel GmbH",
+            betrag_gesamt=47.87,
+            fehlende_nachweise=[frage],
+        )
+    # Ein Beleg, dem ein Dokument fehlt - keine Frage, darf nicht drankommen.
+    pfad = tmp_path / "beleg.txt"
+    pfad.write_text("b", encoding="utf-8")
+    dokument, _ = mappe.datei_aufnehmen(pfad, herkunft_jahr=2024)
+    dokument.analyse = Analyse(
+        kategorie_id="werbungskosten_sonstige", fehlende_nachweise=["Kontoauszug fehlt"]
+    )
+    mappe.speichern()
+    return mappe
+
+
+def test_antworten_werden_am_beleg_festgehalten(tmp_path, capsys, monkeypatch):
+    from steuer.cli import befehl_beantworten
+
+    mappe = _mappe_mit_fragen(tmp_path)
+    antworten = iter(["beruflich, fuer die Wohnungssuche in Koeln", ""])
+    monkeypatch.setattr("builtins.input", lambda *_: next(antworten))
+
+    befehl_beantworten(argparse.Namespace(mappe=str(mappe.wurzel), jahr=None, thema="frage", erneut=False))
+    ausgabe = capsys.readouterr().out
+
+    assert "2 offene Punkte" in ausgabe, "die Kontoauszug-Zeile gehoert nicht dazu"
+    assert "1 Antworten festgehalten" in ausgabe
+
+    wieder = Arbeitsmappe.laden(mappe.wurzel)
+    notizen = [d.notiz for d in wieder.dokumente if d.notiz]
+    assert notizen == ["beruflich, fuer die Wohnungssuche in Koeln"]
+
+
+def test_abbruch_behaelt_das_bereits_gegebene(tmp_path, capsys, monkeypatch):
+    from steuer.cli import befehl_beantworten
+
+    mappe = _mappe_mit_fragen(tmp_path)
+    antworten = iter(["privat genutzt", "x"])
+    monkeypatch.setattr("builtins.input", lambda *_: next(antworten))
+
+    befehl_beantworten(argparse.Namespace(mappe=str(mappe.wurzel), jahr=None, thema="frage", erneut=False))
+    assert "Abgebrochen" in capsys.readouterr().out
+
+    wieder = Arbeitsmappe.laden(mappe.wurzel)
+    assert [d.notiz for d in wieder.dokumente if d.notiz] == ["privat genutzt"]
+
+
+def test_beantwortete_belege_kommen_nicht_wieder(tmp_path, capsys, monkeypatch):
+    from steuer.cli import befehl_beantworten
+
+    mappe = _mappe_mit_fragen(tmp_path)
+    monkeypatch.setattr("builtins.input", lambda *_: "erste Antwort")
+    befehl_beantworten(argparse.Namespace(mappe=str(mappe.wurzel), jahr=None, thema="frage", erneut=False))
+    capsys.readouterr()
+
+    monkeypatch.setattr("builtins.input", lambda *_: "")
+    befehl_beantworten(argparse.Namespace(mappe=str(mappe.wurzel), jahr=None, thema="frage", erneut=False))
+    assert "Nichts offen" in capsys.readouterr().out
+
+
+def test_anmerkung_steht_im_bericht(tmp_path):
+    """Eine Antwort, die der Steuerberater nicht sieht, war vergeudete Zeit."""
+    from steuer import gaps, report
+    from steuer.rules import laden as regeln_laden
+
+    mappe = _mappe_mit_fragen(tmp_path)
+    mappe.dokumente[0].notiz = "beruflich, fuer die Wohnungssuche in Koeln"
+
+    werk = regeln_laden(2024)
+    auswertung = gaps.auswerten(mappe.dokumente, werk, mappe.profil)
+    text = report.markdown_bericht(mappe.dokumente, auswertung, werk, mappe.profil)
+    assert "beruflich, fuer die Wohnungssuche in Koeln" in text
+    assert "Anmerkung des Mandanten" in text

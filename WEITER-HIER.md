@@ -4,14 +4,10 @@ Stand: 20. August 2026, nach dem Umbau in vier Punkten.
 
 ---
 
-## Das Dringendste, unabhängig vom Werkzeug
+## Abgabefrist
 
-**Die Abgabefristen für 2024 sind abgelaufen** (31.07.2025 ohne Berater,
-30.04.2026 mit Berater). Der Bescheid 2023 vom 07.01.2026 kündigt für den
-Wiederholungsfall einen Verspätungszuschlag an, und es besteht Pflicht zur
-Abgabe (Vermietung, Lohnersatzleistungen). **Dr. Hagn anrufen.**
-
-Das ist der einzige Punkt mit Zeitdruck. Alles andere kann warten.
+Erledigt. Die Fristen für 2024 sind abgelaufen, Dr. Hagn ist informiert, ein
+Verspätungszuschlag wird in Kauf genommen. **Kein Thema mehr.**
 
 ---
 
@@ -21,7 +17,7 @@ Das ist der einzige Punkt mit Zeitdruck. Alles andere kann warten.
    Anteile aus der Nebenkostenabrechnung (Hausmeister, Treppenhausreinigung,
    Gartenpflege, Schornsteinfeger). Dazu ist er auf Verlangen verpflichtet.
    Ohne sie stehen die haushaltsnahen Kosten weiter bei 0,00 EUR.
-2. **Nebenkostenabrechnung Leipzig 2024** vom dortigen Vermieter.
+2. **Nebenkostenabrechnung Leipzig 2024** — beantragt, laeuft.
 3. **Von der Ehefrau:** EÜR 2024 als PDF-Export aus der Rechnungs-App,
    Kontoauszüge des Geschäftskontos 2024, und die Klärung der Differenz
    zwischen −5.882,02 € (Screenshot) und −4.880,02 € (12.680,01 − 17.560,03).
