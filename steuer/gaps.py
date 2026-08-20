@@ -748,11 +748,51 @@ def _hinweise_zusammenfassen(dokumente: list[Dokument]) -> list[Befund]:
     return befunde
 
 
+def _stammdaten_hinweis(stammdaten) -> list[Befund]:
+    """Macht sichtbar, welche Werte aus den Vorjahren uebernommen wurden."""
+    if not stammdaten:
+        return []
+    gesetzt = stammdaten.gesetzte()
+    if not gesetzt:
+        return []
+    zeilen = []
+    for eintrag in gesetzt:
+        teil = f"{eintrag.label or eintrag.id}: {eintrag.wert}"
+        if eintrag.einheit and eintrag.einheit != "text":
+            teil += f" {eintrag.einheit}"
+        if eintrag.quelle:
+            teil += f" (Quelle: {eintrag.quelle})"
+        zeilen.append(teil)
+    return [
+        Befund(
+            art="hinweis",
+            id="stammdaten_uebernommen",
+            titel=f"{len(gesetzt)} Werte aus den Stammdaten uebernommen",
+            beschreibung=(
+                "Diese Werte stammen nicht aus einem Beleg dieses Jahres, sondern aus "
+                "bestaetigten Angaben der Vorjahre: " + "; ".join(zeilen) + "."
+            ),
+            prioritaet="niedrig",
+        )
+    ]
+
+
+def _erledigt(eintrag: dict, stammdaten) -> bool:
+    """Prueft, ob ein bestaetigter Stammdatenwert den Eintrag gegenstandslos macht.
+
+    Steht die Gebaeude-AfA als bestaetigter Wert in der Mappe, ist sie keine
+    Luecke mehr - auch wenn kein einzelnes Dokument sie belegt.
+    """
+    kennung = eintrag.get("erledigt_wenn_stammdatum")
+    return bool(kennung and stammdaten and kennung in stammdaten)
+
+
 def auswerten(
     dokumente: list[Dokument],
     regelwerk: Regelwerk,
     profil: Profil,
     heute: _dt.date | None = None,
+    stammdaten=None,
 ) -> Auswertung:
     """Fuehrt die vollstaendige regelbasierte Auswertung durch."""
     heute = heute or _dt.date.today()
@@ -762,7 +802,7 @@ def auswerten(
     # Checkliste: was fehlt?
     for eintrag in regelwerk.checkliste:
         check_id = str(eintrag.get("id", ""))
-        if not _gilt(eintrag, profil):
+        if not _gilt(eintrag, profil) or _erledigt(eintrag, stammdaten):
             continue
         treffer = _erfuellt(check_id, dokumente)
         if treffer:
@@ -786,7 +826,7 @@ def auswerten(
 
     # Chancen aus dem Regelwerk.
     for eintrag in regelwerk.chancen:
-        if not _gilt(eintrag, profil):
+        if not _gilt(eintrag, profil) or _erledigt(eintrag, stammdaten):
             continue
         potenzial = eintrag.get("potenzial_eur")
         befunde.append(
@@ -804,6 +844,7 @@ def auswerten(
     befunde.extend(_dokumentwarnungen(dokumente, regelwerk.jahr, regelwerk))
     befunde.extend(_dubletten_pruefen(dokumente))
     befunde.extend(_frist_pruefen(regelwerk, heute))
+    befunde.extend(_stammdaten_hinweis(stammdaten))
 
     befunde.extend(_hinweise_zusammenfassen(dokumente))
 

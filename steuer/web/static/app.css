@@ -208,3 +208,8 @@ ul.fehlt li { color: var(--achtung); }
 .stapelangabe > p { flex-basis: 100%; margin: 0 0 .2rem; }
 .stapelangabe label { display: flex; flex-direction: column; gap: .2rem; text-align: left; }
 .stapelangabe select, .stapelangabe input { padding: .3rem .4rem; }
+
+.stammwert { padding: .7rem 0; border-bottom: 1px solid var(--rahmen); }
+.stammwert:last-child { border-bottom: none; }
+.stammwert small { display: block; color: var(--gedaempft); margin-top: .2rem; }
+.stammwert small.bestaetigt { font-style: italic; }

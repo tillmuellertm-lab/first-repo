@@ -7,8 +7,9 @@ import logging
 import sys
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from typing import Any
 
-from . import euer, gaps, organize, report, rules, taxonomy
+from . import euer, gaps, organize, report, rules, stammdaten, taxonomy
 from .formatierung import eingabewert, euro, zahl_lesen
 from .analyze import (
     AUSWAHL_DOKUMENT,
@@ -196,6 +197,88 @@ def _int_frage(text: str, vorgabe: int | None) -> int | None:
     return int(wert) if wert is not None else None
 
 
+def befehl_stammdaten(args: argparse.Namespace) -> int:
+    """Zeigt und pflegt die jahresuebergreifenden Fortschreibungswerte."""
+    mappe = _mappe_oeffnen(args)
+    daten = mappe.stammdaten
+
+    if args.aus:
+        quelle = Arbeitsmappe.laden(Path(args.aus))
+        uebernommen, zu_pruefen = quelle.stammdaten.fuer_neues_jahr(mappe.jahr)
+        if not uebernommen.gesetzte():
+            print(f"In {quelle.wurzel} sind keine Stammdaten hinterlegt.")
+            return 1
+        mappe._stammdaten = uebernommen
+        pfad = mappe.stammdaten_speichern()
+        print(f"{len(uebernommen.gesetzte())} Werte aus {quelle.wurzel.name} uebernommen: {pfad}")
+        if zu_pruefen:
+            print(
+                "\nDiese Werte laufen nicht unbegrenzt weiter und sind zu pruefen:\n  "
+                + "\n  ".join(zu_pruefen)
+            )
+        return 0
+
+    if args.bearbeiten:
+        print(
+            "Stammdaten erfassen. Enter uebernimmt den bisherigen Wert,\n"
+            "ein Minuszeichen loescht ihn.\n"
+        )
+        for vorlage in stammdaten.VORLAGEN:
+            eintrag = daten.eintrag(vorlage.id)
+            if vorlage.hinweis:
+                print(f"  {vorlage.hinweis}")
+            antwort = _frage(
+                vorlage.label + (f" in {vorlage.einheit}" if vorlage.einheit else ""),
+                str(eintrag.wert) if eintrag and eintrag.ist_gesetzt else "",
+            )
+            if antwort == "-":
+                daten.entfernen(vorlage.id)
+                print("  entfernt\n")
+                continue
+            if not antwort:
+                print()
+                continue
+            wert: Any = antwort
+            if vorlage.einheit in ("EUR", "prozent_pro_jahr"):
+                gelesen = zahl_lesen(antwort)
+                if gelesen is None:
+                    print(f"  '{antwort}' ist keine Zahl, uebersprungen.\n", file=sys.stderr)
+                    continue
+                wert = gelesen
+            quelle = _frage("  Fundstelle", eintrag.quelle if eintrag else "")
+            daten.setzen(vorlage.id, wert, quelle=quelle, gilt_ab_jahr=mappe.jahr)
+            print()
+        pfad = mappe.stammdaten_speichern()
+        print(f"Stammdaten gespeichert: {pfad}")
+        return 0
+
+    gesetzt = daten.gesetzte()
+    print(f"Stammdaten der Mappe {mappe.wurzel.name} ({mappe.jahr})")
+    print(f"Datei: {mappe.stammdaten_pfad}\n")
+    if not gesetzt:
+        print("Noch keine Werte hinterlegt.\n")
+        print("Diese Werte stehen in keinem einzelnen Beleg und gehen sonst verloren:")
+        for vorlage in stammdaten.VORLAGEN:
+            print(f"  {vorlage.id:38} {vorlage.label}")
+        print("\nErfassen mit: steuer stammdaten --bearbeiten")
+        return 0
+
+    for eintrag in gesetzt:
+        einheit = f" {eintrag.einheit}" if eintrag.einheit else ""
+        print(f"  {eintrag.label or eintrag.id}: {eintrag.wert}{einheit}")
+        if eintrag.quelle:
+            print(f"      Quelle: {eintrag.quelle}")
+        if eintrag.bestaetigt_am:
+            print(f"      bestaetigt am {eintrag.bestaetigt_am}")
+
+    fehlend = daten.fehlende_vorlagen()
+    if fehlend:
+        print(f"\nNoch nicht hinterlegt ({len(fehlend)}):")
+        for vorlage in fehlend:
+            print(f"  {vorlage.id:38} {vorlage.label}")
+    return 0
+
+
 def befehl_hinzufuegen(args: argparse.Namespace) -> int:
     mappe = _mappe_oeffnen(args)
     dateien = dateien_sammeln([Path(p) for p in args.pfade])
@@ -323,11 +406,13 @@ def befehl_analyse(args: argparse.Namespace) -> int:
                 dokument.notiz,
                 ab_seite=args.ab_seite,
                 herkunft=HERKUNFT_LABEL.get(dokument.herkunft, ""),
+                stammdaten=mappe.stammdaten,
             )
             if args.ab_seite and dokument.analyse:
                 # Der Ausschnitt ersetzt die Pruefung der vorderen Seiten nicht,
                 # er ergaenzt sie. Was dort gefunden wurde, bleibt erhalten.
                 _analysen_verbinden(dokument.analyse, analyse, args.ab_seite)
+            analyse.kontext = mappe.kontext_pruefsumme()
             dokument.analyse = analyse
             dokument.status = STATUS_ANALYSIERT
             dokument.fehler = ""
@@ -429,7 +514,7 @@ def befehl_status(args: argparse.Namespace) -> int:
     mappe.eingang_einlesen()
     mappe.speichern()
     regelwerk = _regelwerk(mappe)
-    auswertung = gaps.auswerten(mappe.dokumente, regelwerk, mappe.profil)
+    auswertung = gaps.auswerten(mappe.dokumente, regelwerk, mappe.profil, stammdaten=mappe.stammdaten)
     zahlen = auswertung.kennzahlen
 
     print(f"Arbeitsmappe {mappe.wurzel}  ·  Veranlagungszeitraum {mappe.jahr}")
@@ -463,7 +548,7 @@ def befehl_status(args: argparse.Namespace) -> int:
 def befehl_pruefen(args: argparse.Namespace) -> int:
     mappe = _mappe_oeffnen(args)
     regelwerk = _regelwerk(mappe)
-    auswertung = gaps.auswerten(mappe.dokumente, regelwerk, mappe.profil)
+    auswertung = gaps.auswerten(mappe.dokumente, regelwerk, mappe.profil, stammdaten=mappe.stammdaten)
 
     def _ausgeben(titel: str, befunde: list) -> None:
         if not befunde:
@@ -504,7 +589,7 @@ def befehl_ordnen(args: argparse.Namespace) -> int:
         )
         return 1
 
-    auswertung = gaps.auswerten(mappe.dokumente, regelwerk, mappe.profil)
+    auswertung = gaps.auswerten(mappe.dokumente, regelwerk, mappe.profil, stammdaten=mappe.stammdaten)
     modellauswertung = None
     if args.gesamtauswertung:
         if not schluessel_vorhanden():
@@ -996,6 +1081,18 @@ def parser_bauen() -> argparse.ArgumentParser:
     p = unter.add_parser("profil", help="Steuerliche Ausgangslage anzeigen oder erfassen.")
     p.add_argument("--bearbeiten", action="store_true", help="Profil im Dialog erfassen.")
     p.set_defaults(funktion=befehl_profil)
+
+    p = unter.add_parser(
+        "stammdaten",
+        help="Jahresuebergreifende Werte wie die Gebaeude-AfA anzeigen oder pflegen.",
+    )
+    p.add_argument("--bearbeiten", action="store_true", help="Werte einzeln erfassen.")
+    p.add_argument(
+        "--aus",
+        metavar="MAPPE",
+        help="Werte aus einer anderen Arbeitsmappe uebernehmen und fortschreiben.",
+    )
+    p.set_defaults(funktion=befehl_stammdaten)
 
     p = unter.add_parser("hinzufuegen", help="Scans aufnehmen (Dateien oder Ordner).")
     p.add_argument(

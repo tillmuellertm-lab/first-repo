@@ -87,7 +87,20 @@ def _profil_block(profil: Profil) -> str:
     return "\n".join(zeilen)
 
 
-def system_analyse(regelwerk: Regelwerk, profil: Profil) -> str:
+def _stammdaten_block(stammdaten) -> str:
+    """Bestaetigte Werte aus den Vorjahren, soweit vorhanden."""
+    if not stammdaten:
+        return ""
+    text = stammdaten.als_text()
+    if not text:
+        return ""
+    return (
+        "\n\nBereits bestaetigte Werte aus den Vorjahren. Sie sind gesichert; melde "
+        "sie nicht als fehlend, sondern weise nur auf Abweichungen hin:\n" + text
+    )
+
+
+def system_analyse(regelwerk: Regelwerk, profil: Profil, stammdaten=None) -> str:
     """Systemprompt fuer die Analyse eines einzelnen Dokuments."""
     ersatzhinweis = ""
     if regelwerk.ist_ersatz:
@@ -105,7 +118,7 @@ Hinterlegte Pauschalen, Grenzen und Hoechstbetraege:
 {_werte_block(regelwerk)}
 
 Steuerliche Ausgangslage des Mandanten:
-{_profil_block(profil)}
+{_profil_block(profil)}{_stammdaten_block(stammdaten)}
 
 Zulaessige Kategorien fuer die Zuordnung:
 {_kategorien_block()}

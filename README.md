@@ -125,6 +125,7 @@ Die Originale bleiben unangetastet, die Ablage wird bei jedem Lauf frisch aufgeb
 | --- | --- |
 | `steuer init --jahr 2025` | Arbeitsmappe anlegen |
 | `steuer profil [--bearbeiten]` | Ausgangslage anzeigen oder erfassen |
+| `steuer stammdaten [--bearbeiten] [--aus MAPPE]` | jahresübergreifende Werte wie die Gebäude-AfA pflegen und fortschreiben |
 | `steuer hinzufuegen <Pfade> [--herkunft] [--jahr]` | Dateien oder Ordner aufnehmen; Herkunft und Steuerjahr des Stapels gleich mitgeben |
 | `steuer analyse [--alle] [--nachtragen] [--hoechstens N]` | Dokumente prüfen; `--nachtragen` holt nur nach, was mit älterem Stand geprüft wurde |
 | `steuer liste` | alle Dokumente nach Anlagen sortiert |
@@ -181,6 +182,40 @@ vorschlagen dürfen, aber nicht unbemerkt verändern.
 
 Fehlt für ein Jahr eine Datei, lädt das Werkzeug ersatzweise das jüngste vorhandene Jahr
 und weist in jeder Ausgabe und in jedem Bericht sichtbar darauf hin.
+
+---
+
+## Was über Jahre hinweg gilt
+
+Manche Zahlen stehen in keinem einzelnen Beleg. Die Gebäude-AfA einer vermieteten
+Immobilie etwa wird aus den Vorjahren fortgeschrieben und steht **nicht im
+Steuerbescheid** — nur in der eingereichten Anlage V. Wer sie nicht festhält, sucht
+sie jedes Jahr neu oder lässt den größten Posten der Anlage V stillschweigend
+ausfallen.
+
+```bash
+steuer stammdaten --bearbeiten      # Werte einzeln erfassen, mit Fundstelle
+steuer stammdaten                   # zeigen, was hinterlegt ist
+```
+
+Jeder Wert trägt seine Fundstelle und das Datum der Bestätigung. Nichts wird
+automatisch übernommen.
+
+Beim Wechsel ins nächste Jahr:
+
+```bash
+cd ~/steuer-2025
+steuer stammdaten --aus ~/steuer-2024
+```
+
+Fortgeschrieben wird, was gleich bleibt. Werte mit endlicher Laufzeit — Abschreibungen
+beweglicher Güter, Verlustvorträge — wandern mit, werden aber ausdrücklich zur Prüfung
+gestellt, statt stillschweigend weiterzulaufen.
+
+Was hier bestätigt ist, gilt als bekannt: Die Lückenanalyse meldet es nicht mehr als
+fehlend, und der Analyseauftrag nennt es dem Modell als gesichert.
+
+In der Weboberfläche gibt es dafür den Menüpunkt **Stammdaten**.
 
 ---
 
@@ -370,6 +405,7 @@ Tests laufen ohne API-Schlüssel und ohne Netzzugriff.
 | `steuer/naming.py`, `organize.py` | Benennung und Ablage |
 | `steuer/report.py` | HTML, Markdown, CSV |
 | `steuer/euer.py` | Aufstellung der Betriebseinnahmen und -ausgaben |
+| `steuer/stammdaten.py` | jahresübergreifende, bestätigte Werte |
 | `steuer/lawupdate.py` | Rechtsstandsrecherche und Entwurfsverwaltung |
 | `steuer/web/` | lokale Weboberfläche |
 

@@ -16,7 +16,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Any
 
-from .. import gaps, organize, report, rules, taxonomy
+from .. import gaps, organize, report, rules, stammdaten as stammdaten_modul, taxonomy
 from ..formatierung import eingabewert, euro, zahl_lesen
 from ..analyze import (
     AUSWAHL_DOKUMENT,
@@ -99,7 +99,7 @@ def anwendung_bauen(mappe: Arbeitsmappe) -> Any:
         return rules.laden(mappe.jahr)
 
     def auswertung() -> gaps.Auswertung:
-        return gaps.auswerten(mappe.dokumente, regelwerk(), mappe.profil)
+        return gaps.auswerten(mappe.dokumente, regelwerk(), mappe.profil, stammdaten=mappe.stammdaten)
 
     def grunddaten() -> dict[str, Any]:
         werk = regelwerk()
@@ -127,7 +127,7 @@ def anwendung_bauen(mappe: Arbeitsmappe) -> Any:
     @app.get("/")
     def uebersicht():
         werk = regelwerk()
-        ergebnis = gaps.auswerten(mappe.dokumente, werk, mappe.profil)
+        ergebnis = gaps.auswerten(mappe.dokumente, werk, mappe.profil, stammdaten=mappe.stammdaten)
         gruppen = []
         for kategorie in taxonomy.KATEGORIEN:
             liste = [d for d in mappe.dokumente if d.wirksame_kategorie == kategorie.id]
@@ -198,6 +198,48 @@ def anwendung_bauen(mappe: Arbeitsmappe) -> Any:
             fehler=None,
         )
 
+    @app.route("/stammdaten", methods=["GET", "POST"])
+    def stammdaten():
+        daten = mappe.stammdaten
+        if request.method == "POST":
+            fehler: list[str] = []
+            for vorlage in stammdaten_modul.VORLAGEN:
+                roh = (request.form.get(f"wert_{vorlage.id}") or "").strip()
+                quelle = (request.form.get(f"quelle_{vorlage.id}") or "").strip()
+                if not roh:
+                    daten.entfernen(vorlage.id)
+                    continue
+                wert: Any = roh
+                if vorlage.einheit in ("EUR", "prozent_pro_jahr"):
+                    gelesen = zahl_lesen(roh)
+                    if gelesen is None:
+                        fehler.append(f"{vorlage.label}: '{roh}' ist keine Zahl.")
+                        continue
+                    wert = gelesen
+                daten.setzen(vorlage.id, wert, quelle=quelle, gilt_ab_jahr=mappe.jahr)
+            if fehler:
+                return (
+                    render_template(
+                        "stammdaten.html",
+                        **grunddaten(),
+                        vorlagen=stammdaten_modul.VORLAGEN,
+                        stammdaten=daten,
+                        gespeichert=None,
+                        fehler=fehler,
+                    ),
+                    400,
+                )
+            mappe.stammdaten_speichern()
+            return redirect(url_for("stammdaten", gespeichert=1))
+        return render_template(
+            "stammdaten.html",
+            **grunddaten(),
+            vorlagen=stammdaten_modul.VORLAGEN,
+            stammdaten=daten,
+            gespeichert=request.args.get("gespeichert"),
+            fehler=None,
+        )
+
     @app.route("/dokument/<dokument_id>", methods=["GET", "POST"])
     def dokument(dokument_id: str):
         eintrag = mappe.dokument(dokument_id)
@@ -229,7 +271,7 @@ def anwendung_bauen(mappe: Arbeitsmappe) -> Any:
     @app.get("/bericht")
     def bericht():
         werk = regelwerk()
-        ergebnis = gaps.auswerten(mappe.dokumente, werk, mappe.profil)
+        ergebnis = gaps.auswerten(mappe.dokumente, werk, mappe.profil, stammdaten=mappe.stammdaten)
         return report.html_bericht(mappe.dokumente, ergebnis, werk, mappe.profil, _letzte_gesamtauswertung())
 
     # ---------------------------------------------------------------- API --
@@ -329,7 +371,9 @@ def anwendung_bauen(mappe: Arbeitsmappe) -> Any:
                             mappe.profil,
                             eintrag.notiz,
                             herkunft=HERKUNFT_LABEL.get(eintrag.herkunft, ""),
+                            stammdaten=mappe.stammdaten,
                         )
+                        eintrag.analyse.kontext = mappe.kontext_pruefsumme()
                         eintrag.status = STATUS_ANALYSIERT
                         eintrag.fehler = ""
                         zusatz = EIGNUNG_LABEL.get(eintrag.analyse.eignung, "")
@@ -376,7 +420,7 @@ def anwendung_bauen(mappe: Arbeitsmappe) -> Any:
         def lauf() -> None:
             try:
                 werk = regelwerk()
-                ergebnis = gaps.auswerten(mappe.dokumente, werk, mappe.profil)
+                ergebnis = gaps.auswerten(mappe.dokumente, werk, mappe.profil, stammdaten=mappe.stammdaten)
                 modellauswertung = None
                 if daten.get("gesamtauswertung") and schluessel_vorhanden():
                     auftrag.aktuell = f"Gesamtauswertung laeuft ({modell})"

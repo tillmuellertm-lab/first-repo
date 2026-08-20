@@ -173,6 +173,7 @@ class Analysedienst:
         zusatzhinweis: str = "",
         ab_seite: int | None = None,
         herkunft: str = "",
+        stammdaten=None,
     ) -> Analyse:
         inhalt = inhalt_aufbereiten(pfad, medientyp, ab_seite)
 
@@ -206,7 +207,7 @@ class Analysedienst:
                 lambda: self.client.messages.create(
                     model=self.modell_dokument,
                     max_tokens=4096,
-                    system=prompts.system_analyse(regelwerk, profil),
+                    system=prompts.system_analyse(regelwerk, profil, stammdaten),
                     tools=[prompts.WERKZEUG_ANALYSE],
                     tool_choice={"type": "tool", "name": "dokument_analyse"},
                     messages=[{"role": "user", "content": bloecke}],
@@ -231,7 +232,6 @@ class Analysedienst:
 
         rohdaten = self._werkzeugergebnis(antwort, "dokument_analyse")
         analyse = _analyse_aus_rohdaten(rohdaten)
-        analyse.kontext = profil.kontext_pruefsumme()
         analyse.modell = self.modell_dokument
         if inhalt.gekuerzt:
             analyse.hinweise.append(

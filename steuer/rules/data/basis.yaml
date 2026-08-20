@@ -306,6 +306,7 @@ chancen:
   - id: gebaeude_afa_sichern
     titel: Gebaeude-AfA lueckenlos fortschreiben
     gilt_wenn: [vermietung]
+    erledigt_wenn_stammdatum: gebaeude_afa_jahresbetrag
     potenzial_eur: 1500
     beschreibung: >-
       Die Abschreibung des Gebaeudes laeuft ueber Jahrzehnte und ist meist der

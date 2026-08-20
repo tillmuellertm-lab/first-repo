@@ -99,7 +99,7 @@ def test_nachzutragen_beruecksichtigt_den_kontext(tmp_path):
     dokument = Dokument(id="a", dateiname="beleg.pdf")
     dokument.status = "analysiert"
     dokument.analyse = Analyse(
-        version=ANALYSE_VERSION, kontext=mappe.profil.kontext_pruefsumme()
+        version=ANALYSE_VERSION, kontext=mappe.kontext_pruefsumme()
     )
     mappe.dokumente.append(dokument)
     assert mappe.nachzutragen() == []

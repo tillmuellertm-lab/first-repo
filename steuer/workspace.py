@@ -16,6 +16,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Iterable
 
+from . import stammdaten
 from .models import Dokument, Profil
 
 VERSION = 1
@@ -78,6 +79,8 @@ class Arbeitsmappe:
     profil: Profil = field(default_factory=Profil)
     dokumente: list[Dokument] = field(default_factory=list)
     einstellungen: dict[str, Any] = field(default_factory=dict)
+    # Traege geladen, damit eine Mappe ohne Stammdaten nichts kostet.
+    _stammdaten: Any = field(default=None, repr=False, compare=False)
 
     # -- Pfade ---------------------------------------------------------------
 
@@ -96,6 +99,28 @@ class Arbeitsmappe:
     @property
     def zustandsverzeichnis(self) -> Path:
         return self.wurzel / ORDNER_ZUSTAND
+
+    @property
+    def stammdaten_pfad(self) -> Path:
+        """Ort der jahresuebergreifenden Werte.
+
+        Standard ist die Mappe selbst. Wer mehrere Jahre nebeneinander pflegt,
+        kann in ``steuer.json`` unter ``einstellungen.stammdaten`` einen
+        gemeinsamen Pfad hinterlegen - dann teilen sich alle Jahre eine Datei.
+        """
+        eigener = self.einstellungen.get("stammdaten")
+        if eigener:
+            return Path(eigener).expanduser()
+        return self.wurzel / stammdaten.DATEINAME
+
+    @property
+    def stammdaten(self) -> stammdaten.Stammdaten:
+        if self._stammdaten is None:
+            self._stammdaten = stammdaten.laden(self.stammdaten_pfad)
+        return self._stammdaten
+
+    def stammdaten_speichern(self) -> Path:
+        return stammdaten.speichern(self.stammdaten, self.stammdaten_pfad)
 
     def pfad_zu(self, dokument: Dokument) -> Path:
         return self.eingang / dokument.dateiname
@@ -279,6 +304,10 @@ class Arbeitsmappe:
     def offene_dokumente(self) -> list[Dokument]:
         return [d for d in self.dokumente if d.analyse is None or d.status != "analysiert"]
 
+    def kontext_pruefsumme(self) -> str:
+        """Wissensstand aus Profil und Stammdaten zusammen."""
+        return f"{self.profil.kontext_pruefsumme()}-{self.stammdaten.pruefsumme()}"
+
     def nachzutragen(self) -> list[Dokument]:
         """Dokumente, deren Analyse nicht mehr zum aktuellen Stand passt.
 
@@ -287,7 +316,7 @@ class Arbeitsmappe:
         Fassung der Analysefelder oder ein Profil, das den Betrieb im Haushalt
         noch nicht kannte. Derselbe Beleg wird dann heute anders eingeordnet.
         """
-        kontext = self.profil.kontext_pruefsumme()
+        kontext = self.kontext_pruefsumme()
         return [
             d
             for d in self.dokumente
