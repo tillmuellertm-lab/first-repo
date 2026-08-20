@@ -281,7 +281,9 @@ def anwendung_bauen(mappe: Arbeitsmappe) -> Any:
     def bericht():
         werk = regelwerk()
         ergebnis = gaps.auswerten(mappe.jahresansicht().eigene, werk, mappe.profil, stammdaten=mappe.stammdaten)
-        return report.html_bericht(mappe.dokumente, ergebnis, werk, mappe.profil, _letzte_gesamtauswertung())
+        return report.html_bericht(
+            mappe.jahresansicht().eigene, ergebnis, werk, mappe.profil, _letzte_gesamtauswertung()
+        )
 
     # ---------------------------------------------------------------- API --
 
@@ -438,7 +440,7 @@ def anwendung_bauen(mappe: Arbeitsmappe) -> Any:
                     modellauswertung = dienst.gesamtauswertung(
                         werk,
                         mappe.profil,
-                        [_bestandseintrag(d) for d in mappe.dokumente],
+                        [_bestandseintrag(d) for d in mappe.jahresansicht().eigene],
                         [b.als_dict() for b in ergebnis.befunde],
                     )
                     _gesamtauswertung_sichern(modellauswertung)
@@ -448,7 +450,12 @@ def anwendung_bauen(mappe: Arbeitsmappe) -> Any:
                 )
                 mappe.speichern()
                 berichte = report.berichte_schreiben(
-                    mappe.berichte, mappe.dokumente, ergebnis, werk, mappe.profil, modellauswertung
+                    mappe.berichte,
+                    mappe.jahresansicht().eigene,
+                    ergebnis,
+                    werk,
+                    mappe.profil,
+                    modellauswertung,
                 )
                 auftrag.meldungen.append(f"{ablage.anzahl} Dateien einsortiert unter {ablage.wurzel}")
                 for pfad in berichte:

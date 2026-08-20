@@ -39,14 +39,20 @@ def ablage_erzeugen(
     zielordner: Path | None = None,
     ungeeignete_mitnehmen: bool = True,
 ) -> Ablageergebnis:
-    """Baut die nach Anlagen sortierte Kopie des Dokumentenbestands auf."""
+    """Baut die nach Anlagen sortierte Kopie des Dokumentenbestands auf.
+
+    Nur die Dokumente des Veranlagungsjahres. Der Steuerberater bekommt sonst
+    Belege fremder Jahre mitgeliefert, waehrend die Kennzahlen des Berichts sie
+    zu Recht aussen vor lassen - eine Ablage, die etwas anderes enthaelt als der
+    Bericht behauptet, ist schlimmer als gar keine.
+    """
     ziel = Path(zielordner) if zielordner else mappe.aufbereitet / str(mappe.jahr)
     if ziel.exists():
         shutil.rmtree(ziel)
     ziel.mkdir(parents=True, exist_ok=True)
 
     nach_kategorie: dict[str, list[Dokument]] = defaultdict(list)
-    for dokument in mappe.dokumente:
+    for dokument in mappe.jahresansicht().eigene:
         nach_kategorie[dokument.wirksame_kategorie].append(dokument)
 
     ergebnis = Ablageergebnis(wurzel=ziel)

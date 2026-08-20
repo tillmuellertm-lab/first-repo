@@ -825,7 +825,7 @@ def befehl_ordnen(args: argparse.Namespace) -> int:
                 modellauswertung = dienst.gesamtauswertung(
                     regelwerk,
                     mappe.profil,
-                    [_bestandseintrag(d) for d in mappe.dokumente],
+                    [_bestandseintrag(d) for d in mappe.jahresansicht().eigene],
                     [b.als_dict() for b in auswertung.befunde],
                 )
             except (AnalyseFehler, KeinSchluessel) as fehler:
@@ -834,7 +834,12 @@ def befehl_ordnen(args: argparse.Namespace) -> int:
     ablage = organize.ablage_erzeugen(mappe, ungeeignete_mitnehmen=not args.ohne_ungeeignete)
     mappe.speichern()
     berichte = report.berichte_schreiben(
-        mappe.berichte, mappe.dokumente, auswertung, regelwerk, mappe.profil, modellauswertung
+        mappe.berichte,
+        mappe.jahresansicht().eigene,
+        auswertung,
+        regelwerk,
+        mappe.profil,
+        modellauswertung,
     )
 
     print(f"\n{ablage.anzahl} Dateien einsortiert unter {ablage.wurzel}")

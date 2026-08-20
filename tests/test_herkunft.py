@@ -255,3 +255,25 @@ def test_belegdatum_dient_als_zweite_quelle(tmp_path):
     import re
 
     assert not re.fullmatch(r"(?:19|20)\d{2}-\d{2}-\d{2}", unlesbar.analyse.datum)
+
+
+def test_ablage_nimmt_nur_belege_des_jahres(tmp_path):
+    """Der Steuerberater darf keine Belege fremder Jahre im Paket finden.
+
+    Die Kennzahlen des Berichts stuetzen sich auf die Jahressicht. Naehme die
+    Ablage den ganzen Bestand, enthielte das Paket mehr, als der Bericht
+    ausweist - und niemand koennte sagen, welche Zahl zu welchem Beleg gehoert.
+    """
+    from steuer import organize
+
+    mappe = Arbeitsmappe.anlegen(tmp_path / "mappe", 2024)
+    for name, jahr in (("heuer.txt", 2024), ("vorjahr.txt", 2023), ("naechstes.txt", 2025)):
+        quelle = _datei(tmp_path, name, inhalt=name)
+        dokument, _ = mappe.datei_aufnehmen(quelle, herkunft_jahr=jahr)
+        dokument.analyse = Analyse(kategorie_id="werbungskosten_sonstige", eignung="geeignet")
+
+    ablage = organize.ablage_erzeugen(mappe)
+    abgelegt = {pfad.name for pfad in ablage.wurzel.rglob("*") if pfad.is_file()}
+    assert ablage.anzahl == 1
+    assert any("heuer" in name for name in abgelegt)
+    assert not any("vorjahr" in name or "naechstes" in name for name in abgelegt)
