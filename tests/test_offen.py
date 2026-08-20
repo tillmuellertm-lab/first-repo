@@ -134,3 +134,35 @@ def test_ein_dokument_zaehlt_je_thema_nur_einmal(tmp_path, capsys):
     zeile = next(z for z in ausgabe.splitlines() if "zahlung" in z and "EUR" in z)
     assert zeile.strip().startswith("1"), f"Beleg mehrfach gezaehlt: {zeile!r}"
     assert "100,00" in zeile
+
+
+def test_reihenfolge_passt_zur_angezeigten_zahl(tmp_path, capsys):
+    """Sortiert wird nach Belegen, gezaehlt auch - sonst steht die Liste falsch.
+
+    Ein Thema mit vielen Fehlanzeigen an wenigen Belegen rutschte sonst nach
+    oben, obwohl in seiner Spalte eine kleinere Zahl steht als darunter.
+    """
+    mappe = Arbeitsmappe.anlegen(tmp_path / "mappe", 2024)
+
+    def beleg(name: str, nachweise: list[str]) -> None:
+        pfad = tmp_path / name
+        pfad.write_text(name, encoding="utf-8")
+        dokument, _ = mappe.datei_aufnehmen(pfad, herkunft_jahr=2024)
+        dokument.analyse = Analyse(
+            kategorie_id="werbungskosten_sonstige",
+            betrag_gesamt=10.0,
+            fehlende_nachweise=nachweise,
+        )
+
+    # Ein Beleg mit fuenf Wuenschen zum selben Thema ...
+    beleg("euer.txt", [f"EUER-Auszug Teil {n}" for n in range(5)])
+    # ... gegen drei Belege mit je einem.
+    for n in range(3):
+        beleg(f"arzt{n}.txt", ["Aerztliche Verordnung"])
+
+    mappe.speichern()
+    befehl_offen(argparse.Namespace(mappe=str(mappe.wurzel), jahr=None, thema=None))
+
+    zeilen = [z for z in capsys.readouterr().out.splitlines() if " EUR  " in z]
+    zahlen = [int(z.strip().split()[0]) for z in zeilen]
+    assert zahlen == sorted(zahlen, reverse=True), zeilen

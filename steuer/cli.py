@@ -1277,16 +1277,21 @@ def befehl_offen(args: argparse.Namespace) -> int:
     print(f"{'Belege':>6}  {'Summe':>16}  {'Kennung':<12} Was zu besorgen ist")
     print("-" * 100)
 
-    for kennung, eintraege in sorted(gruppen.items(), key=lambda p: (-len(p[1]), p[0])):
-        # Ein Dokument kann mehrere Fehlanzeigen desselben Themas tragen; fuer
-        # die Summe zaehlt es trotzdem nur einmal.
+    # Ein Dokument kann mehrere Fehlanzeigen desselben Themas tragen. Gezaehlt,
+    # summiert und sortiert wird nach Dokumenten - sonst steht in der Spalte
+    # "Belege" eine andere Zahl, als die Reihenfolge behauptet.
+    zeilen = []
+    for kennung, eintraege in gruppen.items():
         je_dokument = {d.id: d for _, d in eintraege}
         summe = sum(
             d.analyse.betrag_abzugsfaehig or d.analyse.betrag_gesamt or 0.0
             for d in je_dokument.values()
         )
+        zeilen.append((len(je_dokument), summe, kennung))
+
+    for anzahl, summe, kennung in sorted(zeilen, key=lambda z: (-z[0], z[2])):
         print(
-            f"{len(je_dokument):>6}  {euro(summe) if summe else '':>16}  "
+            f"{anzahl:>6}  {euro(summe) if summe else '':>16}  "
             f"{kennung:<12} {beschriftungen[kennung]}"
         )
 
