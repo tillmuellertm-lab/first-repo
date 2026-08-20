@@ -205,3 +205,32 @@ def test_gesetztes_jahr_ueberlebt_das_speichern(tmp_path):
     mappe.speichern()
     wieder = Arbeitsmappe.laden(mappe.wurzel)
     assert wieder.dokument("a").gehoert_ins_jahr == 2024
+
+
+def test_datum_aus_dateiname_liest_vollstaendige_daten():
+    from steuer.cli import datum_aus_dateiname as lesen
+
+    # So benennen Scan-Programme ueblicherweise.
+    assert lesen("2024-03-12_Rechnung.pdf") == "2024-03-12"
+    assert lesen("2023-07-31_RTL interactive.pdf") == "2023-07-31"
+    # Deutsche Schreibweise irgendwo im Namen.
+    assert lesen("Rechnung vom 12.03.2024 Elektro.pdf") == "2024-03-12"
+    assert lesen("Beleg 5.9.2024.pdf") == "2024-09-05"
+
+
+def test_datum_aus_dateiname_verwirft_mehrdeutiges():
+    from steuer.cli import datum_aus_dateiname as lesen
+
+    # Eine blosse Jahreszahl kann eine Rechnungsnummer sein.
+    assert lesen("Rechnung 2024 Nr 4711.pdf") is None
+    assert lesen("Kassenbon.pdf") is None
+    # Unmoegliche Daten sind keine Daten.
+    assert lesen("2024-13-45_unsinn.pdf") is None
+    assert lesen("32.01.2024_beleg.pdf") is None
+
+
+def test_datum_aus_dateiname_nimmt_das_erste_datum():
+    from steuer.cli import datum_aus_dateiname as lesen
+
+    # Der vorangestellte Zeitstempel gilt, nicht ein spaeter erwaehntes Datum.
+    assert lesen("2024-02-01_Kassenzettel vom 31.01.2024.pdf") == "2024-02-01"

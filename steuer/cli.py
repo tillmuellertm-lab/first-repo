@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import re
 import sys
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -306,6 +307,91 @@ def befehl_jahre(args: argparse.Namespace) -> int:
             "  Das Jahr laesst sich beim Aufnehmen mit --jahr angeben oder je Dokument\n"
             "  in der Weboberflaeche setzen."
         )
+    return 0
+
+
+# Die Begrenzungen (?<!\d) und (?!\d) sind wesentlich: Ohne sie liest das
+# Muster aus dem unmoeglichen "32.01.2024" klaglos den 2. Januar heraus - eine
+# falsche Zahl, die niemandem auffaellt.
+DATUM_MUSTER = (
+    # ISO-Datum, wie es Scan-Programme voranstellen: 2024-03-12_Rechnung.pdf
+    re.compile(
+        r"(?<!\d)(?P<jahr>(?:19|20)\d{2})-(?P<monat>0[1-9]|1[0-2])-(?P<tag>0[1-9]|[12]\d|3[01])(?!\d)"
+    ),
+    # Deutsche Schreibweise irgendwo im Namen: Rechnung vom 12.03.2024
+    re.compile(
+        r"(?<!\d)(?P<tag>0?[1-9]|[12]\d|3[01])\.(?P<monat>0?[1-9]|1[0-2])\.(?P<jahr>(?:19|20)\d{2})(?!\d)"
+    ),
+)
+
+
+def datum_aus_dateiname(name: str) -> str | None:
+    """Liest ein vollstaendiges Datum aus dem Dateinamen, sonst None.
+
+    Bewusst nur vollstaendige Datumsangaben: Eine blosse Jahreszahl im Namen
+    kann alles Moegliche sein - eine Rechnungsnummer, ein Modelljahr, ein
+    Aktenzeichen. Ein Tag-Monat-Jahr-Muster ist dagegen eindeutig.
+    """
+    for muster in DATUM_MUSTER:
+        treffer = muster.search(name)
+        if treffer:
+            return "{jahr}-{monat:0>2}-{tag:0>2}".format(**treffer.groupdict())
+    return None
+
+
+def befehl_jahr_aus_dateiname(args: argparse.Namespace) -> int:
+    """Uebernimmt das Steuerjahr aus dem Datum im Dateinamen.
+
+    Viele Scan-Programme stellen das Belegdatum voran. Wo das der Fall ist, muss
+    niemand raten und niemand von Hand nachtragen - die Angabe steht schon da.
+    """
+    mappe = _mappe_oeffnen(args)
+    gefunden: list[tuple] = []
+    ohne_datum: list = []
+    for dokument in mappe.dokumente:
+        if dokument.gehoert_ins_jahr is not None and not args.auch_erkannte:
+            continue
+        datum = datum_aus_dateiname(dokument.dateiname)
+        if datum:
+            gefunden.append((dokument, datum))
+        else:
+            ohne_datum.append(dokument)
+
+    if not gefunden:
+        print("In keinem der betroffenen Dateinamen steht ein vollstaendiges Datum.")
+        return 0
+
+    verteilung: dict[str, int] = {}
+    for _, datum in gefunden:
+        jahr = datum[:4]
+        verteilung[jahr] = verteilung.get(jahr, 0) + 1
+
+    print(f"In {len(gefunden)} Dateinamen steht ein Datum. Daraus ergibt sich:\n")
+    for jahr, anzahl in sorted(verteilung.items()):
+        markierung = "  <- Jahr dieser Mappe" if jahr == str(mappe.jahr) else ""
+        print(f"  {anzahl:>5}  {jahr}{markierung}")
+
+    print("\n  Beispiele:")
+    for dokument, datum in gefunden[:8]:
+        print(f"    {datum}   {dokument.dateiname[:58]}")
+    if len(gefunden) > 8:
+        print(f"    ... und {len(gefunden) - 8} weitere")
+
+    if ohne_datum:
+        print(f"\n  Bei {len(ohne_datum)} Dateinamen steht kein Datum; sie bleiben ohne Jahr.")
+
+    if args.probelauf:
+        print("\nProbelauf, es wurde nichts veraendert.")
+        print("Zum Ausfuehren denselben Befehl ohne --probelauf aufrufen.")
+        return 0
+
+    for dokument, datum in gefunden:
+        dokument.herkunft_jahr = int(datum[:4])
+    mappe.speichern()
+    ansicht = mappe.jahresansicht()
+    print(f"\nGesetzt. In die Auswertung fuer {mappe.jahr} gehen jetzt {len(ansicht.eigene)} Dokumente ein.")
+    if ansicht.ohne_jahr:
+        print(f"{len(ansicht.ohne_jahr)} haben weiterhin kein Jahr.")
     return 0
 
 
@@ -1306,6 +1392,17 @@ def parser_bauen() -> argparse.ArgumentParser:
         "jahre", help="Verteilung des Bestands auf die Veranlagungsjahre anzeigen."
     )
     p.set_defaults(funktion=befehl_jahre)
+
+    p = unter.add_parser(
+        "jahr-aus-dateiname",
+        help="Das Steuerjahr aus dem Datum im Dateinamen uebernehmen.",
+    )
+    p.add_argument(
+        "--auch-erkannte", action="store_true",
+        help="Auch Dokumente ueberschreiben, bei denen bereits ein Jahr bekannt ist.",
+    )
+    p.add_argument("--probelauf", action="store_true", help="Nur anzeigen, was passieren wuerde.")
+    p.set_defaults(funktion=befehl_jahr_aus_dateiname)
 
     p = unter.add_parser(
         "jahr-setzen",
