@@ -1,7 +1,8 @@
 # Hier geht es weiter
 
-Stand: 20. August 2026, abends. Die Ablage ist fertig, das Paket fuer
-Dr. Hagn liegt bereit. Offen sind nur noch Rueckfragen und Besorgungen.
+Stand: 21. August 2026. Die Ablage ist fertig, das Paket fuer Dr. Hagn liegt
+bereit. Offen sind Rueckfragen und Besorgungen. Frage 1 von 16 ist inhaltlich
+geklaert, aber noch nicht eingetippt — der fertige Text steht unten.
 
 ---
 
@@ -35,6 +36,11 @@ Verspätungszuschlag wird in Kauf genommen. **Kein Thema mehr.**
    Kontoauszüge des Geschäftskontos 2024, und die Klärung der Differenz
    zwischen −5.882,02 € (Screenshot) und −4.880,02 € (12.680,01 − 17.560,03).
 4. **Verlustfeststellungsbescheid** zum Aktienverlust von 157 € aus 2023.
+5. **Kinderbetreuungskosten 2024** — Kita-/Elternbeiträge samt Zahlungsnachweis.
+   Zwei Drittel davon, höchstens 4.000 € je Kind, sind Sonderausgaben.
+6. **Zum DKB-Darlehen:** Restschuld des Altkredits am 30.08.2024, die
+   ursprüngliche Aufteilung des Kredits von 2021 und die 2024 gezahlten Zinsen
+   (DKB-Kontoauszug). Ohne Beträge ist der Zinsabzug nicht darstellbar.
 
 **Zwei Zahlen, die kein Dokument hergibt:** die Arbeitstage je Zeitraum
 (Leipzig Januar–August 4 km, Köln September–Dezember 6 km) und die
@@ -54,32 +60,80 @@ Konsole oeffnen, eine Zeile:
 cd ~/first-repo-claude-tax-return-document-tool-jesqdh && source .venv/bin/activate && cd steuer-2024 && git pull origin claude/tax-return-document-tool-jesqdh && steuer beantworten --erneut
 ```
 
-Das legt die offenen **Rueckfragen** einzeln vor, der teuerste Beleg zuerst,
-Kleinbetraege unter 50 EUR bleiben aussen vor. Antwort tippen, Enter. Leer =
+16 Rueckfragen, teuerster Beleg zuerst, Kleinbetraege unter 50 EUR bleiben
+aussen vor (12 Stueck, zusammen 294,18 EUR). Antwort tippen, Enter. Leer =
 ueberspringen, `-` = Anmerkung loeschen, `x` = abbrechen. Nach jeder Antwort
-wird gespeichert; ein Abbruch kostet nichts.
+wird gespeichert; abbrechen kostet nichts.
 
-**Die erste Frage ist schon beantwortet, sie muss nur eingetippt werden.** An
-der ERGO-Rechnung ueber 269,19 EUR steht faelschlich ein Konsolenbefehl als
-Anmerkung. Richtige Antwort:
+**Am `>` wartet die Konsole auf Text, nicht auf einen Befehl.** Immer nur eine
+Zeile einfuegen, ohne Zeilenumbruch.
 
-> Privat angeschafft, Pendelstrecke. Durch Entfernungspauschale abgegolten,
-> nicht zusaetzlich ansetzen.
+---
 
-Begruendung: Die Entfernungspauschale gilt saemtliche Fahrzeugkosten ab —
-Anschaffung, Sprit, Versicherung, Steuer, Reparaturen (§ 9 Abs. 2 Satz 1 EStG).
-Zusaetzlich bleiben nur Unfallkosten auf dem Arbeitsweg und Fahrkarten fuer Bus
-und Bahn oberhalb der Pauschale.
+### Frage 1 von 16 — DKB-Privatdarlehen 35.000 EUR — fertig, nur eintippen
 
-**Zweite Frage, NUeRNBERGER Direktversicherung 1.509,24 EUR:** Gefragt ist, ob
-neben dem Arbeitgeberbeitrag etwas aus dem Netto gezahlt wurde. Steht auf der
-Gehaltsabrechnung ein Abzug „Direktversicherung" oder „Entgeltumwandlung"
-*nach* der Steuerberechnung, dann ja. Steht er davor, war es Entgeltumwandlung
-und damit bereits steuerfrei — dann lautet die Antwort „nur Arbeitgeberbeitrag,
-keine private Zahlung".
+```
+Umschuldung eines DKB-Darlehens von 2021 (2,95 %), das u.a. Ausbau der vermieteten Immobilie Halstenbek, Motorrad, HSV-Anleihe und Umzug Leipzig finanziert hatte. Neues Darlehen 6,4 %, 30.08.2024-30.07.2031, loeste dieses ab und finanzierte zusaetzlich Anwaltskosten Arbeitsvertrag 1. FC Koeln, Umzugsunternehmen, Kautionsdifferenz, Renovierung alte Wohnung, Umbau neue Wohnung, 2,5 Monate doppelte Miete, Kitagebuehr, Moebel, Haartransplantation. Zinsen nur anteilig abziehbar, Aufteilung nach Betraegen folgt.
+```
 
-Wenn Konsole nicht behagt: `steuer web` starten und die Anmerkung im Browser
-bei jedem Dokument eintragen. Langsamer, aber der Scan steht daneben.
+**Warum:** Ein Umschuldungsdarlehen tritt in die Fussstapfen des abgeloesten
+Kredits — der Verwendungszweck lebt weiter. Abziehbar sind die Zinsen nur,
+soweit das Geld der Erzielung von Einkuenften diente:
+
+| Verwendung | Zinsen abziehbar? |
+| --- | --- |
+| **Ausbau Halstenbek** | ✅ Anlage V, unbegrenzt, bis 2031 |
+| **Anwaltskosten Arbeitsvertrag 1. FC Köln** | ✅ Anlage N |
+| **Umzugsunternehmen** | ✅ Anlage N |
+| **Renovierung alte Wohnung** (Mietvertragspflicht) | ✅ Anlage N |
+| **2,5 Monate doppelte Miete** | ✅ Anlage N |
+| Umzug Leipzig 2021 + Küche | ⚠️ Umzug ja, Küche nein |
+| Kautionsdifferenz | ⚠️ strittig — Kaution ist Vermögen, kein Aufwand |
+| HSV-Anleihe | ❌ § 20 Abs. 9 EStG: kein WK-Abzug bei Kapitaleinkünften |
+| Motorrad, Möbel, Umbau neue Wohnung, Haartransplantation | ❌ privat |
+
+Der wertvollste Posten ist **Halstenbek** — Anlage V, unbegrenzt, Jahr fuer Jahr
+bis 2031.
+
+**Dafuer noch zu beschaffen — ohne Betraege kann Dr. Hagn nichts ansetzen:**
+
+1. Restschuld des alten Kredits am 30.08.2024 (welcher Teil war Abloesung?)
+2. Urspruengliche Aufteilung des Kredits von 2021 — was kostete der Ausbau
+   Halstenbek, was Motorrad, Anleihe, Umzug? Steht im Darlehensantrag 2021.
+3. Aufteilung der neuen Posten. Vieles ist schon belegt: Wuttke 2.115,35 EUR,
+   Renovierung 1.260,50 EUR, doppelte Miete.
+4. Gezahlte Zinsen 2024 aus dem DKB-Kontoauszug. Bei 6,4 % ab 30.08. grob
+   700 bis 800 EUR.
+
+---
+
+### Frage 2 — NUeRNBERGER Direktversicherung 1.509,24 EUR
+
+Gefragt ist, ob neben dem Arbeitgeberbeitrag etwas aus dem Netto gezahlt wurde.
+Steht auf der Gehaltsabrechnung ein Abzug „Direktversicherung" oder
+„Entgeltumwandlung" *nach* der Steuerberechnung, dann ja. Steht er davor, war es
+Entgeltumwandlung und bereits steuerfrei — dann: „nur Arbeitgeberbeitrag, keine
+private Zahlung".
+
+---
+
+### Bereits geklaert, falls die ERGO-Rechnung noch einmal kommt
+
+```
+Privat angeschafft, Pendelstrecke. Durch Entfernungspauschale abgegolten, nicht zusaetzlich ansetzen.
+```
+
+---
+
+## Neu aufgetaucht: Kitagebuehren
+
+Beim Darlehen als Verwendungszweck genannt — und selbst absetzbar, unabhaengig
+vom Kredit: **zwei Drittel der Kinderbetreuungskosten, hoechstens 4.000 EUR je
+Kind** (§ 10 Abs. 1 Nr. 5 EStG, Stand 2024; ab 2025 sind es 80 % und 4.800 EUR).
+
+In den offenen Punkten steht bereits „Tatsaechliche Zahlungsnachweise/
+Kontoauszuege fuer 2024 gezahlte Kita-/Elternbeitraege". Das gehoert zu den
+Dingen, die sich wirklich lohnen — anders als die 29,99-EUR-Abos.
 
 ---
 
