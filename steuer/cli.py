@@ -1476,6 +1476,50 @@ def befehl_liste(args: argparse.Namespace) -> int:
     return 0
 
 
+def befehl_anmerkungen(args: argparse.Namespace) -> int:
+    """Zeigt, was tatsaechlich als Anmerkung gespeichert ist.
+
+    Wer ueber Wochen in kurzen Abschnitten arbeitet, muss nachsehen koennen, was
+    davon angekommen ist. Ohne diese Anzeige bleibt nur der Glaube daran, und
+    eine verlorene Antwort faellt erst dem Steuerberater auf.
+    """
+    mappe = _mappe_oeffnen(args)
+    ansicht = mappe.jahresansicht()
+    mit_notiz = [d for d in ansicht.eigene if d.notiz]
+
+    offen = 0
+    for dokument in ansicht.eigene:
+        if not dokument.analyse or dokument.notiz:
+            continue
+        if any(_offen_thema(f)[0] == "frage" for f in dokument.analyse.fehlende_nachweise):
+            offen += 1
+
+    if not mit_notiz:
+        print(f"Keine Anmerkungen gespeichert (Veranlagung {mappe.jahr}).")
+        if offen:
+            print(f"{offen} Rueckfragen warten. Beantworten mit: steuer beantworten")
+        return 0
+
+    print(f"{len(mit_notiz)} Anmerkungen, Veranlagung {mappe.jahr}:\n")
+    for dokument in sorted(mit_notiz, key=lambda d: d.dateiname):
+        analyse = dokument.analyse
+        betrag = (analyse.betrag_abzugsfaehig or analyse.betrag_gesamt) if analyse else None
+        kopf = _belegname(dokument)
+        if betrag:
+            kopf += f"  ({euro(betrag)})"
+        print(f"  {kopf}")
+        print(f"      {dokument.notiz}")
+        if _sieht_aus_wie_befehl(dokument.notiz):
+            print("      ACHTUNG: sieht nach einer eingefuegten Konsolenzeile aus.")
+        print()
+
+    print(f"{offen} Rueckfragen sind noch offen.")
+    if offen:
+        print("Weiter mit: steuer beantworten")
+    print("Aendern oder loeschen: steuer beantworten --erneut ('-' loescht)")
+    return 0
+
+
 def befehl_recht_zeigen(args: argparse.Namespace) -> int:
     jahr = args.jahr or _mappe_oeffnen(args).jahr
     regelwerk = rules.laden(jahr)
@@ -1805,6 +1849,12 @@ def parser_bauen() -> argparse.ArgumentParser:
         help="Auch auswerten, wenn die Mappe nicht nach einer Betriebsmappe aussieht.",
     )
     p.set_defaults(funktion=befehl_euer)
+
+    p = unter.add_parser(
+        "anmerkungen",
+        help="Zeigen, welche eigenen Antworten gespeichert sind.",
+    )
+    p.set_defaults(funktion=befehl_anmerkungen)
 
     p = unter.add_parser("recht-zeigen", help="Hinterlegten Rechtsstand anzeigen.")
     p.add_argument("--jahr", type=int)

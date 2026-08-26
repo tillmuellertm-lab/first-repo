@@ -342,3 +342,44 @@ def test_kleinbetraege_bleiben_standardmaessig_aussen_vor(tmp_path, capsys, monk
     ausgabe = capsys.readouterr().out
     assert "1 offene Punkte" in ausgabe
     assert "1 weitere Fragen betreffen Betraege unter" in ausgabe
+
+
+# --- Nachsehen, was gespeichert ist ------------------------------------------
+
+
+def test_anmerkungen_zeigen_was_gespeichert_wurde(tmp_path, capsys):
+    """Wer in kurzen Abschnitten arbeitet, muss nachsehen koennen."""
+    from steuer.cli import befehl_anmerkungen
+
+    mappe = _mappe_mit_fragen(tmp_path)
+    mappe.dokumente[0].notiz = "beruflich, fuer die Wohnungssuche in Koeln"
+    mappe.speichern()
+
+    befehl_anmerkungen(argparse.Namespace(mappe=str(mappe.wurzel), jahr=None))
+    ausgabe = capsys.readouterr().out
+
+    assert "1 Anmerkungen" in ausgabe
+    assert "beruflich, fuer die Wohnungssuche in Koeln" in ausgabe
+    assert "1 Rueckfragen sind noch offen" in ausgabe
+
+
+def test_leere_mappe_nennt_die_offenen_rueckfragen(tmp_path, capsys):
+    from steuer.cli import befehl_anmerkungen
+
+    mappe = _mappe_mit_fragen(tmp_path)
+    befehl_anmerkungen(argparse.Namespace(mappe=str(mappe.wurzel), jahr=None))
+    ausgabe = capsys.readouterr().out
+    assert "Keine Anmerkungen gespeichert" in ausgabe
+    assert "2 Rueckfragen warten" in ausgabe
+
+
+def test_versehentlich_gespeicherter_befehl_wird_markiert(tmp_path, capsys):
+    """Die alte Fehleingabe muss auffindbar bleiben, nicht nur verhindert."""
+    from steuer.cli import befehl_anmerkungen
+
+    mappe = _mappe_mit_fragen(tmp_path)
+    mappe.dokumente[0].notiz = "git pull origin claude/tax-return-document-tool-jesqdh"
+    mappe.speichern()
+
+    befehl_anmerkungen(argparse.Namespace(mappe=str(mappe.wurzel), jahr=None))
+    assert "ACHTUNG: sieht nach einer eingefuegten Konsolenzeile aus" in capsys.readouterr().out
