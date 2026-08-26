@@ -418,6 +418,84 @@ def _dokumentwarnungen(dokumente: list[Dokument], jahr: int, regelwerk: Regelwer
     return befunde
 
 
+def _kinderbetreuung_pruefen(
+    dokumente: list[Dokument], regelwerk: Regelwerk, profil: Profil
+) -> list[Befund]:
+    """Rechnet die Kinderbetreuungskosten vor, statt sie liegenzulassen.
+
+    Zwei Drittel der Aufwendungen sind Sonderausgaben, hoechstens 4.000 EUR je
+    Kind (§ 10 Abs. 1 Nr. 5 EStG). Das Regelwerk kannte diese Werte laengst,
+    aber niemand hat sie je angewandt: In den Kennzahlen tauchten
+    Kita-Beitraege gar nicht auf. Ein Betrag, den das Werkzeug liest und dann
+    verschweigt, ist schlimmer als einer, den es nie gesehen hat.
+    """
+    if not profil.hat("kinder"):
+        return []
+    belege = [
+        d
+        for d in dokumente
+        if d.wirksame_kategorie == "kinder"
+        and d.analyse
+        and (d.analyse.betrag_gesamt or d.analyse.betrag_abzugsfaehig)
+    ]
+    if not belege:
+        return []
+
+    # Der Gesamtbetrag des Belegs, nicht ein vom Modell geschaetzter Anteil:
+    # Was abzugsfaehig ist, entscheidet die Aufteilung, nicht eine Annahme.
+    summe = round(sum(float(d.analyse.betrag_gesamt or d.analyse.betrag_abzugsfaehig or 0.0) for d in belege), 2)
+    if not summe:
+        return []
+
+    eintrag = regelwerk.eintrag("kinderbetreuungskosten") or {}
+    anteil = float(eintrag.get("abziehbarer_anteil") or 0) or 2 / 3
+    hoechstbetrag = float(eintrag.get("max_abzug") or 0)
+    abziehbar = round(summe * anteil, 2)
+    grenze = hoechstbetrag * max(1, profil.anzahl_kinder) if hoechstbetrag else 0.0
+    gedeckelt = min(abziehbar, grenze) if grenze else abziehbar
+
+    text = [
+        f"{len(belege)} Belege ergeben {euro(summe)}. Zwei Drittel davon sind "
+        f"Sonderausgaben: {euro(abziehbar)}.",
+    ]
+    if grenze and abziehbar > grenze:
+        text.append(
+            f"Begrenzt auf {euro(grenze)} ({euro(hoechstbetrag)} je Kind bei "
+            f"{profil.anzahl_kinder} Kindern)."
+        )
+    text.append(
+        "Nicht abzugsfaehig sind Verpflegung sowie Unterricht und die Vermittlung "
+        "besonderer Faehigkeiten. Steht auf der Bescheinigung ein Sammelposten ohne "
+        "Aufschluesselung, ist beim Traeger nachzufragen, was er abdeckt - schaetzen "
+        "hilft hier nicht, das Finanzamt verlangt die Aufteilung."
+    )
+    bar = [d for d in belege if d.analyse and d.analyse.zahlungsart == "bar"]
+    if bar:
+        text.append(
+            f"ACHTUNG: {len(bar)} Belege sind als Barzahlung erfasst. Bar gezahlte "
+            "Betreuungskosten sind vollstaendig verloren; verlangt wird die Zahlung "
+            "auf das Konto des Erbringers."
+        )
+    else:
+        text.append(
+            "Der Zahlungsnachweis ist hier zwingend, nicht optional: Rechnung und "
+            "unbare Zahlung sind Abzugsvoraussetzung."
+        )
+
+    return [
+        Befund(
+            art="chance",
+            id="kinderbetreuungskosten",
+            titel="Kinderbetreuungskosten als Sonderausgaben ansetzen",
+            beschreibung=" ".join(text),
+            anlage="Anlage Kind",
+            prioritaet="hoch",
+            potenzial_eur=round(gedeckelt, 2),
+            betroffene_dokumente=[d.id for d in belege],
+        )
+    ]
+
+
 def _fahrzeugkosten_pruefen(dokumente: list[Dokument], profil: Profil) -> list[Befund]:
     """Warnt, wenn Fahrzeugkosten neben der Entfernungspauschale stehen.
 
@@ -891,6 +969,7 @@ def auswerten(
     befunde.extend(_rechnerische_chancen(zahlen, regelwerk, profil))
     befunde.extend(_dokumentwarnungen(dokumente, regelwerk.jahr, regelwerk))
     befunde.extend(_fahrzeugkosten_pruefen(dokumente, profil))
+    befunde.extend(_kinderbetreuung_pruefen(dokumente, regelwerk, profil))
     befunde.extend(_dubletten_pruefen(dokumente))
     befunde.extend(_frist_pruefen(regelwerk, heute))
     befunde.extend(_stammdaten_hinweis(stammdaten))

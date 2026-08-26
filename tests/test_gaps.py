@@ -294,3 +294,68 @@ def test_belege_ohne_betrag_loesen_keine_warnung_aus():
     ohne_betrag.analyse.betrag_gesamt = None
     auswertung = gaps.auswerten([ohne_betrag], REGELWERK, profil)
     assert not [b for b in auswertung.warnungen if b.id == "fahrzeugkosten_neben_entfernungspauschale"]
+
+
+# --- Kinderbetreuungskosten --------------------------------------------------
+
+
+def _kitabeleg(betrag: float, kennung: str, zahlungsart: str = "unbar") -> Dokument:
+    doc = Dokument(id=kennung, dateiname=f"{kennung}.pdf")
+    doc.analyse = Analyse(
+        kategorie_id="kinder",
+        dokumenttyp="Elternbeitragsnachweis",
+        aussteller="Rahn Education",
+        eignung="bedingt_geeignet",
+        betrag_gesamt=betrag,
+        zahlungsart=zahlungsart,
+    )
+    return doc
+
+
+def test_kinderbetreuungskosten_werden_vorgerechnet():
+    """Zwei Drittel als Sonderausgaben - § 10 Abs. 1 Nr. 5 EStG."""
+    profil = Profil(merkmale=["angestellt", "kinder"], anzahl_kinder=2)
+    belege = [_kitabeleg(2581.20, "carl"), _kitabeleg(1956.80, "martha")]
+    auswertung = gaps.auswerten(belege, REGELWERK, profil)
+
+    treffer = [b for b in auswertung.chancen if b.id == "kinderbetreuungskosten"]
+    assert treffer, "4.538 EUR Kita-Kosten duerfen nicht unerwaehnt bleiben"
+    befund = treffer[0]
+    # 4.538,00 * 2/3 = 3.025,33
+    assert 3020 < (befund.potenzial_eur or 0) < 3030, befund.potenzial_eur
+    assert "4.538,00" in befund.beschreibung
+    assert "besonderer Faehigkeiten" in befund.beschreibung
+    assert set(befund.betroffene_dokumente) == {"carl", "martha"}
+
+
+def test_der_gesamtbetrag_zaehlt_nicht_ein_geschaetzter_anteil():
+    """Ein vom Modell geratener Anteil darf die Rechnung nicht verfaelschen."""
+    profil = Profil(merkmale=["kinder"], anzahl_kinder=1)
+    beleg = _kitabeleg(2581.20, "carl")
+    beleg.analyse.betrag_abzugsfaehig = 2323.08  # 90 % - eine reine Annahme
+    auswertung = gaps.auswerten([beleg], REGELWERK, profil)
+
+    befund = next(b for b in auswertung.chancen if b.id == "kinderbetreuungskosten")
+    assert "2.581,20" in befund.beschreibung, "der Belegbetrag zaehlt, nicht die Schaetzung"
+
+
+def test_barzahlung_wird_deutlich_gemeldet():
+    profil = Profil(merkmale=["kinder"], anzahl_kinder=1)
+    auswertung = gaps.auswerten([_kitabeleg(2581.20, "bar", zahlungsart="bar")], REGELWERK, profil)
+    befund = next(b for b in auswertung.chancen if b.id == "kinderbetreuungskosten")
+    assert "vollstaendig verloren" in befund.beschreibung
+
+
+def test_hoechstbetrag_je_kind_wird_beachtet():
+    profil = Profil(merkmale=["kinder"], anzahl_kinder=1)
+    auswertung = gaps.auswerten([_kitabeleg(12000.0, "teuer")], REGELWERK, profil)
+    befund = next(b for b in auswertung.chancen if b.id == "kinderbetreuungskosten")
+    # 12.000 * 2/3 = 8.000, gedeckelt auf 4.000 bei einem Kind
+    assert befund.potenzial_eur == 4000.0
+    assert "Begrenzt auf" in befund.beschreibung
+
+
+def test_ohne_kinder_keine_rechnung():
+    profil = Profil(merkmale=["angestellt"])
+    auswertung = gaps.auswerten([_kitabeleg(2581.20, "carl")], REGELWERK, profil)
+    assert not [b for b in auswertung.chancen if b.id == "kinderbetreuungskosten"]
