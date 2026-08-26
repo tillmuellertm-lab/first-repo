@@ -418,6 +418,117 @@ def _dokumentwarnungen(dokumente: list[Dokument], jahr: int, regelwerk: Regelwer
     return befunde
 
 
+# Belegarten, die eine Fehlanzeige aufloesen koennen: (Bezeichnung, wonach die
+# Fehlanzeige klingt, woran der vorhandene Beleg zu erkennen ist).
+# Die Analyse prueft jedes Dokument fuer sich allein und kann deshalb nicht
+# wissen, dass die vermisste Unterlage zwei Ordner weiter liegt. Sie fordert
+# dann etwas an, was laengst da ist - und der Mandant sucht danach.
+BELEGARTEN: tuple[tuple[str, str, str], ...] = (
+    ("Lohnsteuerbescheinigung", r"lohnsteuerbescheinigung", r"lohnsteuerbescheinigung"),
+    ("Gehaltsabrechnung", r"gehalts(abrechnung|nachweis)|lohnabrechnung|lohn-/gehalt|entgeltabrechnung",
+     r"gehaltsabrechnung|lohnabrechnung|entgeltabrechnung|verdienstabrechnung"),
+    ("Kontoauszug", r"kontoausz|zahlungsnachweis|ueberweisungsbeleg|lastschrift|einzahlungsquittung",
+     r"kontoausz|finanzreport|umsatzuebersicht|kontoumsaetze"),
+    ("Steuerbescheinigung der Bank", r"jahressteuerbescheinigung|steuerbescheinigung|ertraegnisaufstellung",
+     r"steuerbescheinigung|ertraegnisaufstellung"),
+    ("Einnahmen-Ueberschuss-Rechnung", r"e[uü]er|einnahmen-?ueberschuss|gewinnermittlung",
+     r"e[uü]er|einnahmen-?ueberschuss|gewinnermittlung"),
+    ("Mietvertrag", r"mietvertrag", r"mietvertrag"),
+    ("Nebenkostenabrechnung", r"nebenkostenabrechnung|betriebskostenabrechnung",
+     r"nebenkostenabrechnung|betriebskostenabrechnung"),
+    ("Rechnung des Umzugsunternehmens", r"umzugsunternehmen|spedition|umzugsrechnung",
+     r"umzugsunternehmen|spedition|umzuege|umzug"),
+    ("Elternbeitragsnachweis", r"kita|elternbeitrag|kinderbetreuung|betreuungskosten",
+     r"elternbeitrag|kindertagesst|kita|betreuungsvertrag"),
+    ("Arbeitsvertrag", r"arbeitsvertrag|anstellungsvertrag|dienstwagenueberlassung",
+     r"arbeitsvertrag|anstellungsvertrag|ueberlassungsvertrag"),
+    ("Grundsteuerbescheid", r"grundsteuerbescheid", r"grundsteuer"),
+    ("Versicherungsbescheinigung", r"beitragsbescheinigung|jahresbeitrag|standmitteilung",
+     r"beitragsbescheinigung|standmitteilung|jahresbescheinigung"),
+)
+
+
+def _ohne_umlaute(text: str) -> str:
+    for alt, neu in (("ä", "ae"), ("ö", "oe"), ("ü", "ue"), ("ß", "ss")):
+        text = text.replace(alt, neu)
+    return text
+
+
+def _belegtext(dokument: Dokument) -> str:
+    analyse = dokument.analyse
+    teile = [dokument.dateiname, dokument.zieldateiname]
+    if analyse:
+        teile += [analyse.dokumenttyp, analyse.aussteller, analyse.zusammenfassung]
+    return _ohne_umlaute(" ".join(t for t in teile if t).lower())
+
+
+def _bestand_abgleichen(dokumente: list[Dokument]) -> list[Befund]:
+    """Meldet Fehlanzeigen, die ein anderer Beleg der Mappe bereits abdeckt.
+
+    Jedes Dokument wird einzeln geprueft; das Modell sieht dabei nur dieses eine
+    Blatt. Es fordert deshalb Unterlagen an, die in derselben Mappe liegen - die
+    Standmitteilung verlangt die Gehaltsabrechnung, das Teildokument der EUeR
+    verlangt die EUeR. Wer dem nachgeht, sucht nach etwas, das er schon hat.
+
+    Der Abgleich loescht nichts. Er sagt nur, wo sich das Nachfragen erledigt
+    haben duerfte - die Entscheidung bleibt beim Menschen.
+    """
+    import re as _re
+
+    treffer: list[tuple[str, str, str, str]] = []
+    for dokument in dokumente:
+        if not dokument.analyse:
+            continue
+        for fehlend in dokument.analyse.fehlende_nachweise:
+            gesucht = _ohne_umlaute(fehlend.lower())
+            for bezeichnung, muster_frage, muster_beleg in BELEGARTEN:
+                if not _re.search(muster_frage, gesucht):
+                    continue
+                deckung = [
+                    d
+                    for d in dokumente
+                    if d.id != dokument.id and _re.search(muster_beleg, _belegtext(d))
+                ]
+                if deckung:
+                    quelle = deckung[0]
+                    name = (
+                        quelle.analyse.dokumenttyp
+                        if quelle.analyse and quelle.analyse.dokumenttyp
+                        else quelle.dateiname
+                    )
+                    treffer.append((dokument.id, bezeichnung, fehlend, name))
+                break
+
+    if not treffer:
+        return []
+
+    zeilen = [
+        f"{len(treffer)} offene Punkte verlangen Unterlagen, die in dieser Mappe "
+        "bereits vorhanden sind. Die Analyse prueft jedes Dokument fuer sich und "
+        "kann das nicht sehen. Vermutlich erledigt:"
+    ]
+    for _, bezeichnung, fehlend, quelle in treffer[:12]:
+        zeilen.append(f"- {bezeichnung}: \"{fehlend[:90]}\" - vorhanden als: {quelle}")
+    if len(treffer) > 12:
+        zeilen.append(f"... und {len(treffer) - 12} weitere.")
+    zeilen.append(
+        "Geprueft wird nur die Belegart, nicht der Inhalt: Ob der vorhandene Beleg "
+        "den richtigen Zeitraum und die richtige Person betrifft, muss ein Mensch "
+        "entscheiden. Deshalb wird hier nichts geloescht."
+    )
+
+    return [
+        Befund(
+            art="hinweis",
+            id="bestand_deckt_offene_punkte",
+            titel="Offene Punkte, die vorhandene Belege abdecken duerften",
+            beschreibung="\n".join(zeilen),
+            prioritaet="niedrig",
+            betroffene_dokumente=sorted({t[0] for t in treffer}),
+        )
+    ]
+
+
 def _kinderbetreuung_pruefen(
     dokumente: list[Dokument], regelwerk: Regelwerk, profil: Profil
 ) -> list[Befund]:
@@ -970,6 +1081,7 @@ def auswerten(
     befunde.extend(_dokumentwarnungen(dokumente, regelwerk.jahr, regelwerk))
     befunde.extend(_fahrzeugkosten_pruefen(dokumente, profil))
     befunde.extend(_kinderbetreuung_pruefen(dokumente, regelwerk, profil))
+    befunde.extend(_bestand_abgleichen(dokumente))
     befunde.extend(_dubletten_pruefen(dokumente))
     befunde.extend(_frist_pruefen(regelwerk, heute))
     befunde.extend(_stammdaten_hinweis(stammdaten))

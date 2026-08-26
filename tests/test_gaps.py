@@ -359,3 +359,75 @@ def test_ohne_kinder_keine_rechnung():
     profil = Profil(merkmale=["angestellt"])
     auswertung = gaps.auswerten([_kitabeleg(2581.20, "carl")], REGELWERK, profil)
     assert not [b for b in auswertung.chancen if b.id == "kinderbetreuungskosten"]
+
+
+# --- Abgleich mit dem vorhandenen Bestand ------------------------------------
+
+
+def _mit_typ(kennung: str, typ: str, fehlt: list[str] | None = None) -> Dokument:
+    doc = Dokument(id=kennung, dateiname=f"{kennung}.pdf")
+    doc.analyse = Analyse(
+        kategorie_id="nichtselbstaendige_arbeit",
+        dokumenttyp=typ,
+        eignung="bedingt_geeignet",
+        fehlende_nachweise=fehlt or [],
+    )
+    return doc
+
+
+def test_vorhandener_beleg_erledigt_die_fehlanzeige():
+    """Die Standmitteilung verlangt eine Gehaltsabrechnung, die daneben liegt."""
+    profil = Profil(merkmale=["angestellt"])
+    dokumente = [
+        _mit_typ("stand", "Standmitteilung Direktversicherung",
+                 ["Lohn-/Gehaltsabrechnungen 2024 zum Abgleich der Dienstwagen-Versteuerung"]),
+        _mit_typ("lohn", "Gehaltsabrechnung"),
+    ]
+    auswertung = gaps.auswerten(dokumente, REGELWERK, profil)
+
+    befund = next(b for b in auswertung.befunde if b.id == "bestand_deckt_offene_punkte")
+    assert "Gehaltsabrechnung" in befund.beschreibung
+    assert befund.betroffene_dokumente == ["stand"]
+
+
+def test_ohne_deckung_kein_hinweis():
+    """Was wirklich fehlt, darf nicht als erledigt erscheinen."""
+    profil = Profil(merkmale=["angestellt"])
+    dokumente = [_mit_typ("stand", "Standmitteilung", ["Lohnsteuerbescheinigung 2024 fehlt"])]
+    auswertung = gaps.auswerten(dokumente, REGELWERK, profil)
+    assert not [b for b in auswertung.befunde if b.id == "bestand_deckt_offene_punkte"]
+
+
+def test_ein_dokument_deckt_sich_nicht_selbst():
+    """Sonst erklaerte die Lohnsteuerbescheinigung ihre eigene Fehlanzeige fuer erledigt."""
+    profil = Profil(merkmale=["angestellt"])
+    dokumente = [_mit_typ("eine", "Lohnsteuerbescheinigung", ["Lohnsteuerbescheinigung fehlt"])]
+    auswertung = gaps.auswerten(dokumente, REGELWERK, profil)
+    assert not [b for b in auswertung.befunde if b.id == "bestand_deckt_offene_punkte"]
+
+
+def test_umlaute_stehen_dem_abgleich_nicht_im_weg():
+    profil = Profil(merkmale=["angestellt"])
+    dokumente = [
+        _mit_typ("beleg", "Rechnung", ["Zahlungsnachweis (Kontoauszug/Überweisungsbeleg)"]),
+        _mit_typ("auszug", "Bankauszug / Finanzreport"),
+    ]
+    auswertung = gaps.auswerten(dokumente, REGELWERK, profil)
+    befund = next(b for b in auswertung.befunde if b.id == "bestand_deckt_offene_punkte")
+    assert "Kontoauszug" in befund.beschreibung
+
+
+def test_der_hinweis_loescht_nichts():
+    """Der Abgleich prueft die Belegart, nicht den Inhalt - er darf nur raten."""
+    profil = Profil(merkmale=["angestellt"])
+    dokumente = [
+        _mit_typ("a", "Standmitteilung", ["Gehaltsabrechnung fehlt"]),
+        _mit_typ("b", "Gehaltsabrechnung"),
+    ]
+    auswertung = gaps.auswerten(dokumente, REGELWERK, profil)
+    befund = next(b for b in auswertung.befunde if b.id == "bestand_deckt_offene_punkte")
+
+    assert befund.art == "hinweis" and befund.prioritaet == "niedrig"
+    assert "muss ein Mensch" in befund.beschreibung
+    # Die Fehlanzeige am Dokument bleibt unangetastet.
+    assert dokumente[0].analyse.fehlende_nachweise == ["Gehaltsabrechnung fehlt"]
