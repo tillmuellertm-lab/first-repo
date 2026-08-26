@@ -213,3 +213,53 @@ ul.fehlt li { color: var(--achtung); }
 .stammwert:last-child { border-bottom: none; }
 .stammwert small { display: block; color: var(--gedaempft); margin-top: .2rem; }
 .stammwert small.bestaetigt { font-style: italic; }
+
+
+/* --- Rueckfragen: eine Karte je Beleg, Antwortfeld direkt darunter -------- */
+
+.frage {
+  border: 1px solid var(--rand, #d8d8d8);
+  border-radius: 8px;
+  padding: 1rem 1.1rem;
+  margin: 0 0 1rem;
+  background: var(--flaeche, #fff);
+}
+
+.frage.beantwortet { opacity: .75; }
+
+.frage-kopf {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: .6rem;
+  margin-bottom: .3rem;
+}
+
+.frage-kopf a { font-weight: 600; }
+.frage-kopf .betrag { margin-left: auto; font-variant-numeric: tabular-nums; }
+
+.fragenliste {
+  margin: .5rem 0 .7rem;
+  padding-left: 1.2rem;
+}
+
+.fragenliste li { margin-bottom: .25rem; }
+
+.frage textarea {
+  width: 100%;
+  box-sizing: border-box;
+  font: inherit;
+  padding: .5rem .6rem;
+  border: 1px solid var(--rand, #d8d8d8);
+  border-radius: 6px;
+  resize: vertical;
+}
+
+/* Der Speichern-Knopf bleibt sichtbar, auch wenn die Liste lang ist. */
+.knopfreihe.haftend {
+  position: sticky;
+  bottom: 0;
+  padding: .8rem 0;
+  background: var(--hintergrund, #fff);
+  border-top: 1px solid var(--rand, #d8d8d8);
+}

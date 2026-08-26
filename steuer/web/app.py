@@ -16,7 +16,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Any
 
-from .. import gaps, organize, report, rules, stammdaten as stammdaten_modul, taxonomy
+from .. import gaps, offen as offen_modul, organize, report, rules, stammdaten as stammdaten_modul, taxonomy
 from ..formatierung import eingabewert, euro, zahl_lesen
 from ..analyze import (
     AUSWAHL_DOKUMENT,
@@ -239,6 +239,60 @@ def anwendung_bauen(mappe: Arbeitsmappe) -> Any:
             stammdaten=daten,
             gespeichert=request.args.get("gespeichert"),
             fehler=None,
+        )
+
+    @app.route("/rueckfragen", methods=["GET", "POST"])
+    def rueckfragen():
+        """Alle offenen Rueckfragen auf einer Seite, jede mit eigenem Feld.
+
+        In der Konsole werden die Fragen nacheinander gestellt; zurueck kommt man
+        nur ueber einen Neustart. Wer in kurzen Abschnitten arbeitet, braucht
+        stattdessen eine Seite, auf der alles nebeneinander steht und in
+        beliebiger Reihenfolge beantwortet werden kann.
+        """
+        if request.method == "POST":
+            geaendert = 0
+            for schluessel, wert in request.form.items():
+                if not schluessel.startswith("notiz-"):
+                    continue
+                eintrag = mappe.dokument(schluessel[len("notiz-"):])
+                if eintrag is None:
+                    continue
+                neuer_text = wert.strip()
+                if neuer_text != eintrag.notiz:
+                    eintrag.notiz = neuer_text
+                    geaendert += 1
+            if geaendert:
+                mappe.speichern()
+            return redirect(url_for("rueckfragen", gespeichert=geaendert))
+
+        offen, erledigt = [], []
+        for dokument in mappe.jahresansicht().eigene:
+            if not dokument.analyse:
+                continue
+            fragen = [
+                text.strip()
+                for text in dokument.analyse.fehlende_nachweise
+                if text.strip() and offen_modul.thema(text)[0] == "frage"
+            ]
+            if not fragen:
+                continue
+            analyse = dokument.analyse
+            betrag = analyse.betrag_abzugsfaehig or analyse.betrag_gesamt or 0.0
+            eintrag = {"dokument": dokument, "fragen": fragen, "betrag": betrag}
+            (erledigt if dokument.notiz else offen).append(eintrag)
+
+        # Teuerster Beleg zuerst: Dieselbe Minute Arbeit bringt bei 35.000 EUR
+        # tausendmal mehr als bei einem Abo ueber 29,99 EUR.
+        for liste in (offen, erledigt):
+            liste.sort(key=lambda e: -abs(float(e["betrag"] or 0)))
+
+        return render_template(
+            "rueckfragen.html",
+            **grunddaten(),
+            offen=offen,
+            erledigt=erledigt,
+            gespeichert=request.args.get("gespeichert", type=int),
         )
 
     @app.route("/dokument/<dokument_id>", methods=["GET", "POST"])

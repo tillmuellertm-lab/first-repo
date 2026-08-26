@@ -10,7 +10,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
-from . import euer, gaps, organize, report, rules, stammdaten, taxonomy
+from . import euer, gaps, offen, organize, report, rules, stammdaten, taxonomy
 from .formatierung import eingabewert, euro, zahl_lesen
 from .analyze import (
     AUSWAHL_DOKUMENT,
@@ -1173,49 +1173,6 @@ def befehl_typen(args: argparse.Namespace) -> int:
     return 0
 
 
-# Wonach sich die offenen Punkte buendeln lassen. Das Modell formuliert jede
-# Fehlanzeige neu ("Kontoauszug mit tatsaechlicher Abbuchung der vier Raten"),
-# weshalb wortgleiches Gruppieren nichts zusammenbringt: 180 Einzelangaben
-# ergaben 180 Gruppen. Entscheidend ist nicht der Wortlaut, sondern die
-# Besorgung dahinter - und die wiederholt sich sehr wohl.
-# Reihenfolge = Vorrang; die erste zutreffende Zeile gewinnt.
-# Die Muster binden nur am Wortanfang: Im Deutschen wachsen die Woerter
-# hinten weiter ("Kontoauszuege", "Versicherungsbestaetigung"), eine
-# schliessende Wortgrenze wuerde genau diese Faelle verfehlen.
-OFFEN_THEMEN: tuple[tuple[str, str, str], ...] = (
-    ("frage", r"\b(kl[aä]rung|klarstellung|zuordnung|angabe, ob|klären, ob|umrechnen)",
-     "Rueckfrage - keine Besorgung, sondern eine Auskunft von Ihnen"),
-    ("zahlung", r"\b(kontoausz|zahlungsnachweis|[uü]berweisungsbeleg|lastschrift|paypal|"
-                r"abbuchung|einzahlungsquittung|zahlungsbest[aä]tigung)",
-     "Zahlungsnachweis - Kontoauszug oder Ueberweisungsbeleg"),
-    ("lohn", r"\b(lohnsteuerbescheinigung|gehaltsabrechnung|lohnabrechnung|"
-             r"lohn-/gehaltsabrechnung)",
-     "Lohnsteuerbescheinigung oder Gehaltsabrechnung"),
-    ("nebenkosten", r"\b(nebenkostenabrechnung|betriebskostenabrechnung|grundsteuerbescheid)",
-     "Nebenkosten- oder Betriebskostenabrechnung"),
-    ("mietvertrag", r"\b(mietvertrag|renovierungsklausel|renovierungspflicht|"
-                    r"renovierungsverpflichtung|kaution|[uü]bergabeprotokoll)",
-     "Mietvertrag, Kautions- oder Uebergabeunterlagen"),
-    ("arzt", r"\b([aä]rztliche|attest|verordnung|rezept|medizinische[rn]? notwendigkeit|"
-             r"krankenkasse|erstattung)",
-     "Aerztliche Verordnung oder Nachweis der Erstattung"),
-    ("beruflich", r"\b(berufliche[rn]? (veranlassung|nutzung)|betriebliche[rn]? nutzung|"
-                  r"nutzungsanteil|nutzungsnachweis|fahrtenbuch|arbeitgeberbest[aä]tigung)",
-     "Nachweis der beruflichen Veranlassung oder Nutzung"),
-    ("umzug", r"\b(umzugskosten|doppelte[rn]? miete|doppelmiete|bukg)",
-     "Umzugsunterlagen"),
-    ("betrieb", r"\b(e[uü]er|gesch[aä]ftskonto|eingangsrechnung|ausgangsrechnung|"
-                r"abschreibungstabelle|geringwertige)",
-     "Unterlagen aus dem Gewerbe Ihrer Frau"),
-    ("versicherung", r"\b(versicherung|direktversicherung|beitrags|jahrespr[aä]mie|"
-                     r"entgeltumwandlung|bav)",
-     "Bescheinigung der Versicherung"),
-    ("rechnung", r"\b(rechnung|aufschl[uü]sselung|aufteilung|detailaufl|leistungsnachweis|"
-                 r"beitragsrechnung)",
-     "Rechnung oder Aufschluesselung der Posten"),
-)
-
-
 def _belegname(dokument: Dokument) -> str:
     """Der Name, unter dem der Nutzer den Beleg wiedererkennt."""
     analyse = dokument.analyse
@@ -1228,15 +1185,6 @@ def _belegname(dokument: Dokument) -> str:
 def _kurz(text: str, breite: int) -> str:
     text = re.sub(r"\s+", " ", text.strip())
     return text if len(text) <= breite else text[: breite - 1].rstrip() + "…"
-
-
-def _offen_thema(text: str) -> tuple[str, str]:
-    """Ordnet eine Fehlanzeige der Besorgung zu, die sie aufloest."""
-    vereinfacht = re.sub(r"\s+", " ", text.strip().lower())
-    for kennung, muster, beschriftung in OFFEN_THEMEN:
-        if re.search(muster, vereinfacht):
-            return kennung, beschriftung
-    return "sonstiges", "Sonstiges - Einzelfaelle ohne gemeinsame Ursache"
 
 
 def befehl_offen(args: argparse.Namespace) -> int:
@@ -1261,7 +1209,7 @@ def befehl_offen(args: argparse.Namespace) -> int:
             text = fehlend.strip()
             if not text:
                 continue
-            kennung, beschriftung = _offen_thema(text)
+            kennung, beschriftung = offen.thema(text)
             beschriftungen[kennung] = beschriftung
             gruppen.setdefault(kennung, []).append((text, dokument))
 
@@ -1377,7 +1325,7 @@ def befehl_beantworten(args: argparse.Namespace) -> int:
         fragen = [
             text.strip()
             for text in dokument.analyse.fehlende_nachweise
-            if text.strip() and _offen_thema(text)[0] == args.thema
+            if text.strip() and offen.thema(text)[0] == args.thema
         ]
         # Wer gezielt einen Beleg aufruft, will ihn sehen - auch wenn schon eine
         # Antwort daran haengt und auch wenn der Betrag klein ist.
@@ -1508,17 +1456,17 @@ def befehl_anmerkungen(args: argparse.Namespace) -> int:
     ansicht = mappe.jahresansicht()
     mit_notiz = [d for d in ansicht.eigene if d.notiz]
 
-    offen = 0
+    noch_offen = 0
     for dokument in ansicht.eigene:
         if not dokument.analyse or dokument.notiz:
             continue
-        if any(_offen_thema(f)[0] == "frage" for f in dokument.analyse.fehlende_nachweise):
-            offen += 1
+        if any(offen.thema(f)[0] == "frage" for f in dokument.analyse.fehlende_nachweise):
+            noch_offen += 1
 
     if not mit_notiz:
         print(f"Keine Anmerkungen gespeichert (Veranlagung {mappe.jahr}).")
-        if offen:
-            print(f"{offen} Rueckfragen warten. Beantworten mit: steuer beantworten")
+        if noch_offen:
+            print(f"{noch_offen} Rueckfragen warten. Beantworten mit: steuer beantworten")
         return 0
 
     print(f"{len(mit_notiz)} Anmerkungen, Veranlagung {mappe.jahr}:\n")
@@ -1534,8 +1482,8 @@ def befehl_anmerkungen(args: argparse.Namespace) -> int:
             print("      ACHTUNG: sieht nach einer eingefuegten Konsolenzeile aus.")
         print()
 
-    print(f"{offen} Rueckfragen sind noch offen.")
-    if offen:
+    print(f"{noch_offen} Rueckfragen sind noch offen.")
+    if noch_offen:
         print("Weiter mit: steuer beantworten")
     print("Aendern oder loeschen: steuer beantworten --erneut ('-' loescht)")
     return 0

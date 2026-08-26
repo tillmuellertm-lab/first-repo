@@ -239,3 +239,80 @@ def test_modellwahl_der_gesamtauswertung_wird_gemerkt(klient):
         time.sleep(0.05)
     geladen = Arbeitsmappe.laden(klient.mappe.wurzel)
     assert geladen.einstellungen["modell_strategie"] == "claude-fable-5"
+
+
+# --- Rueckfragen im Browser --------------------------------------------------
+
+
+@pytest.fixture
+def mappe_mit_fragen(mappe: Arbeitsmappe, tmp_path: Path) -> Arbeitsmappe:
+    for name, betrag, frage in (
+        ("darlehen.txt", 35000.0, "Klärung, ob und in welcher Höhe Zinsen anzusetzen sind"),
+        ("abo.txt", 29.99, "Zuordnung, ob das Abo der Wohnungssuche diente"),
+    ):
+        quelle = tmp_path / name
+        quelle.write_text(name, encoding="utf-8")
+        dokument, _ = mappe.datei_aufnehmen(quelle, herkunft_jahr=2024)
+        dokument.analyse = Analyse(
+            kategorie_id="werbungskosten_sonstige",
+            dokumenttyp=name,
+            betrag_gesamt=betrag,
+            steuerjahr=2024,
+            fehlende_nachweise=[frage],
+        )
+    mappe.speichern()
+    return mappe
+
+
+def test_rueckfragen_seite_zeigt_teuersten_beleg_zuerst(mappe_mit_fragen):
+    app = anwendung_bauen(mappe_mit_fragen)
+    app.config["TESTING"] = True
+    with app.test_client() as klient:
+        text = klient.get("/rueckfragen").get_data(as_text=True)
+
+    assert "Klärung, ob und in welcher Höhe Zinsen" in text
+    # Die Handwerkerrechnung vermisst ein Dokument, keine Auskunft.
+    assert "Kontoauszug zur Ueberweisung" not in text
+    assert text.index("darlehen.txt") < text.index("abo.txt")
+
+
+def test_antworten_lassen_sich_gesammelt_speichern(mappe_mit_fragen):
+    app = anwendung_bauen(mappe_mit_fragen)
+    app.config["TESTING"] = True
+    darlehen = next(d for d in mappe_mit_fragen.dokumente if d.dateiname == "darlehen.txt")
+
+    with app.test_client() as klient:
+        antwort = klient.post(
+            "/rueckfragen",
+            data={f"notiz-{darlehen.id}": "Umschuldung, Zinsen anteilig"},
+            follow_redirects=True,
+        )
+    assert antwort.status_code == 200
+
+    wieder = Arbeitsmappe.laden(mappe_mit_fragen.wurzel)
+    gespeichert = next(d for d in wieder.dokumente if d.dateiname == "darlehen.txt")
+    assert gespeichert.notiz == "Umschuldung, Zinsen anteilig"
+
+
+def test_leeres_feld_loescht_die_antwort(mappe_mit_fragen):
+    app = anwendung_bauen(mappe_mit_fragen)
+    app.config["TESTING"] = True
+    darlehen = next(d for d in mappe_mit_fragen.dokumente if d.dateiname == "darlehen.txt")
+    darlehen.notiz = "falsche Antwort"
+    mappe_mit_fragen.speichern()
+
+    with app.test_client() as klient:
+        klient.post("/rueckfragen", data={f"notiz-{darlehen.id}": "  "}, follow_redirects=True)
+
+    wieder = Arbeitsmappe.laden(mappe_mit_fragen.wurzel)
+    assert not next(d for d in wieder.dokumente if d.dateiname == "darlehen.txt").notiz
+
+
+def test_rueckfragen_seite_haelt_auch_leere_mappe_aus(tmp_path):
+    leer = Arbeitsmappe.anlegen(tmp_path / "leer", 2024, Profil(veranlagungsjahr=2024))
+    app = anwendung_bauen(leer)
+    app.config["TESTING"] = True
+    with app.test_client() as klient:
+        antwort = klient.get("/rueckfragen")
+    assert antwort.status_code == 200
+    assert "Keine offenen Rueckfragen" in antwort.get_data(as_text=True)

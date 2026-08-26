@@ -10,7 +10,8 @@ from pathlib import Path
 
 import pytest
 
-from steuer.cli import OFFEN_THEMEN, _offen_thema, befehl_offen
+from steuer.cli import befehl_offen
+from steuer.offen import OFFEN_THEMEN, thema as _offen_thema
 from steuer.models import Analyse
 from steuer.workspace import Arbeitsmappe
 
