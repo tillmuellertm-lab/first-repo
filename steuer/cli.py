@@ -1360,8 +1360,18 @@ def befehl_beantworten(args: argparse.Namespace) -> int:
     uebergangene_summe = 0.0
     nur = (args.nur or "").strip().lower()
     for dokument in dokumente:
-        if nur and not (
-            dokument.id.startswith(nur) or nur in dokument.dateiname.lower()
+        # Angezeigt wird der aufbereitete Name, gesucht werden muss aber auch im
+        # Originalnamen - und im Dokumenttyp, denn der steht in der Kopfzeile.
+        if nur and not any(
+            nur in feld.lower()
+            for feld in (
+                dokument.id,
+                dokument.dateiname,
+                dokument.zieldateiname,
+                dokument.analyse.dokumenttyp,
+                dokument.analyse.aussteller,
+            )
+            if feld
         ):
             continue
         fragen = [

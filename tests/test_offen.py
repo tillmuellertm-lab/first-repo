@@ -432,3 +432,32 @@ def test_unbekannter_beleg_meldet_sich_deutlich(tmp_path, capsys):
     )
     assert code == 1
     assert "Kein Beleg zu 'gibtsnicht'" in capsys.readouterr().out
+
+
+def test_nur_findet_den_beleg_unter_seinem_angezeigten_namen(tmp_path, capsys, monkeypatch):
+    """Angezeigt wird der aufbereitete Name - danach wird auch gesucht."""
+    from steuer.cli import befehl_beantworten
+
+    mappe = Arbeitsmappe.anlegen(tmp_path / "mappe", 2024)
+    pfad = tmp_path / "scan0007.pdf"
+    pfad.write_text("x", encoding="utf-8")
+    dokument, _ = mappe.datei_aufnehmen(pfad, herkunft_jahr=2024)
+    dokument.analyse = Analyse(
+        kategorie_id="sonderausgaben",
+        dokumenttyp="Elternbeitragsnachweis Kindertagesstaette",
+        aussteller="Rahn Education",
+        betrag_gesamt=2323.08,
+        fehlende_nachweise=["Klärung, ob Konzeptbeitrag Verpflegungsanteile enthält"],
+    )
+    dokument.zieldateiname = "03_2025-03-17_Elternbeitragsnachweis-Kindertagesstaett.pdf"
+    mappe.speichern()
+
+    for suchwort in ("Elternbeitragsnachweis", "rahn", "scan0007"):
+        monkeypatch.setattr("builtins.input", lambda *_: "")
+        befehl_beantworten(
+            argparse.Namespace(
+                mappe=str(mappe.wurzel), jahr=None, thema="frage",
+                erneut=False, ab_betrag=50.0, nur=suchwort,
+            )
+        )
+        assert "1 offene Punkte" in capsys.readouterr().out, suchwort
