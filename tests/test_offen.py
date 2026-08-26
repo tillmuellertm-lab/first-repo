@@ -207,7 +207,7 @@ def test_antworten_werden_am_beleg_festgehalten(tmp_path, capsys, monkeypatch):
     antworten = iter(["beruflich, fuer die Wohnungssuche in Koeln", ""])
     monkeypatch.setattr("builtins.input", lambda *_: next(antworten))
 
-    befehl_beantworten(argparse.Namespace(mappe=str(mappe.wurzel), jahr=None, thema="frage", erneut=False, ab_betrag=0.0))
+    befehl_beantworten(argparse.Namespace(mappe=str(mappe.wurzel), jahr=None, thema="frage", erneut=False, ab_betrag=0.0, nur=None))
     ausgabe = capsys.readouterr().out
 
     assert "2 offene Punkte" in ausgabe, "die Kontoauszug-Zeile gehoert nicht dazu"
@@ -225,7 +225,7 @@ def test_abbruch_behaelt_das_bereits_gegebene(tmp_path, capsys, monkeypatch):
     antworten = iter(["privat genutzt", "x"])
     monkeypatch.setattr("builtins.input", lambda *_: next(antworten))
 
-    befehl_beantworten(argparse.Namespace(mappe=str(mappe.wurzel), jahr=None, thema="frage", erneut=False, ab_betrag=0.0))
+    befehl_beantworten(argparse.Namespace(mappe=str(mappe.wurzel), jahr=None, thema="frage", erneut=False, ab_betrag=0.0, nur=None))
     assert "Abgebrochen" in capsys.readouterr().out
 
     wieder = Arbeitsmappe.laden(mappe.wurzel)
@@ -237,11 +237,11 @@ def test_beantwortete_belege_kommen_nicht_wieder(tmp_path, capsys, monkeypatch):
 
     mappe = _mappe_mit_fragen(tmp_path)
     monkeypatch.setattr("builtins.input", lambda *_: "erste Antwort")
-    befehl_beantworten(argparse.Namespace(mappe=str(mappe.wurzel), jahr=None, thema="frage", erneut=False, ab_betrag=0.0))
+    befehl_beantworten(argparse.Namespace(mappe=str(mappe.wurzel), jahr=None, thema="frage", erneut=False, ab_betrag=0.0, nur=None))
     capsys.readouterr()
 
     monkeypatch.setattr("builtins.input", lambda *_: "")
-    befehl_beantworten(argparse.Namespace(mappe=str(mappe.wurzel), jahr=None, thema="frage", erneut=False, ab_betrag=0.0))
+    befehl_beantworten(argparse.Namespace(mappe=str(mappe.wurzel), jahr=None, thema="frage", erneut=False, ab_betrag=0.0, nur=None))
     assert "Nichts offen" in capsys.readouterr().out
 
 
@@ -269,7 +269,7 @@ def test_eingefuegter_konsolenbefehl_wird_nicht_als_antwort_gespeichert(tmp_path
     monkeypatch.setattr("builtins.input", lambda *_: next(eingaben))
 
     befehl_beantworten(
-        argparse.Namespace(mappe=str(mappe.wurzel), jahr=None, thema="frage", erneut=False, ab_betrag=0.0)
+        argparse.Namespace(mappe=str(mappe.wurzel), jahr=None, thema="frage", erneut=False, ab_betrag=0.0, nur=None)
     )
     assert "nicht\n        gespeichert" in capsys.readouterr().out
 
@@ -286,7 +286,7 @@ def test_falsche_anmerkung_laesst_sich_loeschen(tmp_path, capsys, monkeypatch):
 
     monkeypatch.setattr("builtins.input", lambda *_: "-")
     befehl_beantworten(
-        argparse.Namespace(mappe=str(mappe.wurzel), jahr=None, thema="frage", erneut=True, ab_betrag=0.0)
+        argparse.Namespace(mappe=str(mappe.wurzel), jahr=None, thema="frage", erneut=True, ab_betrag=0.0, nur=None)
     )
     capsys.readouterr()
 
@@ -313,7 +313,7 @@ def test_teuerster_beleg_kommt_zuerst(tmp_path, capsys, monkeypatch):
 
     monkeypatch.setattr("builtins.input", lambda *_: "")
     befehl_beantworten(
-        argparse.Namespace(mappe=str(mappe.wurzel), jahr=None, thema="frage", erneut=False, ab_betrag=0.0)
+        argparse.Namespace(mappe=str(mappe.wurzel), jahr=None, thema="frage", erneut=False, ab_betrag=0.0, nur=None)
     )
     zeilen = [z for z in capsys.readouterr().out.splitlines() if z.startswith("[")]
     assert "gross" in zeilen[0] and "klein" in zeilen[-1], zeilen
@@ -337,7 +337,7 @@ def test_kleinbetraege_bleiben_standardmaessig_aussen_vor(tmp_path, capsys, monk
 
     monkeypatch.setattr("builtins.input", lambda *_: "")
     befehl_beantworten(
-        argparse.Namespace(mappe=str(mappe.wurzel), jahr=None, thema="frage", erneut=False, ab_betrag=50.0)
+        argparse.Namespace(mappe=str(mappe.wurzel), jahr=None, thema="frage", erneut=False, ab_betrag=50.0, nur=None)
     )
     ausgabe = capsys.readouterr().out
     assert "1 offene Punkte" in ausgabe
@@ -383,3 +383,52 @@ def test_versehentlich_gespeicherter_befehl_wird_markiert(tmp_path, capsys):
 
     befehl_anmerkungen(argparse.Namespace(mappe=str(mappe.wurzel), jahr=None))
     assert "ACHTUNG: sieht nach einer eingefuegten Konsolenzeile aus" in capsys.readouterr().out
+
+
+def test_ein_einzelner_beleg_laesst_sich_gezielt_aufrufen(tmp_path, capsys, monkeypatch):
+    """Nach einer Unterbrechung muss man zu einer Frage zurueckkommen koennen."""
+    from steuer.cli import befehl_beantworten
+
+    mappe = Arbeitsmappe.anlegen(tmp_path / "mappe", 2024)
+    for name, betrag in (("euer.txt", 5882.02), ("darlehen.txt", 35000.0)):
+        pfad = tmp_path / name
+        pfad.write_text(name, encoding="utf-8")
+        dokument, _ = mappe.datei_aufnehmen(pfad, herkunft_jahr=2024)
+        dokument.analyse = Analyse(
+            kategorie_id="selbstaendig",
+            dokumenttyp=name,
+            betrag_gesamt=betrag,
+            fehlende_nachweise=["Klärung der Differenz"],
+        )
+        dokument.notiz = "erste, unvollstaendige Antwort"
+    mappe.speichern()
+
+    monkeypatch.setattr("builtins.input", lambda *_: "vollstaendige Antwort")
+    befehl_beantworten(
+        argparse.Namespace(
+            mappe=str(mappe.wurzel), jahr=None, thema="frage",
+            erneut=False, ab_betrag=50.0, nur="euer",
+        )
+    )
+    ausgabe = capsys.readouterr().out
+    assert "1 offene Punkte" in ausgabe, "nur der eine Beleg, trotz vorhandener Anmerkung"
+    assert "erste, unvollstaendige Antwort" in ausgabe, "die bisherige Antwort muss sichtbar sein"
+
+    wieder = Arbeitsmappe.laden(mappe.wurzel)
+    nach_name = {d.dateiname: d.notiz for d in wieder.dokumente}
+    assert nach_name["euer.txt"] == "vollstaendige Antwort"
+    assert nach_name["darlehen.txt"] == "erste, unvollstaendige Antwort", "nicht angefasst"
+
+
+def test_unbekannter_beleg_meldet_sich_deutlich(tmp_path, capsys):
+    from steuer.cli import befehl_beantworten
+
+    mappe = _mappe_mit_fragen(tmp_path)
+    code = befehl_beantworten(
+        argparse.Namespace(
+            mappe=str(mappe.wurzel), jahr=None, thema="frage",
+            erneut=False, ab_betrag=0.0, nur="gibtsnicht",
+        )
+    )
+    assert code == 1
+    assert "Kein Beleg zu 'gibtsnicht'" in capsys.readouterr().out

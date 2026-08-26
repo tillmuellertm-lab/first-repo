@@ -1358,18 +1358,25 @@ def befehl_beantworten(args: argparse.Namespace) -> int:
     aufgaben: list[tuple[Dokument, list[str], float]] = []
     uebergangen = 0
     uebergangene_summe = 0.0
+    nur = (args.nur or "").strip().lower()
     for dokument in dokumente:
+        if nur and not (
+            dokument.id.startswith(nur) or nur in dokument.dateiname.lower()
+        ):
+            continue
         fragen = [
             text.strip()
             for text in dokument.analyse.fehlende_nachweise
             if text.strip() and _offen_thema(text)[0] == args.thema
         ]
-        if not fragen or (dokument.notiz and not args.erneut):
+        # Wer gezielt einen Beleg aufruft, will ihn sehen - auch wenn schon eine
+        # Antwort daran haengt und auch wenn der Betrag klein ist.
+        if not fragen or (dokument.notiz and not (args.erneut or nur)):
             continue
         betrag = abs(
             float(dokument.analyse.betrag_abzugsfaehig or dokument.analyse.betrag_gesamt or 0.0)
         )
-        if betrag < args.ab_betrag:
+        if betrag < args.ab_betrag and not nur:
             uebergangen += 1
             uebergangene_summe += betrag
             continue
@@ -1382,6 +1389,10 @@ def befehl_beantworten(args: argparse.Namespace) -> int:
     aufgaben.sort(key=lambda a: (-a[2], a[0].dateiname))
 
     if not aufgaben:
+        if nur:
+            print(f"Kein Beleg zu '{args.nur}' mit einer offenen Frage unter '{args.thema}'.")
+            print("Gespeicherte Antworten ansehen: steuer anmerkungen")
+            return 1
         print(f"Nichts offen unter '{args.thema}'.")
         if uebergangen:
             print(
@@ -1815,6 +1826,11 @@ def parser_bauen() -> argparse.ArgumentParser:
         type=float,
         default=50.0,
         help="Nur Belege ab diesem Betrag vorlegen (Standard: 50 EUR, 0 = alle).",
+    )
+    p.add_argument(
+        "--nur",
+        help="Nur einen Beleg vorlegen - Anfang der Kennung oder Teil des Dateinamens. "
+        "Ignoriert Betragsgrenze und vorhandene Anmerkung.",
     )
     p.set_defaults(funktion=befehl_beantworten)
 
