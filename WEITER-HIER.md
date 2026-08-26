@@ -6,6 +6,49 @@ geklaert, aber noch nicht eingetippt — der fertige Text steht unten.
 
 ---
 
+## Wie weit es noch ist
+
+**Bis zur Übergabe an Dr. Hagn: rund anderthalb Stunden.** Drei Schritte, alle
+in Ihrer Hand:
+
+| Schritt | Dauer | Kosten |
+| --- | --- | --- |
+| 1. Die letzten **6 Rückfragen** beantworten | ~20 Min | – |
+| 2. Einmal **neu analysieren** | 30–60 Min Laufzeit | 5–15 € |
+| 3. **Paket packen**: `steuer ordnen --paket` | 2 Min | – |
+
+Schritt 2 lohnt sich diesmal wirklich: Das Werkzeug weiß seit dem Profil-Update
+von der doppelten Haushaltsführung, vom Dienstwagen, von der Freistellung und
+vom Tuftingstudio. Dieselben Belege werden damit anders eingeordnet.
+
+**Danach ist das Paket abgabefertig.** Alles Weitere kann nachgereicht werden —
+darauf zu warten, kostet nur Zeit.
+
+---
+
+## Was nachgeliefert wird, ohne den Termin zu blockieren
+
+| Was | Bei wem | Wert |
+| --- | --- | --- |
+| Restliche Rechnungen ChatGPT Plus und MaxAI | Anbieterkonten, Stripe-Mails | **~250 € Steuer** |
+| Nebenkostenabrechnung Leipzig mit § 35a-Lohnanteilen | Institutional InvestmentPartners GmbH | ~50–100 € |
+| Jahresbescheinigungen bAV | NÜRNBERGER und Zurich | dokumentarisch |
+| Ordnungsgemäße Rechnung Sixt | Sixt-Kundenkonto | Formsache |
+
+**Zahlen, die kein Dokument hergibt** und die nur Sie liefern können:
+
+1. **Arbeitstage 2024** je Zeitraum — Leipzig Januar–August (4 km), Köln
+   September–Dezember (6 km, der Arbeitgeber rechnet mit 5)
+2. **Homeoffice-Tage 2024** — 2023 waren es 47 von möglichen 210
+3. **Fahrten nach Halstenbek** — eine ist durch Tankbelege belegt
+   (31.01./01.02.2024), die übrigen aus dem Kalender rekonstruieren.
+   Pro Fahrt rund 222 € bei 0,30 €/km für 740 km hin und zurück
+4. **Von der Ehefrau:** Sind im EÜR-Export Zahlungen der Agentur für Arbeit als
+   Betriebseinnahme gebucht? Der Gründungszuschuss darf dort nicht stehen.
+   Und: Waren zum 31.12.2024 rund 1.002 € an Rechnungen offen?
+
+---
+
 ## Abgabefrist
 
 Erledigt. Die Fristen für 2024 sind abgelaufen, Dr. Hagn ist informiert, ein
