@@ -168,3 +168,34 @@ def test_analyse_aus_der_api_zerlegt_keinen_string():
         {"kategorie_id": "unklar", "fehlende_nachweise": "Zahlungsnachweis fehlt"}
     )
     assert analyse.fehlende_nachweise == ["Zahlungsnachweis fehlt"]
+
+
+def test_bruchstuecke_des_werkzeugaufrufs_werden_entfernt():
+    """In einer echten Mappe stand ein Fragment des Modellaufrufs im Klartext."""
+    from steuer.models import Analyse, textliste
+
+    assert textliste('<parameter name="item">Einzelrechnungen/Quittungen zu allen Positionen') == [
+        "Einzelrechnungen/Quittungen zu allen Positionen"
+    ]
+    assert textliste(["Klärung, ob Objekt vermietet ist</parameter>"]) == [
+        "Klärung, ob Objekt vermietet ist"
+    ]
+    # Beim Laden alter Analysen ebenfalls.
+    analyse = Analyse.aus_dict({"fehlende_nachweise": ['<parameter name="x">Kontoauszug fehlt']})
+    assert analyse.fehlende_nachweise == ["Kontoauszug fehlt"]
+
+
+def test_spitze_klammern_im_fliesstext_bleiben():
+    """Ein Vergleichszeichen ist kein Bruchstueck."""
+    from steuer.models import textliste
+
+    assert textliste("Betrag < 800 EUR, daher geringwertiges Wirtschaftsgut") == [
+        "Betrag < 800 EUR, daher geringwertiges Wirtschaftsgut"
+    ]
+
+
+def test_ein_reines_bruchstueck_verschwindet_ganz():
+    from steuer.models import textliste
+
+    assert textliste('<parameter name="leer">') == []
+    assert textliste(["</parameter>", "Kontoauszug fehlt"]) == ["Kontoauszug fehlt"]

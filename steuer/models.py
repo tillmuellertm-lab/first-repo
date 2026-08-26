@@ -184,6 +184,22 @@ class Profil:
         return profil
 
 
+# Reste des Werkzeugaufrufs, die gelegentlich im Text der Modellantwort landen.
+_BRUCHSTUECK = re.compile(r"</?(?:parameter|invoke|antml:[a-z_]+)\b[^>]*>", re.IGNORECASE)
+
+
+def _ohne_bruchstuecke(text: str) -> str:
+    """Entfernt Reste des Werkzeugaufrufs aus einem Freitext.
+
+    Gelegentlich schreibt das Modell ein Fragment seines eigenen Aufrufs mitten
+    in den Text - in einer echten Mappe stand in einer Fehlanzeige
+    '<parameter name="Klaerung, ob Objekt ... vermietet ist'. Fuer den Leser ist
+    das Kauderwelsch, und in einem Bericht fuer den Steuerberater hat es nichts
+    verloren.
+    """
+    return re.sub(r"\s+", " ", _BRUCHSTUECK.sub("", text)).strip()
+
+
 def textliste(wert: Any) -> list[str]:
     """Macht aus dem, was das Modell liefert, eine Liste von Saetzen.
 
@@ -197,13 +213,13 @@ def textliste(wert: Any) -> list[str]:
         return []
     if isinstance(wert, str):
         teile = re.split(r"[\n;]+", wert)
-        return [t.strip() for t in teile if t.strip()]
+        return [_ohne_bruchstuecke(t) for t in teile if _ohne_bruchstuecke(t)]
     if isinstance(wert, (list, tuple)):
         # Vor dem Saeubern zusammensetzen: die Leerzeichen des zerlegten Satzes
         # stehen als eigene Eintraege in der Liste und werden sonst weggeworfen.
         zusammengesetzt = zerlegtes_zusammensetzen([str(e) for e in wert])
-        return [t.strip() for t in zusammengesetzt if t.strip()]
-    return [str(wert).strip()]
+        return [_ohne_bruchstuecke(t) for t in zusammengesetzt if _ohne_bruchstuecke(t)]
+    return [_ohne_bruchstuecke(str(wert))] if _ohne_bruchstuecke(str(wert)) else []
 
 
 def zerlegtes_zusammensetzen(eintraege: list[str]) -> list[str]:
