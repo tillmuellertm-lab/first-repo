@@ -462,3 +462,53 @@ def test_nur_findet_den_beleg_unter_seinem_angezeigten_namen(tmp_path, capsys, m
             )
         )
         assert "1 offene Punkte" in capsys.readouterr().out, suchwort
+
+
+# --- Bestand zum Kopieren ----------------------------------------------------
+
+
+def test_bestand_gibt_eine_zeile_je_dokument(tmp_path, capsys):
+    """Wer sich beraten laesst, muss sagen koennen, was er hat."""
+    from steuer.cli import befehl_bestand
+
+    mappe = Arbeitsmappe.anlegen(tmp_path / "mappe", 2024)
+    for name, typ, betrag, jahr in (
+        ("zins.pdf", "Zinsbescheinigung", 3347.13, 2024),
+        ("miete.pdf", "Mietvertrag", 2400.0, 2024),
+        ("alt.pdf", "Rechnung aus 2025", 99.0, 2025),
+    ):
+        pfad = tmp_path / name
+        pfad.write_text(name, encoding="utf-8")
+        dokument, _ = mappe.datei_aufnehmen(pfad, herkunft_jahr=jahr)
+        dokument.analyse = Analyse(
+            kategorie_id="vermietung", dokumenttyp=typ, aussteller="DSL Bank",
+            datum=f"{jahr}-03-01", betrag_gesamt=betrag,
+        )
+    mappe.dokumente[0].notiz = "Zinsen Halstenbek"
+    mappe.speichern()
+
+    befehl_bestand(argparse.Namespace(mappe=str(mappe.wurzel), jahr=None, alle=False))
+    ausgabe = capsys.readouterr().out
+
+    assert "2 Dokumente, 1 mit Anmerkung" in ausgabe
+    assert "Zinsbescheinigung" in ausgabe and "Mietvertrag" in ausgabe
+    assert "Rechnung aus 2025" not in ausgabe, "fremde Jahre bleiben aussen vor"
+    assert "1 Dokumente anderer Jahre" in ausgabe
+    assert "[A]" in ausgabe, "Anmerkungen muessen erkennbar sein"
+
+
+def test_bestand_kann_alle_jahre_zeigen(tmp_path, capsys):
+    from steuer.cli import befehl_bestand
+
+    mappe = Arbeitsmappe.anlegen(tmp_path / "mappe", 2024)
+    for name, jahr in (("a.pdf", 2024), ("b.pdf", 2025)):
+        pfad = tmp_path / name
+        pfad.write_text(name, encoding="utf-8")
+        dokument, _ = mappe.datei_aufnehmen(pfad, herkunft_jahr=jahr)
+        dokument.analyse = Analyse(kategorie_id="vermietung", dokumenttyp=f"Beleg {jahr}")
+    mappe.speichern()
+
+    befehl_bestand(argparse.Namespace(mappe=str(mappe.wurzel), jahr=None, alle=True))
+    ausgabe = capsys.readouterr().out
+    assert "Beleg 2024" in ausgabe and "Beleg 2025" in ausgabe
+    assert "alle Jahre" in ausgabe

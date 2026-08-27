@@ -1419,6 +1419,68 @@ def befehl_beantworten(args: argparse.Namespace) -> int:
     return 0
 
 
+def befehl_bestand(args: argparse.Namespace) -> int:
+    """Gibt den Bestand so aus, dass er sich in ein Gespraech kopieren laesst.
+
+    Wer sich beim Sortieren beraten laesst - von einem Steuerberater, einem
+    Assistenten, einem Menschen am Telefon -, muss sagen koennen, was er hat.
+    Ohne das wird nach Unterlagen gefragt, die laengst vorliegen, und jede
+    Antwort beginnt mit dem Aufzaehlen des Offensichtlichen.
+
+    Deshalb: eine Zeile je Dokument, nach Anlagen gruppiert, kurz genug fuer
+    eine Nachricht und vollstaendig genug, um Rueckfragen zu ersparen.
+    """
+    mappe = _mappe_oeffnen(args)
+    ansicht = mappe.jahresansicht()
+    dokumente = ansicht.eigene if not args.alle else list(mappe.dokumente)
+    if not dokumente:
+        print(f"Keine Dokumente fuer {mappe.jahr}.")
+        return 1
+
+    titel = "alle Jahre" if args.alle else str(mappe.jahr)
+    mit_notiz = sum(1 for d in dokumente if d.notiz)
+    print(f"# Bestand {titel} — {len(dokumente)} Dokumente, {mit_notiz} mit Anmerkung")
+    if not args.alle and (ansicht.fremde or ansicht.ohne_jahr):
+        print(
+            f"# ausserdem in der Mappe: {len(ansicht.fremde)} Dokumente anderer Jahre, "
+            f"{len(ansicht.ohne_jahr)} ohne erkennbares Jahr"
+        )
+    print()
+
+    nach_kategorie: dict[str, list[Dokument]] = {}
+    for dokument in dokumente:
+        nach_kategorie.setdefault(dokument.wirksame_kategorie, []).append(dokument)
+
+    for kategorie in taxonomy.KATEGORIEN:
+        liste = nach_kategorie.get(kategorie.id)
+        if not liste:
+            continue
+        summe = sum(
+            (d.analyse.betrag_abzugsfaehig or d.analyse.betrag_gesamt or 0.0)
+            for d in liste
+            if d.analyse
+        )
+        kopf = f"## {kategorie.ordner} {kategorie.label} ({len(liste)})"
+        if summe:
+            kopf += f" — {euro(round(summe, 2))}"
+        print(kopf)
+        for dokument in sorted(liste, key=organize.sortierschluessel):
+            analyse = dokument.analyse
+            datum = (analyse.datum if analyse and analyse.datum else "") or "----------"
+            was = _belegname(dokument)
+            betrag = (analyse.betrag_abzugsfaehig or analyse.betrag_gesamt) if analyse else None
+            zeile = f"{datum}  {_kurz(was, 58):<58}"
+            zeile += f"{euro(betrag) if betrag else '':>14}"
+            if dokument.notiz:
+                zeile += "  [A]"
+            print(zeile)
+        print()
+
+    print("# [A] = eigene Anmerkung hinterlegt")
+    print("# Volltext der Anmerkungen: steuer anmerkungen")
+    return 0
+
+
 def befehl_liste(args: argparse.Namespace) -> int:
     mappe = _mappe_oeffnen(args)
     if not mappe.dokumente:
@@ -1742,6 +1804,13 @@ def parser_bauen() -> argparse.ArgumentParser:
         "--probelauf", action="store_true", help="Nur anzeigen, was uebernommen wuerde."
     )
     p.set_defaults(funktion=befehl_zusammenfuehren)
+
+    p = unter.add_parser(
+        "bestand",
+        help="Bestand kompakt ausgeben - zum Kopieren in ein Gespraech oder eine Mail.",
+    )
+    p.add_argument("--alle", action="store_true", help="Alle Jahre statt nur das Veranlagungsjahr.")
+    p.set_defaults(funktion=befehl_bestand)
 
     p = unter.add_parser("liste", help="Alle Dokumente nach Anlagen sortiert auflisten.")
     p.add_argument("--kategorie", choices=taxonomy.ids(), help="Nur diese Kategorie zeigen.")

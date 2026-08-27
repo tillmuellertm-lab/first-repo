@@ -28,7 +28,7 @@ class Ablageergebnis:
         return len(self.dateien)
 
 
-def _sortierschluessel(dokument: Dokument) -> tuple:
+def sortierschluessel(dokument: Dokument) -> tuple:
     analyse = dokument.analyse
     datum = (analyse.datum if analyse and analyse.datum else "9999-99-99")
     return (datum, dokument.dateiname)
@@ -70,7 +70,7 @@ def ablage_erzeugen(
         ordner.mkdir(parents=True, exist_ok=True)
         vergeben: set[str] = set()
 
-        for nummer, dokument in enumerate(sorted(dokumente, key=_sortierschluessel), start=1):
+        for nummer, dokument in enumerate(sorted(dokumente, key=sortierschluessel), start=1):
             quelle = mappe.pfad_zu(dokument)
             if not quelle.exists():
                 ergebnis.uebersprungen.append((dokument.dateiname, "Originaldatei fehlt"))
@@ -84,7 +84,7 @@ def ablage_erzeugen(
             dokument.zielordner = kategorie.ordner
             ergebnis.dateien[dokument.id] = zielpfad
 
-        _ordnerinhalt_schreiben(ordner, kategorie, sorted(dokumente, key=_sortierschluessel))
+        _ordnerinhalt_schreiben(ordner, kategorie, sorted(dokumente, key=sortierschluessel))
 
     return ergebnis
 
