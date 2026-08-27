@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from . import euer, prompts
-from .extract import ExtraktionsFehler, inhalt_aufbereiten
+from .extract import ExtraktionsFehler, inhalt_aufbereiten, inhalt_neu_aufbauen, notinhalt
 from .models import ANALYSE_VERSION, Analyse, Position, Profil, Segment, textliste
 from .rules import Regelwerk
 
@@ -200,10 +200,9 @@ class Analysedienst:
             "'dokument_analyse' auf."
         )
 
-        bloecke = list(inhalt.bloecke) + [{"type": "text", "text": "\n".join(aufforderung)}]
-
-        try:
-            antwort = self._mit_wiederholung(
+        def _senden(inhalt_bloecke: list[dict]) -> Any:
+            bloecke = list(inhalt_bloecke) + [{"type": "text", "text": "\n".join(aufforderung)}]
+            return self._mit_wiederholung(
                 lambda: self.client.messages.create(
                     model=self.modell_dokument,
                     max_tokens=4096,
@@ -213,22 +212,39 @@ class Analysedienst:
                     messages=[{"role": "user", "content": bloecke}],
                 )
             )
+
+        try:
+            antwort = _senden(inhalt.bloecke)
         except Exception as fehler:
-            # Die haeufigsten API-Fehler in verstaendliche Meldungen uebersetzen,
-            # statt den englischen Traceback bis zum Nutzer durchzureichen.
-            meldung = str(fehler)
-            if "prompt is too long" in meldung:
-                raise AnalyseFehler(
-                    f"{pfad.name} ist zu umfangreich fuer eine einzelne Analyse. "
-                    "Bitte die Datei in kleinere Teile aufteilen, am besten je Beleg "
-                    "eine Datei, und erneut hochladen."
-                ) from fehler
-            if "credit balance is too low" in meldung:
-                raise AnalyseFehler(
-                    "Das Guthaben des API-Kontos ist aufgebraucht. Unter "
-                    "console.anthropic.com/settings/billing aufladen und erneut versuchen."
-                ) from fehler
-            raise
+            # Ein von der API abgelehntes PDF ist meist nur strukturell
+            # fehlerhaft, nicht inhaltlich wertlos. Bevor der Beleg als Fehler
+            # liegenbleibt, wird die Datei neu aufgebaut und, wenn auch das
+            # scheitert, wenigstens ihr Text geschickt.
+            if "pdf" in str(fehler).lower() and "not valid" in str(fehler).lower():
+                antwort = None
+                repariert = inhalt_neu_aufbauen(pfad)
+                if repariert is not None:
+                    try:
+                        antwort = _senden(repariert.bloecke)
+                        inhalt.hinweise.append(
+                            "Die Datei war strukturell fehlerhaft und wurde vor der "
+                            "Analyse neu aufgebaut."
+                        )
+                    except Exception:  # noqa: BLE001
+                        antwort = None
+                if antwort is None:
+                    ersatz = notinhalt(pfad, "von der API als ungueltiges PDF abgelehnt")
+                    if ersatz is None:
+                        raise AnalyseFehler(
+                            f"{pfad.name} ist als PDF beschaedigt und enthaelt keine "
+                            "lesbare Textebene. Bitte den Beleg erneut einscannen oder "
+                            "als Bilddatei speichern."
+                        ) from fehler
+                    antwort = _senden(ersatz.bloecke)
+                    inhalt.hinweise.extend(ersatz.hinweise)
+            else:
+                raise _uebersetzt(fehler, pfad)
+
 
         rohdaten = self._werkzeugergebnis(antwort, "dokument_analyse")
         analyse = _analyse_aus_rohdaten(rohdaten)
@@ -345,6 +361,27 @@ def _bestand_begrenzen(bestand: list[dict[str, Any]]) -> tuple[list[dict[str, An
     sortiert = sorted(bestand, key=gewicht)
     behalten = sortiert[:MAX_BESTAND_GESAMTAUSWERTUNG]
     return behalten, len(bestand) - len(behalten)
+
+
+def _uebersetzt(fehler: Exception, pfad: Path) -> Exception:
+    """Uebersetzt die haeufigsten API-Fehler in verstaendliche Meldungen.
+
+    Ein englischer Traceback bis zum Nutzer durchzureichen hilft niemandem,
+    der wissen will, was mit seinem Beleg zu tun ist.
+    """
+    meldung = str(fehler)
+    if "prompt is too long" in meldung:
+        return AnalyseFehler(
+            f"{pfad.name} ist zu umfangreich fuer eine einzelne Analyse. "
+            "Bitte die Datei in kleinere Teile aufteilen, am besten je Beleg "
+            "eine Datei, und erneut hochladen."
+        )
+    if "credit balance is too low" in meldung:
+        return AnalyseFehler(
+            "Das Guthaben des API-Kontos ist aufgebraucht. Unter "
+            "console.anthropic.com/settings/billing aufladen und erneut versuchen."
+        )
+    return fehler
 
 
 def _zahl(wert: Any) -> float | None:

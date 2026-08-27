@@ -199,3 +199,45 @@ def test_ein_reines_bruchstueck_verschwindet_ganz():
 
     assert textliste('<parameter name="leer">') == []
     assert textliste(["</parameter>", "Kontoauszug fehlt"]) == ["Kontoauszug fehlt"]
+
+
+# --- Rettung beschaedigter PDFs ---------------------------------------------
+
+
+def test_beschaedigtes_pdf_wird_neu_aufgebaut(tmp_path):
+    """Ein von der API abgelehntes PDF ist meist nur strukturell fehlerhaft."""
+    pytest.importorskip("pypdf")
+    from pypdf import PdfWriter
+
+    from steuer.extract import inhalt_neu_aufbauen, pdf_neu_aufbauen
+
+    pfad = tmp_path / "beleg.pdf"
+    schreiber = PdfWriter()
+    schreiber.add_blank_page(width=595, height=842)
+    with pfad.open("wb") as datei:
+        schreiber.write(datei)
+
+    daten = pdf_neu_aufbauen(pfad)
+    assert daten and daten.startswith(b"%PDF")
+
+    inhalt = inhalt_neu_aufbauen(pfad)
+    assert inhalt is not None
+    assert inhalt.bloecke[0]["type"] == "document"
+    assert "neu aufgebaut" in " ".join(inhalt.hinweise)
+
+
+def test_unrettbare_datei_gibt_nichts_zurueck(tmp_path):
+    from steuer.extract import pdf_neu_aufbauen
+
+    kaputt = tmp_path / "kaputt.pdf"
+    kaputt.write_bytes(b"das ist kein PDF")
+    assert pdf_neu_aufbauen(kaputt) is None
+
+
+def test_notinhalt_braucht_lesbaren_text(tmp_path):
+    """Ohne Textebene wird nichts erfunden - der Fehler bleibt ein Fehler."""
+    from steuer.extract import notinhalt
+
+    leer = tmp_path / "leer.pdf"
+    leer.write_bytes(b"%PDF-1.4 nichts lesbares")
+    assert notinhalt(leer, "Testgrund") is None

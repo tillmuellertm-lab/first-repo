@@ -447,7 +447,10 @@ def anwendung_bauen(mappe: Arbeitsmappe) -> Any:
                         eintrag.status = STATUS_FEHLER
                         eintrag.fehler = str(fehler)
                         auftrag.meldungen.append(f"{eintrag.dateiname}: FEHLER {fehler}")
-                        LOG.exception("Analyse von %s fehlgeschlagen", eintrag.dateiname)
+                        # Kein Traceback: Ein einzelner fehlgeschlagener Beleg ist
+                        # ein vorgesehener Fall, keine Stoerung des Laufs. Wer die
+                        # Konsole sieht, soll nicht glauben, es sei etwas kaputt.
+                        LOG.warning("Analyse von %s fehlgeschlagen: %s", eintrag.dateiname, fehler)
                     auftrag.erledigt += 1
                     mappe.speichern()
             except Exception as fehler:  # noqa: BLE001 - Thread darf nicht still sterben

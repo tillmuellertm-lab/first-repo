@@ -180,6 +180,72 @@ def _pdf_inhalt(
     )
 
 
+def pdf_neu_aufbauen(pfad: Path) -> bytes | None:
+    """Schreibt ein PDF neu, um strukturelle Maengel zu beseitigen.
+
+    Manche Scanner und Exportprogramme erzeugen PDFs, die uebliche Betrachter
+    zwar anzeigen, die die API aber als ungueltig zurueckweist. Ein Durchlauf
+    durch pypdf serialisiert die Datei sauber neu; der Inhalt bleibt derselbe.
+    """
+    try:
+        from pypdf import PdfReader, PdfWriter  # noqa: PLC0415
+
+        leser = PdfReader(str(pfad))
+        if leser.is_encrypted:
+            try:
+                leser.decrypt("")
+            except Exception:  # noqa: BLE001
+                return None
+        schreiber = PdfWriter()
+        for seite in leser.pages[:MAX_PDF_SEITEN]:
+            schreiber.add_page(seite)
+        puffer = io.BytesIO()
+        schreiber.write(puffer)
+        daten = puffer.getvalue()
+        return daten if daten and len(daten) <= MAX_PDF_BYTES else None
+    except Exception as fehler:  # noqa: BLE001
+        LOG.debug("Neuaufbau von %s fehlgeschlagen: %s", pfad.name, fehler)
+        return None
+
+
+def inhalt_neu_aufbauen(pfad: Path) -> Inhalt | None:
+    """Baut den Inhaltsblock aus einem neu serialisierten PDF."""
+    rohdaten = pdf_neu_aufbauen(pfad)
+    if not rohdaten:
+        return None
+    return _pdf_inhalt(
+        pfad,
+        rohdaten,
+        seitenzahl(pfad),
+        gekuerzt=False,
+        hinweise=["Die Datei wurde vor der Uebertragung neu aufgebaut."],
+    )
+
+
+def notinhalt(pfad: Path, grund: str) -> Inhalt | None:
+    """Letzter Ausweg: nur den Text schicken, wenn die Datei selbst scheitert.
+
+    Ein Beleg, von dem wenigstens der Text gelesen wird, ist weit mehr wert als
+    einer, der als Fehler liegenbleibt. Bei reinen Scans ohne Textebene bleibt
+    allerdings auch das erfolglos - dann meldet das Werkzeug den Fehler ehrlich,
+    statt ein leeres Ergebnis zu erfinden.
+    """
+    text = pdf_text(pfad).strip()
+    if len(text) < 40:
+        return None
+    return Inhalt(
+        bloecke=[{"type": "text", "text": text[:MAX_TEXT_ZEICHEN]}],
+        seiten=seitenzahl(pfad),
+        gekuerzt=True,
+        textvorschau=text[:2000],
+        hinweise=[
+            f"Die Datei selbst konnte nicht uebertragen werden ({grund}). "
+            "Geprueft wurde nur der ausgelesene Text; Unterschriften, Stempel "
+            "und Tabellenlayout sind darin nicht enthalten."
+        ],
+    )
+
+
 def inhalt_aufbereiten(
     pfad: Path, medientyp: str, ab_seite: int | None = None
 ) -> Inhalt:
