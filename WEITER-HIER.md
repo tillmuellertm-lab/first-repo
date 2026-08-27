@@ -8,21 +8,75 @@ geklaert, aber noch nicht eingetippt — der fertige Text steht unten.
 
 ## Wie weit es noch ist
 
-**Drei Schritte bis zur Übergabe an Dr. Hagn:**
-
-| Schritt | Dauer | Kosten |
-| --- | --- | --- |
-| 1. Restliche **Rückfragen** im Browser beantworten | ~15 Min | – |
-| 2. Einmal **neu analysieren** | 30–60 Min Laufzeit | 5–15 € |
-| 3. **Paket packen**: `steuer ordnen --paket` | 2 Min | – |
-
-Start:
-
 ```bash
-cd ~/first-repo-claude-tax-return-document-tool-jesqdh && source .venv/bin/activate && cd steuer-2024 && git pull origin claude/tax-return-document-tool-jesqdh && steuer web
+cd ~/first-repo-claude-tax-return-document-tool-jesqdh && source .venv/bin/activate && cd steuer-2024 && git pull origin claude/tax-return-document-tool-jesqdh && steuer status
 ```
 
-Dann `localhost:5173` → **Rückfragen**.
+Die Anlagen-Summen sind repariert und sollten jetzt deutlich kleiner sein als
+zuvor. **Das ist richtig so** — siehe unten.
+
+| Schritt | Dauer |
+| --- | --- |
+| 1. Vier **Dubletten** löschen | 5 Min |
+| 2. Drei **Zinsbescheinigungen** suchen | 15 Min |
+| 3. Restliche **Rückfragen** beantworten | 15 Min |
+| 4. Einmal **neu analysieren** (5–15 €) | 30–60 Min |
+| 5. **`steuer ordnen --paket`** | 2 Min |
+
+---
+
+## Der Bestand: was fehlt
+
+`steuer bestand` gibt die ganze Mappe als kopierbare Liste aus — damit lässt
+sich ein Gespräch führen, ohne dass jemand raten muss, was schon da ist.
+Stand: 115 Dokumente für 2024, 24 mit eigener Anmerkung.
+
+**Sicher fehlend:**
+
+1. **Zinsbescheinigungen 2024** — In der Anlage V steht nur der Darlehensvertrag
+   IB.SH von 2017. Für 2024 keine einzige Bescheinigung: **DSL Bank, IB.SH und
+   DKB**. 2023 waren das zusammen **8.153,80 €** — der größte
+   Werbungskostenblock der Anlage V.
+2. **Mietvertrag und Mieteinnahmen 2024** — rund 28.800 €. Die Einnahmenseite
+   der Anlage V fehlt vollständig.
+3. **Gebäudeversicherung 2024** (2023: DEVK 273,67 €)
+4. **Nebenkostenabrechnung 2023 für die Mieter**
+5. **eToro-Steuerreport 2024**
+6. **Die eigene Aufstellung zur doppelten Haushaltsführung** (2.910 €) taucht
+   in der Mappe nicht auf — nur die zum Verpflegungsmehraufwand.
+
+**Vier Dubletten löschen** (Dokument öffnen → „Aus der Mappe entfernen"):
+Sammelscan Gehaltsabrechnungen RB Leipzig 77.434,62 € (2×, sonst zählt der
+Bruttolohn doppelt) · Arbeitsvertrag 1. FC Köln (2×) · Abfallgebührenbescheid
+251,76 € (2×) · Anhängermiete 26,48 € vom 14.08. (2×, falls es nicht wirklich
+zwei Anhänger waren).
+
+**Zwei Fehleinordnungen mit Geldwert:**
+
+- **Steuerberaterrechnung 410,55 €** steht unter Sonderausgaben. Dort gehört
+  sie seit 2006 nicht mehr hin. Der auf die Ermittlung der Einkünfte
+  entfallende Teil ist **Werbungskosten** — Dr. Hagn kann das aufteilen.
+- **RTL+-Abo** steht unter „nicht steuerrelevant". Für einen Bereichsleiter
+  Medien ist es ein Kandidat für Werbungskosten, sobald die
+  Arbeitgeberbestätigung vorliegt.
+
+---
+
+## Warum die Summen jetzt kleiner sind
+
+Die Kennzahlen zählten bisher **jede Zahl**, die ein Beleg trug:
+
+| Anlage | vorher | Fehlerquelle |
+| --- | ---: | --- |
+| Anlage N | 251.532,98 € | Bruttolohn doppelt, dazu 30.200 € aus einer Meldebescheinigung |
+| Anlage KAP | 20.322,50 € | Kontoauszugssalden statt Kapitalerträge (tatsächlich 480 €) |
+| Anlage V | 106.636,86 € | 100.000 € Darlehenssumme von 2017 |
+| Sonstige WK | 12.576,77 € | 3.590 € Monatsmiete aus einem Mietvertrag |
+
+Die Analyse liefert jetzt mit, **was** ein Betrag bedeutet — Aufwand,
+Einnahme, Vertragswert oder Saldo. Nur Aufwand geht in eine Summe ein. Für
+ältere Analysen wird die Art aus der Dokumentart abgeleitet, ohne dass etwas
+neu laufen muss.
 
 ---
 
