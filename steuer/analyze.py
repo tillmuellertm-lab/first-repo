@@ -393,6 +393,11 @@ def _zahl(wert: Any) -> float | None:
         return None
 
 
+def _betragsart(wert: Any) -> str:
+    text = str(wert or "").strip().lower()
+    return text if text in ("aufwand", "einnahme", "vertragswert", "saldo") else ""
+
+
 def _geschaeftsvorfall(wert: Any) -> str:
     text = str(wert or "").strip().lower()
     return text if text in (euer.EINNAHME, euer.AUSGABE, "kein_betrieblicher_vorgang") else ""
@@ -461,6 +466,7 @@ def _analyse_aus_rohdaten(rohdaten: dict[str, Any]) -> Analyse:
         enthaelt_mehrere_dokumente=bool(rohdaten.get("enthaelt_mehrere_dokumente")),
         segmente=segmente,
         zahlungsart=str(rohdaten.get("zahlungsart") or "unbekannt"),
+        betragsart=_betragsart(rohdaten.get("betragsart")),
         version=ANALYSE_VERSION,
         geschaeftsvorfall=_geschaeftsvorfall(rohdaten.get("geschaeftsvorfall")),
         euer_posten=str(rohdaten.get("euer_posten") or "").strip()

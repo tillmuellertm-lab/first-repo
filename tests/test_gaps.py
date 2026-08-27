@@ -431,3 +431,59 @@ def test_der_hinweis_loescht_nichts():
     assert "muss ein Mensch" in befund.beschreibung
     # Die Fehlanzeige am Dokument bleibt unangetastet.
     assert dokumente[0].analyse.fehlende_nachweise == ["Gehaltsabrechnung fehlt"]
+
+
+# --- Vertragssummen und Salden gehoeren in keine Aufwandssumme ---------------
+
+
+def _mit_betrag(kennung: str, typ: str, betrag: float, art: str = "") -> Dokument:
+    doc = Dokument(id=kennung, dateiname=f"{kennung}.pdf")
+    doc.analyse = Analyse(
+        kategorie_id="vermietung", dokumenttyp=typ, eignung="geeignet",
+        betrag_gesamt=betrag, betragsart=art, steuerjahr=2024,
+    )
+    return doc
+
+
+def test_darlehenssumme_zaehlt_nicht_als_aufwand():
+    """100.000 EUR Darlehenssumme sind keine Werbungskosten."""
+    profil = Profil(merkmale=["vermietung"])
+    dokumente = [
+        _mit_betrag("darlehen", "Darlehensvertrag KfW", 100000.0),
+        _mit_betrag("abwasser", "Gebuehrenbescheid Abwasser", 540.20),
+    ]
+    zahlen = gaps.auswerten(dokumente, REGELWERK, profil).kennzahlen
+    assert zahlen["summen_je_kategorie"]["vermietung"] == 540.20
+
+
+def test_kontoauszug_zaehlt_nicht_als_aufwand():
+    profil = Profil(merkmale=["kapitalanlagen"])
+    doc = _mit_betrag("auszug", "Bankauszug / Finanzreport", 7322.04)
+    doc.analyse.kategorie_id = "kapitalertraege"
+    zahlen = gaps.auswerten([doc], REGELWERK, profil).kennzahlen
+    assert zahlen["summen_je_kategorie"].get("kapitalertraege", 0) == 0
+
+
+def test_mietvertrag_mit_monatsmiete_bleibt_draussen():
+    """Die Monatsmiete im Mietvertrag ist kein Aufwand des Jahres."""
+    profil = Profil(merkmale=["angestellt", "umzug"])
+    doc = _mit_betrag("mietvertrag", "Mietvertrag neue Wohnung", 3590.0)
+    doc.analyse.kategorie_id = "werbungskosten_sonstige"
+    zahlen = gaps.auswerten([doc], REGELWERK, profil).kennzahlen
+    assert zahlen["werbungskosten_gesamt"] == 0
+
+
+def test_ausdrueckliche_angabe_schlaegt_die_schaetzung():
+    """Sagt die Analyse 'aufwand', wird nicht geraten."""
+    profil = Profil(merkmale=["vermietung"])
+    # Eine Kuendigung, die tatsaechlich eine Zahlung ausloest.
+    doc = _mit_betrag("k", "Kuendigung mit Abfindungszahlung", 480.0, art="aufwand")
+    zahlen = gaps.auswerten([doc], REGELWERK, profil).kennzahlen
+    assert zahlen["summen_je_kategorie"]["vermietung"] == 480.0
+
+
+def test_normale_rechnung_zaehlt_weiterhin():
+    profil = Profil(merkmale=["vermietung"])
+    doc = _mit_betrag("r", "Handwerkerrechnung", 1050.77)
+    zahlen = gaps.auswerten([doc], REGELWERK, profil).kennzahlen
+    assert zahlen["summen_je_kategorie"]["vermietung"] == 1050.77

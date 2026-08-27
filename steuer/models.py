@@ -32,7 +32,7 @@ EIGNUNG_REIHENFOLGE = [EIGNUNG_GEEIGNET, EIGNUNG_BEDINGT, EIGNUNG_UNKLAR, EIGNUN
 # Wird erhoeht, wenn die Analyse neue Felder erhebt. So laesst sich erkennen,
 # welche Dokumente von einer aelteren Fassung geprueft wurden und nachgeholt
 # werden muessen, ohne den gesamten Bestand erneut zu bezahlen.
-ANALYSE_VERSION = 1
+ANALYSE_VERSION = 2
 
 STATUS_NEU = "neu"
 STATUS_ANALYSIERT = "analysiert"
@@ -278,6 +278,9 @@ class Analyse:
     enthaelt_mehrere_dokumente: bool = False
     segmente: list[Segment] = field(default_factory=list)
     zahlungsart: str = ""  # unbar, bar, unbekannt
+    # Was der Betrag ueberhaupt bedeutet. Ohne diese Unterscheidung wandert
+    # die Summe eines Darlehensvertrags in die Werbungskosten.
+    betragsart: str = ""  # aufwand, einnahme, vertragswert, saldo
     # Nur bei betrieblichen Belegen gefuellt; steuert die EUeR-Aufstellung.
     geschaeftsvorfall: str = ""  # einnahme, ausgabe, kein_betrieblicher_vorgang
     euer_posten: str = ""  # Posten-Id aus steuer.euer
@@ -311,6 +314,45 @@ class Analyse:
         analyse.positionen = positionen
         analyse.segmente = segmente
         return analyse
+
+
+# Belegarten, deren Betrag kein Aufwand ist. Ein Darlehensvertrag ueber
+# 100.000 EUR, ein Kontoauszug mit 7.322 EUR Saldo und ein Mietvertrag ueber
+# 3.590 EUR Monatsmiete tragen alle eine Zahl - keine davon ist eine Ausgabe.
+_VERTRAGSWERT = re.compile(
+    r"vertrag|darlehen|kredit|police|versicherungsschein|antrag|angebot|"
+    r"bewilligung|zusage|mandat|vollmacht|kuendigung",
+    re.IGNORECASE,
+)
+_SALDO = re.compile(
+    r"kontoauszug|finanzreport|depot|saldo|uebersicht|meldebescheinigung|"
+    r"standmitteilung|renteninformation|jahresmeldung|wertentwicklung",
+    re.IGNORECASE,
+)
+
+
+def betragsart_erraten(analyse: "Analyse") -> str:
+    """Leitet aus der Dokumentart ab, was der Betrag bedeutet.
+
+    Nur fuer Analysen aus der Zeit vor Einfuehrung des Feldes. Neue Analysen
+    liefern die Angabe selbst; geraten wird hier bewusst konservativ, weil ein
+    faelschlich als Aufwand gezaehlter Vertragswert die Kennzahlen sprengt,
+    ein faelschlich ausgelassener Beleg dagegen nur fehlt und auffaellt.
+    """
+    text = f"{analyse.dokumenttyp} {analyse.zusammenfassung}"
+    if _SALDO.search(text):
+        return "saldo"
+    if _VERTRAGSWERT.search(text):
+        return "vertragswert"
+    return "aufwand"
+
+
+def zaehlt_als_aufwand(analyse: "Analyse | None") -> bool:
+    """Ob der Betrag dieses Belegs in eine Aufwandssumme gehoert."""
+    if analyse is None:
+        return False
+    art = analyse.betragsart or betragsart_erraten(analyse)
+    return art == "aufwand"
 
 
 @dataclass

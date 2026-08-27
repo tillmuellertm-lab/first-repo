@@ -140,6 +140,10 @@ Weitere Regeln:
   Paragraf 35a und bei Sonderausgaben zaehlt das Zahlungsdatum, nicht das
   Rechnungsdatum. Weicht das Jahr vom Veranlagungszeitraum ab, sage das deutlich
   in der Begruendung.
+- "betragsart" entscheidet, ob der Betrag in eine Summe eingeht. Nur "aufwand"
+  zaehlt als Ausgabe. Ein Darlehensvertrag ueber 100.000 EUR, ein Kontoauszug
+  mit einem Saldo und ein Mietvertrag mit der Monatsmiete tragen alle eine
+  Zahl - keine davon ist eine Ausgabe.
 - "betrag_abzugsfaehig" ist der steuerlich nutzbare Teil, bei Handwerkern also
   nur Lohn-, Fahrt- und Maschinenkosten ohne Material.
 - "zahlungsart": "unbar", wenn Ueberweisung, Lastschrift oder Karte erkennbar
@@ -196,6 +200,17 @@ WERKZEUG_ANALYSE: dict[str, Any] = {
                 "description": "Veranlagungszeitraum, in den der Beleg gehoert.",
             },
             "betrag_gesamt": {"type": "number", "description": "Gesamtbetrag des Belegs."},
+            "betragsart": {
+                "type": "string",
+                "enum": ["aufwand", "einnahme", "vertragswert", "saldo"],
+                "description": (
+                    "Was der Betrag bedeutet. aufwand = tatsaechlich gezahlte oder "
+                    "geschuldete Ausgabe. einnahme = Zufluss. vertragswert = vereinbarte "
+                    "Summe ohne Zahlung, etwa Darlehenssumme, Versicherungssumme, "
+                    "Monatsmiete in einem Mietvertrag, Kaufpreis in einem Vertrag. "
+                    "saldo = Kontostand, Depotwert, Jahresmeldung, Standmitteilung."
+                ),
+            },
             "betrag_abzugsfaehig": {
                 "type": "number",
                 "description": "Steuerlich nutzbarer Teilbetrag, falls abweichend.",

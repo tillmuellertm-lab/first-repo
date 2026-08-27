@@ -23,6 +23,7 @@ from .analyze import (
     schluessel_vorhanden,
 )
 from .models import (
+    zaehlt_als_aufwand,
     EIGNUNG_BEDINGT,
     EIGNUNG_GEEIGNET,
     EIGNUNG_UNGEEIGNET,
@@ -1458,7 +1459,7 @@ def befehl_bestand(args: argparse.Namespace) -> int:
         summe = sum(
             (d.analyse.betrag_abzugsfaehig or d.analyse.betrag_gesamt or 0.0)
             for d in liste
-            if d.analyse
+            if zaehlt_als_aufwand(d.analyse)
         )
         kopf = f"## {kategorie.ordner} {kategorie.label} ({len(liste)})"
         if summe:

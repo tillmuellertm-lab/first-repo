@@ -22,6 +22,7 @@ from .models import (
     Befund,
     Dokument,
     Profil,
+    zaehlt_als_aufwand,
 )
 from .rules import Regelwerk
 
@@ -151,10 +152,19 @@ def _erfuellt(check_id: str, dokumente: list[Dokument]) -> list[Dokument]:
 
 
 def _summe(dokumente: Iterable[Dokument]) -> float:
+    """Summiert nur, was tatsaechlich ein Aufwand ist.
+
+    Ein Darlehensvertrag ueber 100.000 EUR, ein Kontoauszug mit einem Saldo und
+    ein Mietvertrag mit der Monatsmiete tragen alle eine Zahl. Wer sie
+    mitzaehlt, bekommt Kennzahlen, die um ein Vielfaches danebenliegen - und
+    merkt es nicht, weil die Summe plausibel aussieht.
+    """
     gesamt = 0.0
     for dokument in dokumente:
         analyse = dokument.analyse
         if not analyse or analyse.eignung == EIGNUNG_UNGEEIGNET:
+            continue
+        if not zaehlt_als_aufwand(analyse):
             continue
         betrag = analyse.betrag_abzugsfaehig
         if betrag is None:
@@ -546,7 +556,7 @@ def _kinderbetreuung_pruefen(
         d
         for d in dokumente
         if d.wirksame_kategorie == "kinder"
-        and d.analyse
+        and zaehlt_als_aufwand(d.analyse)
         and (d.analyse.betrag_gesamt or d.analyse.betrag_abzugsfaehig)
     ]
     if not belege:
@@ -623,7 +633,7 @@ def _fahrzeugkosten_pruefen(dokumente: list[Dokument], profil: Profil) -> list[B
         d
         for d in dokumente
         if d.wirksame_kategorie == "werbungskosten_fahrten"
-        and d.analyse
+        and zaehlt_als_aufwand(d.analyse)
         and (d.analyse.betrag_abzugsfaehig or d.analyse.betrag_gesamt)
     ]
     if not betroffen:
