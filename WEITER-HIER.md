@@ -8,21 +8,72 @@ geklaert, aber noch nicht eingetippt — der fertige Text steht unten.
 
 ## Wie weit es noch ist
 
-**Bis zur Übergabe an Dr. Hagn: rund anderthalb Stunden.** Drei Schritte, alle
-in Ihrer Hand:
+**Drei Schritte bis zur Übergabe an Dr. Hagn:**
 
 | Schritt | Dauer | Kosten |
 | --- | --- | --- |
-| 1. Die letzten **6 Rückfragen** beantworten | ~20 Min | – |
+| 1. Restliche **Rückfragen** im Browser beantworten | ~15 Min | – |
 | 2. Einmal **neu analysieren** | 30–60 Min Laufzeit | 5–15 € |
 | 3. **Paket packen**: `steuer ordnen --paket` | 2 Min | – |
 
-Schritt 2 lohnt sich diesmal wirklich: Das Werkzeug weiß seit dem Profil-Update
-von der doppelten Haushaltsführung, vom Dienstwagen, von der Freistellung und
-vom Tuftingstudio. Dieselben Belege werden damit anders eingeordnet.
+Start:
 
-**Danach ist das Paket abgabefertig.** Alles Weitere kann nachgereicht werden —
-darauf zu warten, kostet nur Zeit.
+```bash
+cd ~/first-repo-claude-tax-return-document-tool-jesqdh && source .venv/bin/activate && cd steuer-2024 && git pull origin claude/tax-return-document-tool-jesqdh && steuer web
+```
+
+Dann `localhost:5173` → **Rückfragen**.
+
+---
+
+## Eigenaufstellungen, die erstellt und hochgeladen sind
+
+| Dokument | Ergebnis |
+| --- | ---: |
+| Doppelte Haushaltsführung 15.08.–30.09.2024 | **2.910,00 €** |
+| Verpflegungsmehraufwand Dienstreisen (15 Auswärtsspiele) | **280,00 €** |
+
+Beide mit Herleitung, Rechtsgrundlagen und den Punkten, die Dr. Hagn entscheiden
+muss. Bei der doppelten Haushaltsführung ist das der August (1.336 € als vorab
+entstandene Werbungskosten, gestützt auf die Freistellung ab Mitte Juli).
+
+---
+
+## Geprüft und abgeschlossen
+
+**Die Abschreibung der Immobilie Halstenbek ist korrekt.** Aus Kaufvertrag
+(449.000 €, 264 m² Teilfläche), Bodenrichtwert (370 €/m², Stichtag 31.12.2016)
+und Umrechnungskoeffizient (1,2886 nach der Tabelle des Gutachterausschusses
+Pinneberg) ergibt sich eine Bemessungsgrundlage von 360.050 € gegenüber den
+angesetzten 358.850 € — 0,3 % Abweichung. Die Sonderwünsche von 2017/2018 über
+10.874 € sind bereits eingerechnet. **Kein Handlungsbedarf, kein Anruf bei B+R
+nötig.**
+
+**Die Einbauküche läuft richtig:** 9.200 € über zehn Jahre = 920 €/Jahr bis 2027.
+Genau der Betrag, der als „AfA bewegliche Wirtschaftsgüter" in der Anlage V steht.
+
+**Beide Lohnsteuerbescheinigungen sind ausgewertet:**
+
+| | |
+| --- | ---: |
+| RasenBallsport Leipzig, 01.01.–31.08. | 77.434,62 € |
+| 1. FC Köln, 01.09.–31.12. | 64.954,50 € |
+| **Bruttoarbeitslohn 2024** | **142.389,12 €** |
+
+Zeile 20 (Verpflegungszuschüsse) und Zeile 21 (Leistungen bei doppelter
+Haushaltsführung) sind bei beiden leer — beide Eigenaufstellungen sind daher
+ungekürzt ansetzbar. RB Leipzig Zeile 18: 72,00 € pauschal versteuerte
+Fahrtkostenzuschüsse, die die Entfernungspauschale um diesen Betrag mindern.
+
+**Kinderbetreuung 2024: 4.538,00 €** (Leipzig, beide Kinder), davon zwei Drittel
+= **3.025,33 € Sonderausgaben**. Köln kostete nichts — der Elternbeitrag ist ab
+August 2024 mit 0,00 € festgesetzt, die Zahlungen an Köln Kitas gGmbH sind reines
+Essensgeld und nicht abzugsfähig.
+
+**§ 35a Köln:** aus der Nebenkostenabrechnung 15.08.–31.12.2024 nur zwei Positionen
+begünstigt — Treppenhausreinigung 98,46 € und der Lohnanteil der Gasthermenwartung
+rund 109 €. Zusammen etwa **41 € Steuerermäßigung**. Der Vermieter muss nichts mehr
+liefern; alle Belege liegen der Abrechnung bei.
 
 ---
 
@@ -43,6 +94,13 @@ darauf zu warten, kostet nur Zeit.
 3. **Fahrten nach Halstenbek** — eine ist durch Tankbelege belegt
    (31.01./01.02.2024), die übrigen aus dem Kalender rekonstruieren.
    Pro Fahrt rund 222 € bei 0,30 €/km für 740 km hin und zurück
+5. **Testspiel FC St. Gallen am 06.01.2024** — fand das im Trainingslager
+   statt? Bei mehrtägiger Auswärtstätigkeit je voller Tag 28 €, bei einer
+   Woche also rund 170 € zusätzlich
+6. **Sichtschutzwand Halstenbek** (1.785 € brutto, 2017) — eigenständige
+   Außenanlage, nicht Teil des Gebäudes. Bei Verblendmauerwerk rund
+   20 Jahre Nutzungsdauer, also etwa 89 €/Jahr bis 2037. Prüfen, ob sie in
+   der Anlage V erfasst ist
 4. **Von der Ehefrau:** Sind im EÜR-Export Zahlungen der Agentur für Arbeit als
    Betriebseinnahme gebucht? Der Gründungszuschuss darf dort nicht stehen.
    Und: Waren zum 31.12.2024 rund 1.002 € an Rechnungen offen?
