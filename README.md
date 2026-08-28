@@ -101,10 +101,19 @@ Der Menüpunkt **Beratung** öffnet ein Gespräch mit demselben Modell, das die 
 ausgewertet hat — nur diesmal als Steuerexperte, der mit Ihnen spricht und nicht als
 Zuarbeiter, der eine Liste abliefert.
 
-Der Unterschied zu einem beliebigen Chat ist der Zugriff. Das Modell bekommt den
-Bestand der Mappe in den Systemprompt: alle Belege des Veranlagungsjahres mit Datum,
-Kategorie, Betrag und Eignung, die Summen, die erkannten Lücken und Chancen. Darüber
-hinaus kann es
+Der Unterschied zu einem beliebigen Chat ist der Zugriff. Das Modell bekommt vor jeder
+Antwort den aktuellen Stand in den Systemprompt:
+
+* Profil, Stammdaten und den hinterlegten Rechtsstand des Jahres,
+* alle Summen je Anlage und die Werbungskosten gegen den Pauschbetrag,
+* jeden Beleg des Veranlagungsjahres in einer Zeile — mit Datum, Kategorie, Betrag,
+  Eignung und der Notiz, die Sie bereits dazu gegeben haben,
+* die regelbasierten Lücken, Chancen und Warnungen,
+* die zuletzt erstellte **Gesamtauswertung**, sofern eine vorliegt,
+* und die Zahl der Belege, deren Analyse nicht mehr auf dem aktuellen Stand ist.
+
+Nicht enthalten sind die vollständigen Analysetexte, die Scans und die Belege anderer
+Jahre — die holt sich das Modell bei Bedarf selbst. Dafür kann es
 
 | Werkzeug | Wirkung |
 | --- | --- |

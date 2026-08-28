@@ -7,6 +7,7 @@ entsteht immer als Kopie. So bleibt jeder Lauf wiederholbar.
 
 from __future__ import annotations
 
+import datetime as _dt
 import hashlib
 import json
 import re
@@ -22,6 +23,7 @@ from .models import Dokument, Profil
 VERSION = 1
 KONFIGDATEI = "steuer.json"
 ZUSTANDSDATEI = "dokumente.json"
+GESAMTAUSWERTUNGSDATEI = "gesamtauswertung.json"
 
 ORDNER_EINGANG = "eingang"
 ORDNER_AUFBEREITET = "aufbereitet"
@@ -322,6 +324,35 @@ class Arbeitsmappe:
             if pfad.exists():
                 pfad.unlink()
         return True
+
+    # -- Gesamtauswertung ----------------------------------------------------
+
+    def gesamtauswertung(self) -> dict[str, Any] | None:
+        """Die zuletzt vom Modell erstellte Gesamtauswertung, falls vorhanden.
+
+        Sie entsteht beim Ordnen und ging bisher nur in die Berichte ein. Damit
+        war der Gedankengang, der die Mappe als Ganzes bewertet, ausserhalb der
+        Berichtsdatei nirgends greifbar - weder in der Oberflaeche noch im
+        Beratungsgespraech.
+        """
+        pfad = self.zustandsverzeichnis / GESAMTAUSWERTUNGSDATEI
+        if not pfad.exists():
+            return None
+        try:
+            return json.loads(pfad.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            return None
+
+    def gesamtauswertung_speichern(self, daten: dict[str, Any], modell: str = "") -> None:
+        gesichert = dict(daten or {})
+        gesichert.setdefault("erstellt_am", _dt.date.today().isoformat())
+        if modell:
+            gesichert.setdefault("modell", modell)
+        self.zustandsverzeichnis.mkdir(parents=True, exist_ok=True)
+        atomar_schreiben(
+            self.zustandsverzeichnis / GESAMTAUSWERTUNGSDATEI,
+            json.dumps(gesichert, indent=2, ensure_ascii=False),
+        )
 
     def jahresansicht(self, jahr: int | None = None) -> "Jahresansicht":
         """Teilt den Bestand nach Zugehoerigkeit zum Veranlagungsjahr auf.

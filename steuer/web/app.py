@@ -467,7 +467,7 @@ def anwendung_bauen(mappe: Arbeitsmappe) -> Any:
         werk = regelwerk()
         ergebnis = gaps.auswerten(mappe.jahresansicht().eigene, werk, mappe.profil, stammdaten=mappe.stammdaten)
         return report.html_bericht(
-            mappe.jahresansicht().eigene, ergebnis, werk, mappe.profil, _letzte_gesamtauswertung()
+            mappe.jahresansicht().eigene, ergebnis, werk, mappe.profil, mappe.gesamtauswertung()
         )
 
     # ---------------------------------------------------------------- API --
@@ -631,7 +631,7 @@ def anwendung_bauen(mappe: Arbeitsmappe) -> Any:
                         [_bestandseintrag(d) for d in mappe.jahresansicht().eigene],
                         [b.als_dict() for b in ergebnis.befunde],
                     )
-                    _gesamtauswertung_sichern(modellauswertung)
+                    mappe.gesamtauswertung_speichern(modellauswertung, modell)
                 auftrag.aktuell = "Dateien werden einsortiert"
                 ablage = organize.ablage_erzeugen(
                     mappe, ungeeignete_mitnehmen=not daten.get("ohne_ungeeignete")
@@ -676,23 +676,6 @@ def anwendung_bauen(mappe: Arbeitsmappe) -> Any:
         return jsonify({"neu": [d.dateiname for d in neue]})
 
     # ------------------------------------------------------------ Hilfen --
-
-    def _gesamtauswertung_sichern(daten: dict[str, Any]) -> None:
-        import json
-
-        pfad = mappe.zustandsverzeichnis / "gesamtauswertung.json"
-        pfad.write_text(json.dumps(daten, ensure_ascii=False, indent=2), encoding="utf-8")
-
-    def _letzte_gesamtauswertung() -> dict[str, Any] | None:
-        import json
-
-        pfad = mappe.zustandsverzeichnis / "gesamtauswertung.json"
-        if not pfad.exists():
-            return None
-        try:
-            return json.loads(pfad.read_text(encoding="utf-8"))
-        except ValueError:
-            return None
 
     @app.template_filter("euro")
     def _euro(betrag: float | None) -> str:

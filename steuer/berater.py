@@ -241,11 +241,20 @@ def _dokumentzeile(dokument: Dokument) -> str:
     if analyse.betragsart and analyse.betragsart != "aufwand":
         teile.append(f"Betragsart {analyse.betragsart}")
     if analyse.fehlende_nachweise:
-        teile.append(f"{len(analyse.fehlende_nachweise)} offene Punkte")
-    if dokument.notiz:
-        teile.append("Notiz vorhanden")
+        anzahl = len(analyse.fehlende_nachweise)
+        teile.append(f"{anzahl} offener Punkt" if anzahl == 1 else f"{anzahl} offene Punkte")
     teile.append(dokument.dateiname)
-    return " | ".join(teile)
+    zeile = " | ".join(teile)
+    if dokument.notiz.strip():
+        # Die Notiz ist die Antwort des Mandanten. Sie nur als "vorhanden" zu
+        # melden hiesse, dieselbe Frage noch einmal zu stellen.
+        zeile += "\n    Auskunft des Mandanten: " + _gekuerzt(dokument.notiz, 300)
+    return zeile
+
+
+def _gekuerzt(text: str, laenge: int) -> str:
+    zusammen = " ".join((text or "").split())
+    return zusammen if len(zusammen) <= laenge else zusammen[: laenge - 1] + "…"
 
 
 def kennzahlen_text(mappe: Arbeitsmappe, regelwerk: Regelwerk) -> str:
@@ -265,6 +274,12 @@ def kennzahlen_text(mappe: Arbeitsmappe, regelwerk: Regelwerk) -> str:
         f"Dokumente anderer Jahre in derselben Mappe: {len(ansicht.fremde)} "
         f"(Verteilung: {ansicht.fremde_jahre() or 'keine'})",
         f"Dokumente ohne Jahreszuordnung: {len(ansicht.ohne_jahr)}",
+        # Ohne diese Zahl wuerde eine Auskunft sicherer klingen, als sie ist:
+        # eine mit aelterem Wissensstand erstellte Analyse kann denselben Beleg
+        # heute anders einordnen.
+        f"Belege, deren Analyse nicht auf dem aktuellen Stand ist "
+        f"(nie geprueft, fehlgeschlagen oder mit aelterem Wissensstand): "
+        f"{len(mappe.nachzutragen())} von {len(mappe.dokumente)} in der ganzen Mappe",
         "",
         "Summen (nur Belege des Veranlagungsjahres, nur Betragsart 'aufwand'):",
     ]
@@ -298,10 +313,74 @@ def kennzahlen_text(mappe: Arbeitsmappe, regelwerk: Regelwerk) -> str:
     return "\n".join(zeilen)
 
 
+def gesamtauswertung_text(mappe: Arbeitsmappe) -> str:
+    """Die zuletzt erstellte Gesamtauswertung als Text.
+
+    Sie ist der einzige Arbeitsschritt, der die Mappe als Ganzes betrachtet -
+    also genau das, was im Gespraech oft gemeint ist, wenn nach "der Analyse"
+    gefragt wird. Ohne sie muesste das Gespraech Schluesse noch einmal ziehen,
+    fuer die bereits bezahlt wurde.
+    """
+    daten = mappe.gesamtauswertung()
+    if not daten:
+        return (
+            "Es liegt noch keine Gesamtauswertung vor. Sie entsteht beim Ordnen "
+            "mit der Option 'Gesamtauswertung'."
+        )
+
+    zeilen = []
+    stand = daten.get("erstellt_am")
+    modell = daten.get("modell")
+    kopf = "Gesamtauswertung der Mappe"
+    if stand:
+        kopf += f" vom {stand}"
+    if modell:
+        kopf += f" ({modell})"
+    zeilen.append(kopf + ":")
+    if daten.get("gesamteinschaetzung"):
+        zeilen.append(str(daten["gesamteinschaetzung"]))
+
+    for schluessel, ueberschrift in (
+        ("luecken", "Luecken laut Gesamtauswertung"),
+        ("chancen", "Chancen laut Gesamtauswertung"),
+    ):
+        eintraege = [e for e in (daten.get(schluessel) or []) if isinstance(e, dict)]
+        if not eintraege:
+            continue
+        zeilen.append("")
+        zeilen.append(f"{ueberschrift} ({len(eintraege)}):")
+        for eintrag in eintraege:
+            titel = str(eintrag.get("titel") or "")
+            beschreibung = str(eintrag.get("beschreibung") or "")
+            zusatz = []
+            if eintrag.get("prioritaet"):
+                zusatz.append(str(eintrag["prioritaet"]))
+            if eintrag.get("potenzial_eur"):
+                zusatz.append(f"Potenzial {euro(eintrag['potenzial_eur'])}")
+            if eintrag.get("rechtsgrundlage"):
+                zusatz.append(str(eintrag["rechtsgrundlage"]))
+            vorspann = f"[{', '.join(zusatz)}] " if zusatz else ""
+            zeilen.append(f"- {vorspann}{titel}: {beschreibung}")
+            if eintrag.get("naechster_schritt"):
+                zeilen.append(f"  Naechster Schritt: {eintrag['naechster_schritt']}")
+
+    for schluessel, ueberschrift in (
+        ("fragen_an_den_mandanten", "Offene Fragen an den Mandanten"),
+        ("hinweise_fuer_den_steuerberater", "Hinweise fuer den Steuerberater"),
+    ):
+        eintraege = [str(e) for e in (daten.get(schluessel) or []) if e]
+        if not eintraege:
+            continue
+        zeilen.append("")
+        zeilen.append(f"{ueberschrift}:")
+        zeilen.extend(f"- {e}" for e in eintraege)
+    return "\n".join(zeilen)
+
+
 def lage_text(mappe: Arbeitsmappe, regelwerk: Regelwerk) -> str:
     """Das vollstaendige Lagebild fuer den Systemprompt."""
     ansicht = mappe.jahresansicht()
-    zeilen = [kennzahlen_text(mappe, regelwerk), ""]
+    zeilen = [kennzahlen_text(mappe, regelwerk), "", gesamtauswertung_text(mappe), ""]
     zeilen.append(
         f"Belege des Veranlagungsjahres {mappe.jahr}, je Zeile: Kennung | Datum | "
         "Kategorie | Bezeichnung | Betrag | Eignung | Besonderheiten | Dateiname"

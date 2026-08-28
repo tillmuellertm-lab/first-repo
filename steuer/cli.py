@@ -812,7 +812,10 @@ def befehl_ordnen(args: argparse.Namespace) -> int:
         return 1
 
     auswertung = gaps.auswerten(mappe.jahresansicht().eigene, regelwerk, mappe.profil, stammdaten=mappe.stammdaten)
-    modellauswertung = None
+    # Ohne --gesamtauswertung die zuletzt gesicherte verwenden: sie erneut zu
+    # bezahlen waere unnoetig, sie wegzulassen liesse den Bericht aermer
+    # aussehen als den Kenntnisstand.
+    modellauswertung = mappe.gesamtauswertung()
     if args.gesamtauswertung:
         if not schluessel_vorhanden():
             print("Ohne ANTHROPIC_API_KEY ist keine Gesamtauswertung moeglich.", file=sys.stderr)
@@ -829,6 +832,10 @@ def befehl_ordnen(args: argparse.Namespace) -> int:
                     [_bestandseintrag(d) for d in mappe.jahresansicht().eigene],
                     [b.als_dict() for b in auswertung.befunde],
                 )
+                # Sichern, nicht nur in den Bericht schreiben: sonst kennt weder
+                # die Oberflaeche noch das Beratungsgespraech die Einschaetzung,
+                # die die Mappe als Ganzes bewertet.
+                mappe.gesamtauswertung_speichern(modellauswertung, modell)
             except (AnalyseFehler, KeinSchluessel) as fehler:
                 print(f"Gesamtauswertung fehlgeschlagen: {fehler}", file=sys.stderr)
 

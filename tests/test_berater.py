@@ -316,3 +316,47 @@ def test_gekuerzter_verlauf_beginnt_nie_mit_einem_werkzeugergebnis(monkeypatch):
 
     verlauf = gespraech.fuer_api()
     assert verlauf[0]["content"][0]["type"] != "tool_result"
+
+
+# --- Stand der Analyse -------------------------------------------------------
+
+
+def test_lagebild_traegt_die_gesamtauswertung_mit(mappe, regelwerk):
+    """Der einzige Schritt, der die Mappe als Ganzes bewertet, darf nicht fehlen."""
+    mappe.gesamtauswertung_speichern(
+        {
+            "gesamteinschaetzung": "Die Anlage V ist unvollstaendig.",
+            "luecken": [
+                {
+                    "titel": "Zinsbescheinigungen 2024",
+                    "beschreibung": "Fuer kein Darlehen liegt eine Bescheinigung vor.",
+                    "prioritaet": "hoch",
+                    "naechster_schritt": "Bei DSL Bank, IB.SH und DKB anfordern.",
+                }
+            ],
+            "chancen": [{"titel": "Arbeitszimmer", "beschreibung": "pruefen", "potenzial_eur": 1260}],
+            "fragen_an_den_mandanten": ["Wurde die Wohnung ganzjaehrig vermietet?"],
+        },
+        modell="claude-fable-5",
+    )
+    lage = berater.lage_text(mappe, regelwerk)
+    assert "Die Anlage V ist unvollstaendig." in lage
+    assert "Bei DSL Bank, IB.SH und DKB anfordern." in lage
+    assert "Wurde die Wohnung ganzjaehrig vermietet?" in lage
+    assert "claude-fable-5" in lage
+
+
+def test_lagebild_sagt_wenn_keine_gesamtauswertung_vorliegt(mappe, regelwerk):
+    assert "noch keine Gesamtauswertung" in berater.lage_text(mappe, regelwerk)
+
+
+def test_lagebild_enthaelt_bereits_gegebene_antworten(mappe, regelwerk):
+    """Sonst wird dieselbe Frage ein zweites Mal gestellt."""
+    beleg(mappe, "zinsen.txt").notiz = "Betrifft die vermietete Wohnung in Halstenbek."
+    lage = berater.lage_text(mappe, regelwerk)
+    assert "Auskunft des Mandanten: Betrifft die vermietete Wohnung in Halstenbek." in lage
+
+
+def test_lagebild_benennt_veraltete_analysen(mappe, regelwerk):
+    lage = berater.lage_text(mappe, regelwerk)
+    assert "nicht auf dem aktuellen Stand" in lage
