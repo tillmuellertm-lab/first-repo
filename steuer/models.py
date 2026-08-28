@@ -319,14 +319,25 @@ class Analyse:
 # Belegarten, deren Betrag kein Aufwand ist. Ein Darlehensvertrag ueber
 # 100.000 EUR, ein Kontoauszug mit 7.322 EUR Saldo und ein Mietvertrag ueber
 # 3.590 EUR Monatsmiete tragen alle eine Zahl - keine davon ist eine Ausgabe.
-_VERTRAGSWERT = re.compile(
-    r"vertrag|darlehen|kredit|police|versicherungsschein|antrag|angebot|"
-    r"bewilligung|zusage|mandat|vollmacht|kuendigung",
+#
+# Die Muster sind eng gefasst. Ein erster, weiter Versuch schloss auch
+# "Rechnung Renovierung Wohnung (mietvertragliche Verpflichtung)" aus, weil
+# darin "vertrag" vorkommt - eine echte Ausgabe ueber 1.260,50 EUR, die
+# stillschweigend aus den Werbungskosten verschwand.
+_AUFWANDSIGNAL = re.compile(
+    r"rechnung|quittung|beleg|bescheid|gebuehr|geb[üu]hr|abrechnung|mahnung|"
+    r"zahlungsauff|kassenbon|eigenbeleg|aufstellung",
     re.IGNORECASE,
 )
 _SALDO = re.compile(
-    r"kontoauszug|finanzreport|depot|saldo|uebersicht|meldebescheinigung|"
-    r"standmitteilung|renteninformation|jahresmeldung|wertentwicklung",
+    r"kontoauszug|finanzreport|depot|standmitteilung|meldebescheinigung|"
+    r"renteninformation|jahresmeldung|wertentwicklung|kontostand|saldo",
+    re.IGNORECASE,
+)
+_VERTRAGSWERT = re.compile(
+    r"darlehen|kredit|versicherungsschein|versicherungsantrag|arbeitsvertrag|"
+    r"mietvertrag|betreuungsvertrag|wartungsvertrag|police|vollmacht|"
+    r"sepa-mandat|angebot|k[üu]ndigung",
     re.IGNORECASE,
 )
 
@@ -334,12 +345,13 @@ _SALDO = re.compile(
 def betragsart_erraten(analyse: "Analyse") -> str:
     """Leitet aus der Dokumentart ab, was der Betrag bedeutet.
 
-    Nur fuer Analysen aus der Zeit vor Einfuehrung des Feldes. Neue Analysen
-    liefern die Angabe selbst; geraten wird hier bewusst konservativ, weil ein
-    faelschlich als Aufwand gezaehlter Vertragswert die Kennzahlen sprengt,
-    ein faelschlich ausgelassener Beleg dagegen nur fehlt und auffaellt.
+    Nur fuer Analysen aus der Zeit vor Einfuehrung des Feldes. Eine Rechnung
+    bleibt eine Rechnung, auch wenn im Betreff ein Vertrag erwaehnt wird -
+    deshalb hat das Aufwandssignal Vorrang vor allen anderen Mustern.
     """
     text = f"{analyse.dokumenttyp} {analyse.zusammenfassung}"
+    if _AUFWANDSIGNAL.search(text):
+        return "aufwand"
     if _SALDO.search(text):
         return "saldo"
     if _VERTRAGSWERT.search(text):

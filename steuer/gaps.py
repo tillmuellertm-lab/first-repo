@@ -472,6 +472,54 @@ def _belegtext(dokument: Dokument) -> str:
     return _ohne_umlaute(" ".join(t for t in teile if t).lower())
 
 
+def _nicht_gezaehlte_betraege(dokumente: list[Dokument]) -> list[Befund]:
+    """Nennt jeden Betrag, der nicht in die Summen eingegangen ist.
+
+    Ausschliessen ist richtig, verschweigen nicht. Wer eine Kennzahl liest,
+    muss erfahren koennen, was sie nicht enthaelt - sonst wird aus einer
+    Korrektur ein neuer blinder Fleck.
+    """
+    uebergangen: list[tuple[str, float, str]] = []
+    for dokument in dokumente:
+        analyse = dokument.analyse
+        if not analyse or analyse.eignung == EIGNUNG_UNGEEIGNET:
+            continue
+        betrag = analyse.betrag_abzugsfaehig or analyse.betrag_gesamt
+        if not betrag or zaehlt_als_aufwand(analyse):
+            continue
+        art = analyse.betragsart or "vertragswert oder Saldo"
+        name = analyse.dokumenttyp or dokument.dateiname
+        uebergangen.append((name, float(betrag), art))
+
+    if not uebergangen:
+        return []
+
+    uebergangen.sort(key=lambda e: -abs(e[1]))
+    summe = sum(abs(b) for _, b, _ in uebergangen)
+    zeilen = [
+        f"{len(uebergangen)} Belege tragen einen Betrag, der keine Ausgabe ist "
+        f"und deshalb in keiner Summe steckt (zusammen {euro(round(summe, 2))}):"
+    ]
+    for name, betrag, art in uebergangen[:10]:
+        zeilen.append(f"- {name[:70]}: {euro(betrag)} ({art})")
+    if len(uebergangen) > 10:
+        zeilen.append(f"... und {len(uebergangen) - 10} weitere.")
+    zeilen.append(
+        "Vertragssummen, Darlehensbetraege und Kontostaende gehoeren nicht in "
+        "eine Aufwandssumme. Steht hier ein Beleg, der doch eine Zahlung ist, "
+        "laesst sich das auf seiner Seite richtigstellen."
+    )
+    return [
+        Befund(
+            art="hinweis",
+            id="betraege_nicht_gezaehlt",
+            titel="Betraege, die in keiner Summe stecken",
+            beschreibung="\n".join(zeilen),
+            prioritaet="niedrig",
+        )
+    ]
+
+
 def _bestand_abgleichen(dokumente: list[Dokument]) -> list[Befund]:
     """Meldet Fehlanzeigen, die ein anderer Beleg der Mappe bereits abdeckt.
 
@@ -1092,6 +1140,7 @@ def auswerten(
     befunde.extend(_fahrzeugkosten_pruefen(dokumente, profil))
     befunde.extend(_kinderbetreuung_pruefen(dokumente, regelwerk, profil))
     befunde.extend(_bestand_abgleichen(dokumente))
+    befunde.extend(_nicht_gezaehlte_betraege(dokumente))
     befunde.extend(_dubletten_pruefen(dokumente))
     befunde.extend(_frist_pruefen(regelwerk, heute))
     befunde.extend(_stammdaten_hinweis(stammdaten))

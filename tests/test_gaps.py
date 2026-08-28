@@ -487,3 +487,25 @@ def test_normale_rechnung_zaehlt_weiterhin():
     doc = _mit_betrag("r", "Handwerkerrechnung", 1050.77)
     zahlen = gaps.auswerten([doc], REGELWERK, profil).kennzahlen
     assert zahlen["summen_je_kategorie"]["vermietung"] == 1050.77
+
+
+def test_ausgelassene_betraege_werden_benannt():
+    """Ausschliessen ist richtig, verschweigen nicht."""
+    profil = Profil(merkmale=["vermietung"])
+    dokumente = [
+        _mit_betrag("darlehen", "Darlehensvertrag KfW", 100000.0),
+        _mit_betrag("rechnung", "Handwerkerrechnung", 500.0),
+    ]
+    auswertung = gaps.auswerten(dokumente, REGELWERK, profil)
+    befund = next(b for b in auswertung.befunde if b.id == "betraege_nicht_gezaehlt")
+    assert "Darlehensvertrag" in befund.beschreibung
+    assert "Handwerkerrechnung" not in befund.beschreibung
+
+
+def test_rechnung_mit_vertrag_im_betreff_zaehlt_weiterhin():
+    """Der Fall, der 1.260,50 EUR stillschweigend verschwinden liess."""
+    profil = Profil(merkmale=["angestellt", "umzug"])
+    doc = _mit_betrag("reno", "Rechnung Renovierung Wohnung (mietvertragliche Verpflichtung)", 1260.50)
+    doc.analyse.kategorie_id = "werbungskosten_sonstige"
+    zahlen = gaps.auswerten([doc], REGELWERK, profil).kennzahlen
+    assert zahlen["werbungskosten_gesamt"] == 1260.50
