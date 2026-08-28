@@ -16,12 +16,23 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Any
 
-from .. import gaps, offen as offen_modul, organize, report, rules, stammdaten as stammdaten_modul, taxonomy
+from .. import (
+    berater,
+    gaps,
+    offen as offen_modul,
+    organize,
+    report,
+    rules,
+    stammdaten as stammdaten_modul,
+    taxonomy,
+)
 from ..formatierung import eingabewert, euro, zahl_lesen
 from ..analyze import (
+    AUSWAHL_BERATUNG,
     AUSWAHL_DOKUMENT,
     AUSWAHL_STRATEGIE,
     Analysedienst,
+    modell_beratung_pruefen,
     modell_dokument_pruefen,
     modell_strategie_pruefen,
     schluessel_vorhanden,
@@ -70,6 +81,21 @@ class Auftrag:
         }
 
 
+@dataclass
+class Beratungslauf:
+    """Zustand des laufenden Gespraechszugs.
+
+    Der Verlauf selbst liegt in der Mappe; hier steht nur, ob gerade eine
+    Antwort erarbeitet wird. Ein Zug kann eine Minute dauern, wenn das Modell
+    mehrere Belege nachschlaegt - solange muss die Seite zeigen koennen, dass
+    etwas passiert.
+    """
+
+    laeuft: bool = False
+    fehler: str = ""
+    begonnen_um: str = ""
+
+
 def anwendung_bauen(mappe: Arbeitsmappe) -> Any:
     try:
         from flask import (  # noqa: PLC0415
@@ -94,6 +120,7 @@ def anwendung_bauen(mappe: Arbeitsmappe) -> Any:
     app.jinja_env.filters["eingabewert"] = eingabewert
     sperre = threading.Lock()
     auftrag = Auftrag()
+    beratungslauf = Beratungslauf()
 
     def regelwerk() -> rules.Regelwerk:
         return rules.laden(mappe.jahr)
@@ -240,6 +267,84 @@ def anwendung_bauen(mappe: Arbeitsmappe) -> Any:
             gespeichert=request.args.get("gespeichert"),
             fehler=None,
         )
+
+    @app.get("/beratung")
+    def beratung():
+        """Das Gespraech mit dem Steuerexperten ueber den eigenen Bestand.
+
+        Bisher lief die Beratung ausserhalb des Werkzeugs und wusste deshalb
+        nichts von den Belegen, und das Werkzeug analysierte die Belege, ohne
+        zurueckfragen zu koennen. Hier faellt beides zusammen.
+        """
+        gespraech = berater.laden(mappe)
+        return render_template(
+            "beratung.html",
+            **grunddaten(),
+            beitraege=berater.beitraege(gespraech),
+            auswahl_beratung=AUSWAHL_BERATUNG,
+            modell_beratung=modell_beratung_pruefen(mappe.einstellungen.get("modell_beratung")),
+            laeuft=beratungslauf.laeuft,
+            fehler=beratungslauf.fehler,
+        )
+
+    @app.post("/beratung/loeschen")
+    def beratung_loeschen():
+        berater.loeschen(mappe)
+        return redirect(url_for("beratung"))
+
+    @app.get("/api/beratung")
+    def beratung_stand():
+        gespraech = berater.laden(mappe)
+        return jsonify(
+            {
+                "laeuft": beratungslauf.laeuft,
+                "fehler": beratungslauf.fehler,
+                "beitraege": [b.als_dict() for b in berater.beitraege(gespraech)],
+            }
+        )
+
+    @app.post("/api/beratung")
+    def beratung_senden():
+        if beratungslauf.laeuft:
+            return jsonify({"fehler": "Es wird gerade schon eine Antwort erarbeitet."}), 409
+        if not schluessel_vorhanden():
+            return jsonify({"fehler": "Ohne ANTHROPIC_API_KEY ist kein Gespraech moeglich."}), 400
+        daten = request.get_json(silent=True) or {}
+        text = str(daten.get("nachricht") or "").strip()
+        if not text:
+            return jsonify({"fehler": "Die Nachricht ist leer."}), 400
+
+        modell = modell_beratung_pruefen(daten.get("modell") or mappe.einstellungen.get("modell_beratung"))
+        mappe.einstellungen["modell_beratung"] = modell
+        mappe.speichern()
+
+        beratungslauf.laeuft = True
+        beratungslauf.fehler = ""
+        beratungslauf.begonnen_um = _dt.datetime.now().strftime("%H:%M:%S")
+
+        def lauf() -> None:
+            try:
+                # Waehrend eines Zuges darf kein anderer Lauf die Mappe
+                # veraendern: das Modell traegt Notizen ein und ordnet um.
+                with sperre:
+                    gespraech = berater.laden(mappe)
+                    berater.nachricht_senden(
+                        mappe,
+                        gespraech,
+                        text,
+                        dienst=Analysedienst(modell_beratung=modell),
+                        regelwerk=regelwerk(),
+                        modell=modell,
+                        sichern=lambda g: berater.speichern(mappe, g),
+                    )
+            except Exception as fehler:  # noqa: BLE001 - jeder Fehler gehoert auf die Seite
+                beratungslauf.fehler = str(fehler)
+                LOG.warning("Beratung fehlgeschlagen: %s", fehler)
+            finally:
+                beratungslauf.laeuft = False
+
+        threading.Thread(target=lauf, daemon=True).start()
+        return jsonify({"laeuft": True})
 
     @app.route("/dubletten", methods=["GET", "POST"])
     def dubletten():

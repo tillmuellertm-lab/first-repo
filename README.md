@@ -27,6 +27,7 @@ fehlt** und **wo Geld liegen bleibt**.
 | Chancen erkennen | ausgerechnete Pauschalen, ungenutzte Höchstbeträge, Gestaltungsansätze |
 | Aktuell bleiben | versionierte Regeldateien je Jahr plus Recherche-Befehl mit Web-Suche |
 | Sammelscans trennen | erkennt mehrere Dokumente in einer PDF und zerlegt sie seitengenau |
+| Rückfragen klären | Gespräch mit dem Modell über den eigenen Bestand — es liest Belege nach und trägt Ihre Antworten ein |
 
 ---
 
@@ -91,6 +92,38 @@ steuer web
 Öffnet die Oberfläche auf <http://127.0.0.1:5173>: Scans per Drag-and-drop ablegen,
 Analyse anstoßen, Ergebnisse mit Vorschau des Originals durchsehen, Kategorien von Hand
 korrigieren, Bericht erzeugen. Der Server lauscht ausschließlich lokal.
+
+---
+
+## Beratung: das Gespräch über den eigenen Bestand
+
+Der Menüpunkt **Beratung** öffnet ein Gespräch mit demselben Modell, das die Belege
+ausgewertet hat — nur diesmal als Steuerexperte, der mit Ihnen spricht und nicht als
+Zuarbeiter, der eine Liste abliefert.
+
+Der Unterschied zu einem beliebigen Chat ist der Zugriff. Das Modell bekommt den
+Bestand der Mappe in den Systemprompt: alle Belege des Veranlagungsjahres mit Datum,
+Kategorie, Betrag und Eignung, die Summen, die erkannten Lücken und Chancen. Darüber
+hinaus kann es
+
+| Werkzeug | Wirkung |
+| --- | --- |
+| `dokumente_suchen` | durchsucht alle Belege, auch die anderer Jahre |
+| `dokument_lesen` | die vollständige gespeicherte Analyse eines Belegs |
+| `beleg_ansehen` | hängt den Originalscan ans Gespräch, wenn die Analyse nicht reicht |
+| `offene_punkte` | die offenen Punkte, gebündelt nach der Besorgung dahinter |
+| `kennzahlen_abrufen` | rechnet Summen und Befunde neu aus |
+| `notiz_speichern` | **schreibt** Ihre Auskunft zum Beleg in die Mappe |
+| `kategorie_setzen` | **korrigiert** eine falsche Zuordnung |
+
+Die letzten beiden ändern die Mappe. Das ist der eigentliche Zweck: Was Sie im Gespräch
+über einen Beleg sagen, landet als Notiz an diesem Beleg und erscheint im Bericht für
+den Steuerberater direkt unter der Frage, die es beantwortet — statt im Gesprächsverlauf
+zu versanden. Jeder Zugriff steht als eigene Zeile im Verlauf, damit erkennbar bleibt,
+worauf eine Antwort beruht.
+
+Der Verlauf liegt in `.zustand/gespraech.json` und wird beim nächsten Start
+fortgesetzt. „Gespräch verwerfen“ löscht ihn; eingetragene Notizen bleiben.
 
 ---
 
@@ -371,6 +404,7 @@ Die Auswahl wird in der Arbeitsmappe gemerkt und beim nächsten Start wieder ang
 | Analyse jedes einzelnen Dokuments | Sonnet 5, Opus 5 | `claude-opus-5` | `STEUER_MODELL_DOKUMENT` |
 | Abschließende Gesamtauswertung | Opus 5, Fable 5 | `claude-fable-5` | `STEUER_MODELL_STRATEGIE` |
 | Rechtsstandsrecherche | — | `claude-opus-5` | `STEUER_MODELL_RECHT` |
+| Beratungsgespräch | Opus 5, Fable 5 | `claude-opus-5` | `STEUER_MODELL_BERATUNG` |
 
 An der Kommandozeile geht dasselbe über Optionen:
 
@@ -391,6 +425,13 @@ deutlich teurer als Sonnet. Wer viele Belege hat und Kosten sparen will, stellt
 `STEUER_MODELL_DOKUMENT` auf `claude-sonnet-5` und behält Opus nur für die Fälle,
 die das Werkzeug als unsicher markiert (`steuer analyse --dokument <Kennung>
 --modell claude-opus-5`).
+
+**Zum Beratungsgespräch:** Jede Frage kostet einen Modellaufruf, plus einen weiteren
+je Werkzeugrunde (höchstens acht). Der Bestand der Mappe geht dabei jedes Mal mit,
+wird aber zwischengespeichert und ist deshalb nur beim ersten Aufruf voll zu bezahlen.
+Teuer wird das Ansehen eines Originalscans (`beleg_ansehen`) — es entspricht einer
+weiteren Dokumentanalyse. Das Modell ist angehalten, erst die gespeicherte Analyse zu
+lesen und den Scan nur zu holen, wenn diese die Frage nicht beantwortet.
 
 ---
 
@@ -434,6 +475,7 @@ Tests laufen ohne API-Schlüssel und ohne Netzzugriff.
 | `steuer/prompts.py` | Rollenbeschreibung und Werkzeugschemata |
 | `steuer/analyze.py` | Anbindung an die Claude-API mit Wiederholungslogik |
 | `steuer/gaps.py` | regelbasierte Auswertung ohne Modellaufruf |
+| `steuer/berater.py` | Beratungsgespräch: Verlauf, Werkzeuge, Zugriff auf die Mappe |
 | `steuer/naming.py`, `organize.py` | Benennung und Ablage |
 | `steuer/report.py` | HTML, Markdown, CSV |
 | `steuer/euer.py` | Aufstellung der Betriebseinnahmen und -ausgaben |

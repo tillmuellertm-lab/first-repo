@@ -387,3 +387,53 @@ def test_dublettenseite_haelt_auch_leere_mappe_aus(tmp_path):
         antwort = klient.get("/dubletten")
     assert antwort.status_code == 200
     assert "Keine Dubletten gefunden" in antwort.get_data(as_text=True)
+
+
+# --- Beratung im Browser -----------------------------------------------------
+
+
+def test_beratungsseite_rendert_leeres_gespraech(klient):
+    antwort = klient.get("/beratung")
+    assert antwort.status_code == 200
+    assert "Noch kein Gespraech" in antwort.get_data(as_text=True)
+
+
+def test_beratungsseite_zeigt_den_gespeicherten_verlauf(klient):
+    from steuer import berater
+
+    gespraech = berater.Gespraech()
+    gespraech.anhaengen("user", [{"type": "text", "text": "Fehlt mir noch etwas?"}])
+    gespraech.anhaengen("assistant", [{"type": "text", "text": "Die Zinsbescheinigung fehlt."}])
+    berater.speichern(klient.mappe, gespraech)
+
+    text = klient.get("/beratung").get_data(as_text=True)
+    assert "Fehlt mir noch etwas?" in text
+    assert "Die Zinsbescheinigung fehlt." in text
+
+    stand = klient.get("/api/beratung").get_json()
+    assert stand["laeuft"] is False
+    assert [b["rolle"] for b in stand["beitraege"]] == ["mandant", "berater"]
+
+
+def test_beratung_ohne_schluessel_wird_abgelehnt(klient, monkeypatch):
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    antwort = klient.post("/api/beratung", json={"nachricht": "Hallo"})
+    assert antwort.status_code == 400
+    assert "ANTHROPIC_API_KEY" in antwort.get_json()["fehler"]
+
+
+def test_leere_nachricht_wird_abgelehnt(klient, monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
+    antwort = klient.post("/api/beratung", json={"nachricht": "   "})
+    assert antwort.status_code == 400
+
+
+def test_gespraech_laesst_sich_verwerfen(klient):
+    from steuer import berater
+
+    gespraech = berater.Gespraech()
+    gespraech.anhaengen("user", [{"type": "text", "text": "Alte Frage"}])
+    berater.speichern(klient.mappe, gespraech)
+
+    klient.post("/beratung/loeschen", follow_redirects=True)
+    assert berater.laden(klient.mappe).nachrichten == []

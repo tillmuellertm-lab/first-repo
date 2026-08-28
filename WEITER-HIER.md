@@ -1,8 +1,20 @@
 # Hier geht es weiter
 
-Stand: 21. August 2026. Die Ablage ist fertig, das Paket fuer Dr. Hagn liegt
-bereit. Offen sind Rueckfragen und Besorgungen. Frage 1 von 16 ist inhaltlich
-geklaert, aber noch nicht eingetippt — der fertige Text steht unten.
+Stand: 28. August 2026. Die Ablage ist fertig, das Paket fuer Dr. Hagn liegt
+bereit. Offen sind Rueckfragen und Besorgungen.
+
+**Das Wichtigste zuerst: Es gibt jetzt die Seite „Beratung".** Dort sprechen Sie
+mit dem Modell, das Ihre Belege ausgewertet hat — und dieses Modell sieht die
+Mappe wirklich. Es kann einzelne Belege nachschlagen, sich einen Scan ansehen,
+die Summen nachrechnen und **Ihre Antworten selbst eintragen**. Damit entfällt
+der Umweg, im Chat etwas zu klären und es hinterher von Hand einzutippen.
+
+Fragen, die sich dort lohnen:
+
+- „Welche Unterlagen fehlen mir noch am dringendsten?"
+- „Sind die Zinsbescheinigungen für Halstenbek in der Mappe? Bitte such danach."
+- „Ich habe den Transporter für den Umzug gemietet — wo gehört die Rechnung hin?"
+- „Geh mit mir die offenen Rückfragen durch, eine nach der anderen."
 
 ---
 
@@ -15,13 +27,13 @@ cd ~/first-repo-claude-tax-return-document-tool-jesqdh && source .venv/bin/activ
 Die Anlagen-Summen sind repariert und sollten jetzt deutlich kleiner sein als
 zuvor. **Das ist richtig so** — siehe unten.
 
-| Schritt | Dauer |
-| --- | --- |
-| 1. Vier **Dubletten** löschen | 5 Min |
-| 2. Drei **Zinsbescheinigungen** suchen | 15 Min |
-| 3. Restliche **Rückfragen** beantworten | 15 Min |
-| 4. Einmal **neu analysieren** (5–15 €) | 30–60 Min |
-| 5. **`steuer ordnen --paket`** | 2 Min |
+| Schritt | Wo | Dauer |
+| --- | --- | --- |
+| 1. Vier **Dubletten** löschen | Seite **Dubletten** | 5 Min |
+| 2. Drei **Zinsbescheinigungen** suchen | zuerst auf der Seite **Beratung** fragen | 15 Min |
+| 3. Restliche **Rückfragen** beantworten | Seite **Beratung** oder **Rückfragen** | 15 Min |
+| 4. Einmal **neu analysieren** (5–15 €) | Seite **Übersicht** | 30–60 Min |
+| 5. **`steuer ordnen --paket`** | Konsole | 2 Min |
 
 ---
 
@@ -212,16 +224,19 @@ das für 2024 weg.
 Konsole oeffnen, eine Zeile:
 
 ```bash
-cd ~/first-repo-claude-tax-return-document-tool-jesqdh && source .venv/bin/activate && cd steuer-2024 && git pull origin claude/tax-return-document-tool-jesqdh && steuer beantworten --erneut
+cd ~/first-repo-claude-tax-return-document-tool-jesqdh && source .venv/bin/activate && git pull origin claude/tax-return-document-tool-jesqdh && cd steuer-2024 && steuer web
 ```
 
-16 Rueckfragen, teuerster Beleg zuerst, Kleinbetraege unter 50 EUR bleiben
-aussen vor (12 Stueck, zusammen 294,18 EUR). Antwort tippen, Enter. Leer =
-ueberspringen, `-` = Anmerkung loeschen, `x` = abbrechen. Nach jeder Antwort
-wird gespeichert; abbrechen kostet nichts.
+Dann im Browser <http://127.0.0.1:5173> oeffnen und oben auf **Beratung**
+klicken. Dort einfach losschreiben — ganze Saetze, wie in einem Gespraech.
+Strg+Enter sendet, der Knopf „Senden" auch.
 
-**Am `>` wartet die Konsole auf Text, nicht auf einen Befehl.** Immer nur eine
-Zeile einfuegen, ohne Zeilenumbruch.
+Waehrend gearbeitet wird, erscheinen graue Zeilen wie „durchsucht die Mappe:
+zins" oder „traegt Ihre Antwort bei Beleg 3f2a ein". Daran sehen Sie, worauf
+die Antwort beruht. Eine Antwort dauert je nach Nachschlagen 10 bis 60 Sekunden.
+
+Wer die Rueckfragen lieber der Reihe nach abarbeitet, hat weiterhin die Seite
+**Rueckfragen** mit einem Feld je Beleg. Beides schreibt in dieselbe Notiz.
 
 ---
 

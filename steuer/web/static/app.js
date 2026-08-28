@@ -198,3 +198,122 @@ document.addEventListener("click", async (ereignis) => {
     window.location.href = "/";
   }
 });
+
+// --- Beratung -------------------------------------------------------------
+
+// Ein Zug kann eine Minute dauern, wenn das Modell mehrere Belege nachschlaegt.
+// Deshalb wird nicht auf die Antwort gewartet, sondern der Verlauf abgefragt:
+// so erscheinen die Zeilen "Nachgeschlagen" schon, waehrend gearbeitet wird.
+
+const beratungForm = document.getElementById("beratung-form");
+if (beratungForm) {
+  const verlauf = document.getElementById("verlauf");
+  const feld = document.getElementById("beratung-text");
+  const senden = document.getElementById("beratung-senden");
+  const denkt = document.getElementById("beratung-denkt");
+  const fehlerfeld = document.getElementById("beratung-fehler");
+  let beobachtung = null;
+
+  const rollennamen = { mandant: "Sie", berater: "Steuerexperte", vorgang: "Nachgeschlagen" };
+
+  function zeichne(beitraege) {
+    verlauf.textContent = "";
+    for (const beitrag of beitraege) {
+      const karte = document.createElement("div");
+      karte.className = `beitrag ${beitrag.rolle}`;
+      const kopf = document.createElement("div");
+      kopf.className = "beitrag-kopf";
+      kopf.textContent = rollennamen[beitrag.rolle] || beitrag.rolle;
+      const zeit = document.createElement("span");
+      zeit.className = "zeit";
+      zeit.textContent = beitrag.zeit || "";
+      kopf.appendChild(zeit);
+      const text = document.createElement("div");
+      text.className = "beitrag-text";
+      // Bewusst als Text und nicht als HTML: der Inhalt stammt aus einem
+      // Sprachmodell und aus den eigenen Belegen.
+      text.textContent = beitrag.text;
+      karte.append(kopf, text);
+      verlauf.appendChild(karte);
+    }
+    verlauf.scrollTop = verlauf.scrollHeight;
+  }
+
+  function zeigeFehler(text) {
+    fehlerfeld.textContent = text || "";
+    fehlerfeld.hidden = !text;
+  }
+
+  async function hole() {
+    const antwort = await fetch("/api/beratung");
+    const stand = await antwort.json();
+    zeichne(stand.beitraege || []);
+    denkt.hidden = !stand.laeuft;
+    senden.disabled = stand.laeuft;
+    if (stand.fehler) zeigeFehler(stand.fehler);
+    return stand;
+  }
+
+  function beobachte() {
+    if (beobachtung) clearInterval(beobachtung);
+    beobachtung = setInterval(async () => {
+      try {
+        const stand = await hole();
+        if (!stand.laeuft) {
+          clearInterval(beobachtung);
+          beobachtung = null;
+        }
+      } catch (fehler) {
+        clearInterval(beobachtung);
+        beobachtung = null;
+        zeigeFehler(`Verbindung zum Werkzeug verloren: ${fehler}`);
+        senden.disabled = false;
+        denkt.hidden = true;
+      }
+    }, 1500);
+  }
+
+  async function abschicken() {
+    const text = feld.value.trim();
+    if (!text || senden.disabled) return;
+    zeigeFehler("");
+    senden.disabled = true;
+    denkt.hidden = false;
+    const antwort = await fetch("/api/beratung", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        nachricht: text,
+        modell: document.getElementById("modell-beratung")?.value,
+      }),
+    });
+    const daten = await antwort.json();
+    if (!antwort.ok) {
+      zeigeFehler(daten.fehler || "Die Nachricht konnte nicht gesendet werden.");
+      senden.disabled = false;
+      denkt.hidden = true;
+      return;
+    }
+    feld.value = "";
+    document.getElementById("beratung-leer")?.remove();
+    await hole();
+    beobachte();
+  }
+
+  beratungForm.addEventListener("submit", (ereignis) => {
+    ereignis.preventDefault();
+    abschicken();
+  });
+
+  feld.addEventListener("keydown", (ereignis) => {
+    if (ereignis.key === "Enter" && (ereignis.ctrlKey || ereignis.metaKey)) {
+      ereignis.preventDefault();
+      abschicken();
+    }
+  });
+
+  zeigeModellhinweis("modell-beratung", "hinweis-beratung");
+
+  // Ein Zug kann laufen, waehrend die Seite neu geladen wird.
+  if (!denkt.hidden) beobachte();
+}

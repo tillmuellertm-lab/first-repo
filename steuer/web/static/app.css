@@ -288,3 +288,63 @@ ul.fehlt li { color: var(--achtung); }
 .dublette-name { font-weight: 600; word-break: break-word; }
 
 .dublettenliste .notiz { margin: .3rem 0 0 1.6rem; }
+
+
+/* --- Beratung: Gespraechsverlauf ----------------------------------------- */
+
+.verlauf { margin: 1.2rem 0; }
+
+.beitrag {
+  border: 1px solid var(--rahmen);
+  border-radius: var(--radius);
+  padding: .7rem .9rem;
+  margin-bottom: .6rem;
+  background: var(--flaeche);
+}
+
+/* Die eigene Nachricht steht abgesetzt, damit der Verlauf beim Ueberfliegen
+   erkennbar bleibt; der Vorgang tritt zurueck, er ist Beiwerk. */
+.beitrag.mandant { background: var(--flaeche2); }
+.beitrag.berater { border-left: 3px solid var(--akzent); }
+.beitrag.vorgang {
+  background: transparent;
+  border: none;
+  padding: .1rem .9rem;
+  margin-bottom: .2rem;
+  font-size: .82rem;
+  color: var(--gedaempft);
+}
+
+.beitrag-kopf {
+  display: flex;
+  gap: .6rem;
+  align-items: baseline;
+  font-size: .78rem;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: var(--gedaempft);
+  margin-bottom: .3rem;
+}
+
+.beitrag.vorgang .beitrag-kopf { display: none; }
+.beitrag-kopf .zeit { margin-left: auto; text-transform: none; letter-spacing: 0; }
+
+/* Die Antwort kommt als Fliesstext mit Absaetzen und Listen. Sie unveraendert
+   stehen zu lassen ist sicherer, als sie als HTML zu deuten. */
+.beitrag-text { white-space: pre-wrap; line-height: 1.5; }
+.beitrag.vorgang .beitrag-text::before { content: "· "; }
+
+.denkt { color: var(--gedaempft); font-size: .88rem; margin: .5rem 0; }
+
+.beratung-eingabe textarea {
+  width: 100%;
+  box-sizing: border-box;
+  font: inherit;
+  padding: .6rem .7rem;
+  border: 1px solid var(--rahmen);
+  border-radius: var(--radius);
+  resize: vertical;
+  margin-bottom: .5rem;
+}
+
+.beratung-eingabe .knopfreihe { align-items: center; }

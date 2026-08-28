@@ -23,6 +23,7 @@ LOG = logging.getLogger(__name__)
 MODELL_DOKUMENT = os.environ.get("STEUER_MODELL_DOKUMENT", "claude-opus-5")
 MODELL_STRATEGIE = os.environ.get("STEUER_MODELL_STRATEGIE", "claude-fable-5")
 MODELL_RECHT = os.environ.get("STEUER_MODELL_RECHT", "claude-opus-5")
+MODELL_BERATUNG = os.environ.get("STEUER_MODELL_BERATUNG", "claude-opus-5")
 
 # Zur Auswahl angebotene Modelle je Arbeitsschritt: (Kennung, Bezeichnung, Erlaeuterung).
 # Die Reihenfolge ist die Reihenfolge im Auswahlfeld.
@@ -73,6 +74,16 @@ def modell_dokument_pruefen(modell: str | None) -> str:
 def modell_strategie_pruefen(modell: str | None) -> str:
     return _pruefen(modell, AUSWAHL_STRATEGIE, MODELL_STRATEGIE)
 
+
+# Im Gespraech zaehlt dasselbe wie in der Gesamtauswertung: mehrstufiges
+# Schlussfolgern ueber viele Belege. Deshalb dieselbe Auswahl.
+AUSWAHL_BERATUNG = AUSWAHL_STRATEGIE
+
+
+def modell_beratung_pruefen(modell: str | None) -> str:
+    return _pruefen(modell, AUSWAHL_BERATUNG, MODELL_BERATUNG)
+
+
 MAX_VERSUCHE = 4
 WEB_SUCHE_WERKZEUG = {"type": "web_search_20250305", "name": "web_search", "max_uses": 12}
 
@@ -97,6 +108,7 @@ class Analysedienst:
     modell_dokument: str = MODELL_DOKUMENT
     modell_strategie: str = MODELL_STRATEGIE
     modell_recht: str = MODELL_RECHT
+    modell_beratung: str = MODELL_BERATUNG
     _client: Any = None
 
     def __post_init__(self) -> None:
@@ -296,6 +308,38 @@ class Analysedienst:
         )
         return self._werkzeugergebnis(antwort, "gesamtauswertung")
 
+    # -- Beratungsgespraech --------------------------------------------------
+
+    def beratung(
+        self,
+        system: str,
+        werkzeuge: list[dict[str, Any]],
+        nachrichten: list[dict[str, Any]],
+        modell: str = "",
+    ) -> Any:
+        """Ein Zug im Gespraech mit dem Mandanten.
+
+        Bewusst ohne ``tool_choice``: das Modell soll selbst entscheiden, ob es
+        nachschlaegt oder einfach antwortet. Eine leere Werkzeugliste wird
+        weggelassen statt uebergeben - so laesst sich die letzte Runde erzwingen,
+        in der es zusammenfassen und nicht weitersuchen soll.
+        """
+        # Der Systemprompt traegt den gesamten Bestand der Mappe und geht in
+        # jeder Werkzeugrunde erneut mit. Zwischengespeichert kostet er nur
+        # beim ersten Mal voll - bei acht Runden je Frage ist das der
+        # Unterschied zwischen brauchbar und unbezahlbar.
+        argumente: dict[str, Any] = {
+            "model": modell or self.modell_beratung,
+            "max_tokens": 4096,
+            "system": [
+                {"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}
+            ],
+            "messages": nachrichten,
+        }
+        if werkzeuge:
+            argumente["tools"] = werkzeuge
+        return self._mit_wiederholung(lambda: self.client.messages.create(**argumente))
+
     # -- Rechtsupdate --------------------------------------------------------
 
     def rechtsstand_recherchieren(self, jahr: int, bisherige_werte: dict[str, Any]) -> dict[str, Any]:
@@ -476,12 +520,14 @@ def _analyse_aus_rohdaten(rohdaten: dict[str, Any]) -> Analyse:
 
 
 __all__ = [
+    "AUSWAHL_BERATUNG",
     "AUSWAHL_DOKUMENT",
     "AUSWAHL_STRATEGIE",
     "AnalyseFehler",
     "Analysedienst",
     "ExtraktionsFehler",
     "KeinSchluessel",
+    "modell_beratung_pruefen",
     "modell_dokument_pruefen",
     "modell_strategie_pruefen",
     "schluessel_vorhanden",

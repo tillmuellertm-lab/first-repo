@@ -202,9 +202,9 @@ class Arbeitsmappe:
             "profil": self.profil.als_dict(),
             "einstellungen": self.einstellungen,
         }
-        _atomar_schreiben(self.wurzel / KONFIGDATEI, json.dumps(konfig, indent=2, ensure_ascii=False))
+        atomar_schreiben(self.wurzel / KONFIGDATEI, json.dumps(konfig, indent=2, ensure_ascii=False))
         zustand = {"version": VERSION, "dokumente": [d.als_dict() for d in self.dokumente]}
-        _atomar_schreiben(
+        atomar_schreiben(
             self.zustandsverzeichnis / ZUSTANDSDATEI,
             json.dumps(zustand, indent=2, ensure_ascii=False),
         )
@@ -409,7 +409,7 @@ def _freier_name(ordner: Path, wunschname: str) -> str:
     return f"{stamm}-{zaehler}{endung}"
 
 
-def _atomar_schreiben(pfad: Path, inhalt: str) -> None:
+def atomar_schreiben(pfad: Path, inhalt: str) -> None:
     pfad.parent.mkdir(parents=True, exist_ok=True)
     temp = pfad.with_suffix(pfad.suffix + ".tmp")
     temp.write_text(inhalt, encoding="utf-8")

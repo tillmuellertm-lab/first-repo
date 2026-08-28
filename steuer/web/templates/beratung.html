@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block titel %}Beratung{% endblock %}
+
+{% block inhalt %}
+<h1>Beratung</h1>
+
+<p class="klein">
+  Hier sprechen Sie mit dem Steuerexperten, der Ihre Belege ausgewertet hat. Er
+  sieht denselben Bestand wie die Analyse: alle {{ jahresansicht.eigene | length }}
+  Belege des Jahres {{ jahr }}, die Summen, die offenen Punkte. Er kann einzelne
+  Belege nachschlagen, sich einen Scan ansehen und Ihre Antworten dort eintragen,
+  wo sie in den Bericht fuer den Steuerberater gehoeren. Was Sie hier sagen,
+  bleibt also in der Mappe.
+</p>
+
+{% if not schluessel_vorhanden %}
+<div class="banner warnung">
+  Es ist kein ANTHROPIC_API_KEY gesetzt. Ohne Schluessel kann das Gespraech nicht
+  gefuehrt werden.
+</div>
+{% endif %}
+
+<div class="banner fehler" id="beratung-fehler" {% if not fehler %}hidden{% endif %}>
+  {{ fehler }}
+</div>
+
+<div class="verlauf" id="verlauf">
+  {% if not beitraege %}
+  <div class="leer" id="beratung-leer">
+    <h2>Noch kein Gespraech</h2>
+    <p>
+      Fangen Sie mit dem an, was Sie gerade beschaeftigt. Zum Beispiel:
+      &bdquo;Welche Unterlagen fehlen mir noch am dringendsten?&ldquo;,
+      &bdquo;Sind die Zinsbescheinigungen fuer Halstenbek in der Mappe?&ldquo; oder
+      &bdquo;Ich habe den Transporter fuer den Umzug gemietet, wo gehoert die
+      Rechnung hin?&ldquo;
+    </p>
+  </div>
+  {% endif %}
+  {% for beitrag in beitraege %}
+  <div class="beitrag {{ beitrag.rolle }}">
+    <div class="beitrag-kopf">
+      {%- if beitrag.rolle == 'mandant' %}Sie
+      {%- elif beitrag.rolle == 'berater' %}Steuerexperte
+      {%- else %}Nachgeschlagen{% endif %}
+      <span class="zeit">{{ beitrag.zeit }}</span>
+    </div>
+    <div class="beitrag-text">{{ beitrag.text }}</div>
+  </div>
+  {% endfor %}
+</div>
+
+<div class="denkt" id="beratung-denkt" {% if not laeuft %}hidden{% endif %}>
+  Der Steuerexperte sieht sich Ihre Unterlagen an &hellip;
+</div>
+
+<form class="beratung-eingabe" id="beratung-form">
+  <textarea id="beratung-text" rows="3"
+            placeholder="Ihre Frage oder Ihre Auskunft. Mit Strg+Enter absenden."></textarea>
+  <div class="knopfreihe">
+    <button type="submit" class="knopf haupt" id="beratung-senden">Senden</button>
+    <label class="modellwahl" id="wahl-beratung">
+      Modell
+      <select id="modell-beratung">
+        {% for kennung, bezeichnung, erlaeuterung in auswahl_beratung %}
+        <option value="{{ kennung }}" title="{{ erlaeuterung }}"
+                {% if kennung == modell_beratung %}selected{% endif %}>{{ bezeichnung }}</option>
+        {% endfor %}
+      </select>
+    </label>
+  </div>
+  <p class="modellhinweis" id="hinweis-beratung"></p>
+</form>
+
+<p class="klein">
+  Jede Frage kostet API-Guthaben, das Ansehen eines Originalscans spuerbar mehr
+  als eine Auskunft aus der gespeicherten Analyse. Die Zeilen
+  &bdquo;Nachgeschlagen&ldquo; zeigen Ihnen, worauf eine Antwort beruht.
+</p>
+
+{% if beitraege %}
+<form method="post" action="{{ url_for('beratung_loeschen') }}"
+      onsubmit="return confirm('Das ganze Gespraech verwerfen? Eingetragene Notizen bleiben erhalten.');">
+  <button type="submit" class="knopf leise">Gespraech verwerfen und neu beginnen</button>
+</form>
+{% endif %}
+{% endblock %}
