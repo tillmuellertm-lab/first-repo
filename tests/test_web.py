@@ -316,3 +316,74 @@ def test_rueckfragen_seite_haelt_auch_leere_mappe_aus(tmp_path):
         antwort = klient.get("/rueckfragen")
     assert antwort.status_code == 200
     assert "Keine offenen Rueckfragen" in antwort.get_data(as_text=True)
+
+
+# --- Dubletten im Browser ----------------------------------------------------
+
+
+@pytest.fixture
+def mappe_mit_dubletten(mappe: Arbeitsmappe, tmp_path: Path) -> Arbeitsmappe:
+    """Derselbe Beleg aus zwei Stapeln, dazu ein Einzelstueck ohne Partner."""
+    for name in ("gehalt_scan_a.txt", "gehalt_scan_b.txt"):
+        quelle = tmp_path / name
+        quelle.write_text(name, encoding="utf-8")
+        dokument, _ = mappe.datei_aufnehmen(quelle, herkunft_jahr=2024)
+        dokument.analyse = Analyse(
+            kategorie_id="werbungskosten_sonstige",
+            dokumenttyp="Gehaltsabrechnung",
+            aussteller="RasenBallsport",
+            datum="2024-07-31",
+            steuerjahr=2024,
+            betrag_gesamt=7743.62,
+        )
+
+    einzeln = tmp_path / "einmalig.txt"
+    einzeln.write_text("einmalig", encoding="utf-8")
+    dokument, _ = mappe.datei_aufnehmen(einzeln, herkunft_jahr=2024)
+    dokument.analyse = Analyse(
+        kategorie_id="werbungskosten_sonstige",
+        dokumenttyp="Tankbeleg",
+        aussteller="Aral",
+        datum="2024-09-01",
+        steuerjahr=2024,
+        betrag_gesamt=61.4,
+    )
+    mappe.speichern()
+    return mappe
+
+
+def test_dublettenseite_zeigt_nur_doppelte_belege(mappe_mit_dubletten):
+    app = anwendung_bauen(mappe_mit_dubletten)
+    app.config["TESTING"] = True
+    with app.test_client() as klient:
+        text = klient.get("/dubletten").get_data(as_text=True)
+
+    assert "gehalt_scan_a.txt" in text
+    assert "gehalt_scan_b.txt" in text
+    assert "einmalig.txt" not in text
+
+
+def test_dublette_wird_nur_fuer_angehakte_ids_entfernt(mappe_mit_dubletten):
+    app = anwendung_bauen(mappe_mit_dubletten)
+    app.config["TESTING"] = True
+    zweiter = next(d for d in mappe_mit_dubletten.dokumente if d.dateiname == "gehalt_scan_b.txt")
+
+    with app.test_client() as klient:
+        antwort = klient.post("/dubletten", data={"entfernen": zweiter.id}, follow_redirects=True)
+    assert antwort.status_code == 200
+
+    wieder = Arbeitsmappe.laden(mappe_mit_dubletten.wurzel)
+    namen = [d.dateiname for d in wieder.dokumente]
+    assert "gehalt_scan_b.txt" not in namen
+    assert "gehalt_scan_a.txt" in namen
+    assert "einmalig.txt" in namen
+
+
+def test_dublettenseite_haelt_auch_leere_mappe_aus(tmp_path):
+    leer = Arbeitsmappe.anlegen(tmp_path / "leer", 2024, Profil(veranlagungsjahr=2024))
+    app = anwendung_bauen(leer)
+    app.config["TESTING"] = True
+    with app.test_client() as klient:
+        antwort = klient.get("/dubletten")
+    assert antwort.status_code == 200
+    assert "Keine Dubletten gefunden" in antwort.get_data(as_text=True)

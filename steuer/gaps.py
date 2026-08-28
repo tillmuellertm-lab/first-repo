@@ -252,6 +252,53 @@ def _frist_pruefen(regelwerk: Regelwerk, heute: _dt.date) -> list[Befund]:
     return befunde
 
 
+def dubletten_gruppen(dokumente: list[Dokument]) -> list[list[Dokument]]:
+    """Findet Belege, die zweimal in der Mappe liegen.
+
+    Dateigleiche Dubletten faengt schon das Aufnehmen ab. Was bleibt, sind
+    dieselben Belege aus zwei Scans: leicht andere Datei, gleicher Inhalt.
+    Erkannt wird ueber Aussteller, Datum und Betrag - und, wo der Aussteller
+    fehlt, ueber Dokumentart, Datum und Betrag.
+
+    Das Ergebnis ist bewusst eine Liste von Gruppen und keine Loeschempfehlung:
+    Zwei Anhaenger am selben Tag zum selben Preis sind keine Dublette, sondern
+    zwei Anhaenger. Entscheiden muss ein Mensch.
+    """
+    gesehen: dict[tuple[str, str, float], list[Dokument]] = defaultdict(list)
+    for dokument in dokumente:
+        analyse = dokument.analyse
+        if not analyse or not analyse.datum:
+            continue
+        betrag = analyse.betrag_gesamt if analyse.betrag_gesamt is not None else analyse.betrag_abzugsfaehig
+        kennung = (analyse.aussteller or analyse.dokumenttyp or "").strip().lower()
+        if not kennung:
+            continue
+        gesehen[(kennung, analyse.datum, round(float(betrag or 0.0), 2))].append(dokument)
+
+    gruppen = [sorted(liste, key=_behaltenswert) for liste in gesehen.values() if len(liste) > 1]
+    gruppen.sort(
+        key=lambda liste: -abs(
+            (liste[0].analyse.betrag_gesamt or liste[0].analyse.betrag_abzugsfaehig or 0.0)
+        )
+    )
+    return gruppen
+
+
+def _behaltenswert(dokument: Dokument) -> tuple:
+    """Reihenfolge innerhalb einer Dublettengruppe: vorne steht, was bleiben soll.
+
+    Vorne gehoert das Exemplar, an dem die meiste Arbeit haengt. Eine Notiz des
+    Nutzers waere sonst mit der Datei weg, und die schreibt niemand gern
+    zweimal. Danach zaehlt, was schon einen Zielnamen hat, dann das aeltere.
+    """
+    return (
+        0 if dokument.notiz.strip() else 1,
+        0 if dokument.zieldateiname else 1,
+        dokument.hinzugefuegt_am,
+        dokument.dateiname,
+    )
+
+
 def _dubletten_pruefen(dokumente: list[Dokument]) -> list[Befund]:
     gesehen: dict[tuple[str, str, float], list[str]] = defaultdict(list)
     for dokument in dokumente:

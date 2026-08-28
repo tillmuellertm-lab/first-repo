@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block titel %}Dubletten{% endblock %}
+
+{% block inhalt %}
+<h1>Dubletten</h1>
+
+<p class="klein">
+  Belege, die zweimal in der Mappe liegen: gleicher Aussteller, gleiches Datum,
+  gleicher Betrag. Das passiert, wenn derselbe Beleg aus zwei Stapeln kommt.
+  In der Summe zaehlt er dann doppelt.
+</p>
+<p class="klein">
+  Vorausgewaehlt ist jeweils alles ausser dem ersten Eintrag &mdash; das ist der
+  Vorschlag, nicht die Entscheidung. Zwei gleiche Anhaengermieten am selben Tag
+  koennen auch wirklich zwei Anhaenger sein. Sehen Sie kurz hin, bevor Sie
+  entfernen. Entfernen loescht die Datei aus der Mappe; die Datei in Ihrem
+  Downloads-Ordner bleibt.
+</p>
+
+{% if entfernt %}
+<div class="banner erfolg">{{ entfernt }} Dokument{{ 'e' if entfernt != 1 else '' }} entfernt.</div>
+{% elif entfernt == 0 %}
+<div class="banner">Nichts entfernt.</div>
+{% endif %}
+
+{% if not gruppen %}
+<section class="leer">
+  <h2>Keine Dubletten gefunden</h2>
+  <p>
+    Kein Beleg kommt mit gleichem Aussteller, Datum und Betrag zweimal vor.
+    Belege ohne Datum oder ohne Betrag kann diese Pruefung nicht vergleichen &mdash;
+    sie erscheinen hier grundsaetzlich nicht.
+  </p>
+</section>
+{% else %}
+
+<form method="post"
+      onsubmit="return confirm('Die angehakten Dokumente werden aus der Mappe entfernt. Fortfahren?');">
+  <h2>{{ gruppen | length }} Gruppe{{ 'n' if gruppen | length != 1 else '' }}</h2>
+
+  {% for gruppe in gruppen %}
+  {% set erster = gruppe[0] %}
+  <div class="frage">
+    <div class="frage-kopf">
+      <strong>{{ erster.analyse.aussteller or erster.analyse.dokumenttyp or erster.dateiname }}</strong>
+      <span class="klein">{{ erster.analyse.datum }}</span>
+      <span class="betrag">{{ (erster.analyse.betrag_gesamt if erster.analyse.betrag_gesamt is not none else erster.analyse.betrag_abzugsfaehig) | euro }}</span>
+    </div>
+    <ul class="dublettenliste">
+      {% for dokument in gruppe %}
+      <li>
+        <label>
+          <input type="checkbox" name="entfernen" value="{{ dokument.id }}"
+                 {% if not loop.first %}checked{% endif %}>
+          <span class="dublette-name">
+            <a href="{{ url_for('dokument', dokument_id=dokument.id) }}">
+              {{ dokument.zieldateiname or dokument.dateiname }}
+            </a>
+          </span>
+          <span class="klein">
+            {{ dokument.analyse.dokumenttyp or 'ohne Dokumentart' }}
+            &middot; {{ taxonomy.kategorie(dokument.wirksame_kategorie).label }}
+            &middot; aufgenommen {{ dokument.hinzugefuegt_am }}
+            {%- if loop.first %} &middot; behalten{% endif %}
+          </span>
+        </label>
+        {% if dokument.notiz %}
+        <p class="klein notiz">Ihre Notiz: {{ dokument.notiz }}</p>
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endfor %}
+
+  <div class="knopfreihe haftend">
+    <button type="submit" class="knopf gefahr">Angehakte entfernen</button>
+  </div>
+</form>
+{% endif %}
+{% endblock %}

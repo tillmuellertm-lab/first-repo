@@ -241,6 +241,32 @@ def anwendung_bauen(mappe: Arbeitsmappe) -> Any:
             fehler=None,
         )
 
+    @app.route("/dubletten", methods=["GET", "POST"])
+    def dubletten():
+        """Doppelt vorliegende Belege anzeigen und in einem Zug entfernen.
+
+        Von Hand sind Dubletten muehsam zu finden: Sie stehen in derselben
+        Gruppe untereinander, sehen aber je nach Scan unterschiedlich aus. Ein
+        doppelt gezaehlter Bruttolohn faellt dafuer sofort auf - in der falschen
+        Richtung.
+        """
+        if request.method == "POST":
+            entfernt = 0
+            for kennung in request.form.getlist("entfernen"):
+                if mappe.dokument_entfernen(kennung, datei_loeschen=True):
+                    entfernt += 1
+            if entfernt:
+                mappe.speichern()
+            return redirect(url_for("dubletten", entfernt=entfernt))
+
+        gruppen = gaps.dubletten_gruppen(mappe.dokumente)
+        return render_template(
+            "dubletten.html",
+            **grunddaten(),
+            gruppen=gruppen,
+            entfernt=request.args.get("entfernt", type=int),
+        )
+
     @app.route("/rueckfragen", methods=["GET", "POST"])
     def rueckfragen():
         """Alle offenen Rueckfragen auf einer Seite, jede mit eigenem Feld.

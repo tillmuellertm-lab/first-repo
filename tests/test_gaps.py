@@ -509,3 +509,45 @@ def test_rechnung_mit_vertrag_im_betreff_zaehlt_weiterhin():
     doc.analyse.kategorie_id = "werbungskosten_sonstige"
     zahlen = gaps.auswerten([doc], REGELWERK, profil).kennzahlen
     assert zahlen["werbungskosten_gesamt"] == 1260.50
+
+
+def test_dublettengruppen_stellen_den_beleg_mit_notiz_nach_vorn():
+    """Loeschvorschlag ist alles ausser dem ersten - vorne muss die Notiz stehen."""
+    mit_notiz = dokument(
+        "werbungskosten_sonstige", 251.76, aussteller="Kreis Pinneberg",
+        datum="2024-02-01", kennung="a",
+    )
+    mit_notiz.notiz = "Abfallgebuehren, gehoert zur Anlage V"
+    mit_notiz.hinzugefuegt_am = "2024-12-01"
+    ohne_notiz = dokument(
+        "werbungskosten_sonstige", 251.76, aussteller="Kreis Pinneberg",
+        datum="2024-02-01", kennung="b",
+    )
+    ohne_notiz.hinzugefuegt_am = "2024-11-01"
+
+    gruppen = gaps.dubletten_gruppen([ohne_notiz, mit_notiz])
+
+    assert len(gruppen) == 1
+    assert gruppen[0][0] is mit_notiz
+
+
+def test_dublettengruppen_uebergehen_belege_ohne_datum():
+    ohne_datum = [
+        dokument("werbungskosten_sonstige", 40.0, aussteller="Aral", datum=None, kennung="a"),
+        dokument("werbungskosten_sonstige", 40.0, aussteller="Aral", datum=None, kennung="b"),
+    ]
+    assert gaps.dubletten_gruppen(ohne_datum) == []
+
+
+def test_dublettengruppen_sortieren_nach_betrag():
+    klein = [
+        dokument("werbungskosten_sonstige", 26.48, aussteller="RentMyTrailer",
+                 datum="2024-08-14", kennung=f"k{i}") for i in range(2)
+    ]
+    gross = [
+        dokument("werbungskosten_sonstige", 7743.62, aussteller="RasenBallsport",
+                 datum="2024-07-31", kennung=f"g{i}") for i in range(2)
+    ]
+    gruppen = gaps.dubletten_gruppen(klein + gross)
+
+    assert [g[0].analyse.aussteller for g in gruppen] == ["RasenBallsport", "RentMyTrailer"]

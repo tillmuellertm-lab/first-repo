@@ -263,3 +263,28 @@ ul.fehlt li { color: var(--achtung); }
   background: var(--hintergrund, #fff);
   border-top: 1px solid var(--rand, #d8d8d8);
 }
+
+
+/* --- Dubletten: eine Karte je Gruppe, ein Haken je Beleg ----------------- */
+
+.dublettenliste { list-style: none; margin: .6rem 0 0; padding: 0; }
+
+.dublettenliste li + li {
+  border-top: 1px solid var(--rahmen);
+  margin-top: .5rem;
+  padding-top: .5rem;
+}
+
+.dublettenliste label {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: .6rem;
+  align-items: baseline;
+  cursor: pointer;
+}
+
+/* Der Haken steht in Spalte eins, Name und Beiwerk untereinander in Spalte zwei. */
+.dublettenliste input { grid-row: 1 / span 2; }
+.dublette-name { font-weight: 600; word-break: break-word; }
+
+.dublettenliste .notiz { margin: .3rem 0 0 1.6rem; }
