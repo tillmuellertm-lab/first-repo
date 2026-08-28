@@ -363,3 +363,44 @@ ul.fehlt li { color: var(--achtung); }
   font: inherit;
   overflow-x: auto;
 }
+
+
+/* --- Beratung: Bilder ---------------------------------------------------- */
+
+.beitrag-bild {
+  max-width: min(100%, 28rem);
+  border-radius: var(--radius);
+  border: 1px solid var(--rahmen);
+  display: block;
+}
+
+.bildvorschau { display: flex; gap: .5rem; flex-wrap: wrap; margin-bottom: .5rem; }
+
+.bildvorschau figure {
+  position: relative;
+  margin: 0;
+  border: 1px solid var(--rahmen);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.bildvorschau img { display: block; height: 5rem; width: auto; }
+
+/* Wegnehmen muss so leicht sein wie Hinzufuegen - sonst wird versehentlich
+   ein falsches Bild mitgeschickt. */
+.bildvorschau button {
+  position: absolute;
+  top: .15rem;
+  right: .15rem;
+  border: none;
+  border-radius: 50%;
+  width: 1.4rem;
+  height: 1.4rem;
+  line-height: 1;
+  cursor: pointer;
+  background: rgba(0, 0, 0, .65);
+  color: #fff;
+  font-size: .9rem;
+}
+
+.beratung-eingabe textarea.bereit { border-color: var(--akzent); }

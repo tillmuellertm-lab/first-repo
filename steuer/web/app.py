@@ -8,6 +8,8 @@ bleibt.
 
 from __future__ import annotations
 
+import base64 as _b64
+import binascii
 import datetime as _dt
 import logging
 import threading
@@ -299,6 +301,14 @@ def anwendung_bauen(mappe: Arbeitsmappe) -> Any:
             "entwurf.html", **grunddaten(), name=datei.name, text=datei.read_text(encoding="utf-8")
         )
 
+    @app.get("/gespraechsbild/<name>")
+    def gespraechsbild(name: str):
+        """Liefert ein im Gespraech gezeigtes Bild fuer die Anzeige im Verlauf."""
+        datei = berater.bildpfad(mappe, name)
+        if datei is None:
+            abort(404)
+        return send_file(datei)
+
     @app.get("/verbesserungen")
     def verbesserungen():
         """Was dem Werkzeug im Gebrauch gefehlt hat, gesammelt vom Modell selbst."""
@@ -333,8 +343,28 @@ def anwendung_bauen(mappe: Arbeitsmappe) -> Any:
             return jsonify({"fehler": "Ohne ANTHROPIC_API_KEY ist kein Gespraech moeglich."}), 400
         daten = request.get_json(silent=True) or {}
         text = str(daten.get("nachricht") or "").strip()
-        if not text:
+        rohbilder = daten.get("bilder") or []
+        if not text and not rohbilder:
             return jsonify({"fehler": "Die Nachricht ist leer."}), 400
+        if len(rohbilder) > berater.MAX_BILDER_JE_NACHRICHT:
+            return jsonify(
+                {"fehler": f"Hoechstens {berater.MAX_BILDER_JE_NACHRICHT} Bilder je Nachricht."}
+            ), 400
+
+        # Die Bilder werden hier aufgenommen, nicht im Hintergrundlauf: ein
+        # unbrauchbares Bild soll sofort eine Fehlermeldung ergeben und nicht
+        # eine Minute spaeter ein abgebrochenes Gespraech.
+        bilder = []
+        for eintrag in rohbilder:
+            if not isinstance(eintrag, dict):
+                continue
+            try:
+                rohdaten = _b64.b64decode(str(eintrag.get("daten") or ""), validate=True)
+                bilder.append(
+                    berater.bild_aufnehmen(mappe, rohdaten, str(eintrag.get("medientyp") or ""))
+                )
+            except (berater.BeratungsFehler, ValueError, binascii.Error) as fehler:
+                return jsonify({"fehler": f"Bild abgelehnt: {fehler}"}), 400
 
         modell = modell_beratung_pruefen(daten.get("modell") or mappe.einstellungen.get("modell_beratung"))
         mappe.einstellungen["modell_beratung"] = modell
@@ -358,6 +388,7 @@ def anwendung_bauen(mappe: Arbeitsmappe) -> Any:
                         regelwerk=regelwerk(),
                         modell=modell,
                         sichern=lambda g: berater.speichern(mappe, g),
+                        bilder=bilder,
                     )
             except Exception as fehler:  # noqa: BLE001 - jeder Fehler gehoert auf die Seite
                 beratungslauf.fehler = str(fehler)

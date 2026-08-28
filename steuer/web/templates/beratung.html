@@ -61,10 +61,18 @@
     <div class="beitrag-kopf">
       {%- if beitrag.rolle == 'mandant' %}Sie
       {%- elif beitrag.rolle == 'berater' %}Steuerexperte
+      {%- elif beitrag.rolle == 'bild' %}Ihr Bild
       {%- else %}Nachgeschlagen{% endif %}
       <span class="zeit">{{ beitrag.zeit }}</span>
     </div>
+      {% if beitrag.rolle == 'bild' %}
+    <a href="{{ url_for('gespraechsbild', name=beitrag.text) }}" target="_blank">
+      <img class="beitrag-bild" src="{{ url_for('gespraechsbild', name=beitrag.text) }}"
+           alt="Vom Mandanten gezeigtes Bild">
+    </a>
+    {% else %}
     <div class="beitrag-text">{{ beitrag.text }}</div>
+    {% endif %}
   </div>
   {% endfor %}
 </div>
@@ -75,9 +83,13 @@
 
 <form class="beratung-eingabe" id="beratung-form">
   <textarea id="beratung-text" rows="3"
-            placeholder="Ihre Frage oder Ihre Auskunft. Mit Strg+Enter absenden."></textarea>
+            placeholder="Ihre Frage oder Ihre Auskunft. Bildschirmfoto mit Strg+V einfuegen. Mit Strg+Enter absenden."></textarea>
+  <div class="bildvorschau" id="bildvorschau" hidden></div>
   <div class="knopfreihe">
     <button type="submit" class="knopf haupt" id="beratung-senden">Senden</button>
+    <button type="button" class="knopf" id="bild-waehlen">Bild anhaengen</button>
+    <input type="file" id="bild-eingabe" accept="image/png,image/jpeg,image/gif,image/webp"
+           multiple hidden>
     <label class="modellwahl" id="wahl-beratung">
       Modell
       <select id="modell-beratung">
@@ -90,6 +102,15 @@
   </div>
   <p class="modellhinweis" id="hinweis-beratung"></p>
 </form>
+
+<p class="klein">
+  <strong>Bildschirmfotos:</strong> Bild aufnehmen und mit <kbd>Strg</kbd>+<kbd>V</kbd>
+  direkt in das Feld einfuegen &mdash; oder eine Datei hineinziehen, oder
+  &bdquo;Bild anhaengen&ldquo; anklicken. Hoechstens fuenf je Nachricht, PNG, JPEG,
+  GIF und WebP. Grosse Bilder werden vor dem Senden verkleinert. Ein Steuerbeleg
+  gehoert dagegen auf die Uebersichtsseite hochgeladen, damit er analysiert wird
+  und in die Ablage kommt.
+</p>
 
 <p class="klein">
   Jede Frage kostet API-Guthaben, das Ansehen eines Originalscans spuerbar mehr

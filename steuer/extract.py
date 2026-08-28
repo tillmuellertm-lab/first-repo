@@ -115,14 +115,25 @@ def _pdf_kuerzen(pfad: Path, max_seiten: int, ab_seite: int = 0) -> bytes:
 
 def _bild_aufbereiten(pfad: Path, medientyp: str) -> tuple[bytes, str, list[str]]:
     """Skaliert zu grosse Bilder herunter, damit sie die API-Grenzen einhalten."""
-    rohdaten = pfad.read_bytes()
+    try:
+        return bild_verkleinern(pfad.read_bytes(), medientyp)
+    except ExtraktionsFehler as fehler:
+        raise ExtraktionsFehler(f"{pfad.name}: {fehler}") from fehler
+
+
+def bild_verkleinern(rohdaten: bytes, medientyp: str) -> tuple[bytes, str, list[str]]:
+    """Bringt Bilddaten auf ein Mass, das die API annimmt und das bezahlbar ist.
+
+    Ein Bildschirmfoto ist leicht 3000 Pixel breit. Ungekuerzt kostet es ein
+    Vielfaches an Tokens, ohne mehr zu zeigen: mehr als 1568 Pixel an der
+    langen Kante verarbeitet das Modell ohnehin nicht.
+    """
     hinweise: list[str] = []
     Image = _pillow()
     if Image is None:
         if len(rohdaten) > MAX_BILD_BYTES:
             raise ExtraktionsFehler(
-                f"{pfad.name} ist zu gross fuer die Analyse und 'Pillow' fehlt zum Verkleinern: "
-                "pip install Pillow"
+                "Das Bild ist zu gross und 'Pillow' fehlt zum Verkleinern: pip install Pillow"
             )
         return rohdaten, medientyp, hinweise
 
@@ -145,7 +156,7 @@ def _bild_aufbereiten(pfad: Path, medientyp: str) -> tuple[bytes, str, list[str]
             puffer = io.BytesIO()
             verkleinert.save(puffer, format="JPEG", quality=80, optimize=True)
             daten = puffer.getvalue()
-        hinweise.append(f"Bild fuer die Analyse auf {verkleinert.size[0]}x{verkleinert.size[1]} Pixel verkleinert.")
+        hinweise.append(f"Bild auf {verkleinert.size[0]}x{verkleinert.size[1]} Pixel verkleinert.")
         return daten, "image/jpeg", hinweise
 
 

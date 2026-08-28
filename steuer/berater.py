@@ -15,7 +15,9 @@ eigene Zeile im Verlauf - man soll sehen koennen, worauf eine Auskunft beruht.
 
 from __future__ import annotations
 
+import base64 as _b64
 import datetime as _dt
+import hashlib as _hashlib
 import json
 import logging
 from dataclasses import dataclass, field
@@ -85,17 +87,25 @@ class Gespraech:
             }
         )
 
-    def fuer_api(self) -> list[dict[str, Any]]:
+    def fuer_api(self, mappe: Arbeitsmappe | None = None) -> list[dict[str, Any]]:
         """Der Verlauf im Format der Messages-API, bei Bedarf vorne gekuerzt.
 
         Gekuerzt wird nur an einer Stelle, an der keine Antwort von ihrem
         Werkzeugaufruf getrennt wird: eine Nachricht mit ``tool_result`` ohne
         das zugehoerige ``tool_use`` davor weist die API zurueck.
+
+        Bilder liegen als Datei in der Mappe und stehen im Verlauf nur als
+        Verweis; erst hier werden sie eingesetzt. Sonst waere die
+        Verlaufsdatei nach ein paar Bildschirmfotos unlesbar und um ein
+        Vielfaches groesser als das Gespraech selbst.
         """
         gewaehlt = self.nachrichten[-MAX_NACHRICHTEN:]
         while gewaehlt and _enthaelt(gewaehlt[0], "tool_result"):
             gewaehlt = gewaehlt[1:]
-        return [{"role": n["rolle"], "content": n["inhalt"]} for n in gewaehlt]
+        return [
+            {"role": n["rolle"], "content": _bilder_einsetzen(n["inhalt"], mappe)}
+            for n in gewaehlt
+        ]
 
     def als_dict(self) -> dict[str, Any]:
         return {
@@ -124,6 +134,95 @@ def _enthaelt(nachricht: dict[str, Any], blockart: str) -> bool:
 
 def pfad(mappe: Arbeitsmappe) -> Path:
     return mappe.zustandsverzeichnis / GESPRAECHSDATEI
+
+
+# ------------------------------------------------------------- Bilder --------
+
+# Was ein Bildschirmfoto sein kann. PDF gehoert nicht dazu: ein Beleg wird
+# hochgeladen und analysiert, nicht ins Gespraech geworfen.
+BILDTYPEN = {
+    "image/png": ".png",
+    "image/jpeg": ".jpg",
+    "image/gif": ".gif",
+    "image/webp": ".webp",
+}
+MAX_BILDER_JE_NACHRICHT = 5
+
+
+def bilderordner(mappe: Arbeitsmappe) -> Path:
+    return mappe.zustandsverzeichnis / "gespraechsbilder"
+
+
+def bild_aufnehmen(mappe: Arbeitsmappe, rohdaten: bytes, medientyp: str) -> dict[str, Any]:
+    """Legt ein Bild in der Mappe ab und gibt den Verweis fuer den Verlauf.
+
+    Der Dateiname ist die Pruefsumme: dasselbe Bildschirmfoto zweimal
+    eingefuegt liegt einmal auf der Platte.
+    """
+    from .extract import ExtraktionsFehler, bild_verkleinern  # lokal, Zirkelbezug
+
+    if medientyp not in BILDTYPEN:
+        raise BeratungsFehler(
+            f"'{medientyp}' ist kein unterstuetztes Bildformat. Moeglich sind "
+            "PNG, JPEG, GIF und WebP."
+        )
+    if not rohdaten:
+        raise BeratungsFehler("Das Bild ist leer.")
+    try:
+        daten, medientyp, _ = bild_verkleinern(rohdaten, medientyp)
+    except ExtraktionsFehler as fehler:
+        raise BeratungsFehler(str(fehler)) from fehler
+
+    ordner = bilderordner(mappe)
+    ordner.mkdir(parents=True, exist_ok=True)
+    name = _hashlib.sha256(daten).hexdigest()[:16] + BILDTYPEN[medientyp]
+    ziel = ordner / name
+    if not ziel.exists():
+        ziel.write_bytes(daten)
+    return {"type": "bild_verweis", "datei": name, "medientyp": medientyp}
+
+
+def bildpfad(mappe: Arbeitsmappe, name: str) -> Path | None:
+    """Loest einen Bildnamen auf, ohne aus dem Ordner herauszufuehren."""
+    ordner = bilderordner(mappe).resolve()
+    if not ordner.is_dir():
+        return None
+    ziel = (ordner / name).resolve()
+    if ziel.parent != ordner or not ziel.is_file():
+        return None
+    return ziel
+
+
+def _bilder_einsetzen(
+    inhalt: list[dict[str, Any]], mappe: Arbeitsmappe | None
+) -> list[dict[str, Any]]:
+    """Ersetzt Bildverweise durch die Bilddaten, die die API erwartet."""
+    if not any(isinstance(b, dict) and b.get("type") == "bild_verweis" for b in inhalt):
+        return inhalt
+    ergebnis: list[dict[str, Any]] = []
+    for block in inhalt:
+        if not isinstance(block, dict) or block.get("type") != "bild_verweis":
+            ergebnis.append(block)
+            continue
+        datei = bildpfad(mappe, str(block.get("datei") or "")) if mappe else None
+        if datei is None:
+            # Das Bild ist weg. Ein Hinweis ist ehrlicher als ein stiller
+            # Ausfall: sonst antwortet das Modell zu einem Bild, das es nie sah.
+            ergebnis.append(
+                {"type": "text", "text": "[Ein frueher gezeigtes Bild ist nicht mehr vorhanden.]"}
+            )
+            continue
+        ergebnis.append(
+            {
+                "type": "image",
+                "source": {
+                    "type": "base64",
+                    "media_type": str(block.get("medientyp") or "image/png"),
+                    "data": _b64.b64encode(datei.read_bytes()).decode("ascii"),
+                },
+            }
+        )
+    return ergebnis
 
 
 def laden(mappe: Arbeitsmappe) -> Gespraech:
@@ -158,7 +257,7 @@ def loeschen(mappe: Arbeitsmappe) -> bool:
 class Beitrag:
     """Eine Zeile des Verlaufs, wie sie in der Oberflaeche steht."""
 
-    rolle: str  # mandant | berater | vorgang
+    rolle: str  # mandant | berater | vorgang | bild
     text: str
     zeit: str = ""
 
@@ -219,7 +318,9 @@ def beitraege(gespraech: Gespraech) -> list[Beitrag]:
             if not isinstance(block, dict):
                 continue
             art = block.get("type")
-            if rolle == "user" and art == "text":
+            if rolle == "user" and art == "bild_verweis":
+                ergebnis.append(Beitrag("bild", str(block.get("datei") or ""), zeit))
+            elif rolle == "user" and art == "text":
                 ergebnis.append(Beitrag("mandant", str(block.get("text") or ""), zeit))
             elif rolle == "assistant" and art == "text":
                 text = str(block.get("text") or "").strip()
@@ -1042,6 +1143,7 @@ def nachricht_senden(
     regelwerk: Regelwerk,
     modell: str = "",
     sichern: Callable[[Gespraech], None] | None = None,
+    bilder: list[dict[str, Any]] | None = None,
 ) -> Gespraech:
     """Stellt eine Frage und laesst das Modell antworten, notfalls ueber Umwege.
 
@@ -1053,11 +1155,20 @@ def nachricht_senden(
     from .prompts import system_beratung  # lokal, um Zirkelbezuege zu vermeiden
 
     frage = frage.strip()
-    if not frage:
+    bilder = list(bilder or [])
+    if not frage and not bilder:
         raise BeratungsFehler("Ohne Frage keine Antwort.")
+    if len(bilder) > MAX_BILDER_JE_NACHRICHT:
+        raise BeratungsFehler(
+            f"Hoechstens {MAX_BILDER_JE_NACHRICHT} Bilder je Nachricht."
+        )
 
     gespraech.modell = modell or gespraech.modell
-    gespraech.anhaengen("user", [{"type": "text", "text": frage}])
+    # Das Bild zuerst, die Frage danach: so weiss das Modell beim Lesen des
+    # Bildes schon nicht, worauf es achten soll - aber die Frage bezieht sich
+    # eindeutig auf das, was darueber steht.
+    inhalt = bilder + [{"type": "text", "text": frage or "Bitte sieh dir das an."}]
+    gespraech.anhaengen("user", inhalt)
     if sichern:
         sichern(gespraech)
 
@@ -1069,7 +1180,7 @@ def nachricht_senden(
         antwort = dienst.beratung(
             system=system,
             werkzeuge=[] if letzte_runde else liste,
-            nachrichten=gespraech.fuer_api(),
+            nachrichten=gespraech.fuer_api(mappe),
             modell=modell,
         )
         bloecke = [_als_dict(block) for block in getattr(antwort, "content", []) or []]

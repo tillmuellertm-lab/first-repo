@@ -214,7 +214,12 @@ if (beratungForm) {
   const fehlerfeld = document.getElementById("beratung-fehler");
   let beobachtung = null;
 
-  const rollennamen = { mandant: "Sie", berater: "Steuerexperte", vorgang: "Nachgeschlagen" };
+  const rollennamen = {
+    mandant: "Sie",
+    berater: "Steuerexperte",
+    vorgang: "Nachgeschlagen",
+    bild: "Ihr Bild",
+  };
 
   function zeichne(beitraege) {
     verlauf.textContent = "";
@@ -228,12 +233,20 @@ if (beratungForm) {
       zeit.className = "zeit";
       zeit.textContent = beitrag.zeit || "";
       kopf.appendChild(zeit);
-      const text = document.createElement("div");
-      text.className = "beitrag-text";
-      // Bewusst als Text und nicht als HTML: der Inhalt stammt aus einem
-      // Sprachmodell und aus den eigenen Belegen.
-      text.textContent = beitrag.text;
-      karte.append(kopf, text);
+      let koerper;
+      if (beitrag.rolle === "bild") {
+        koerper = document.createElement("img");
+        koerper.className = "beitrag-bild";
+        koerper.src = `/gespraechsbild/${encodeURIComponent(beitrag.text)}`;
+        koerper.alt = "Vom Mandanten gezeigtes Bild";
+      } else {
+        koerper = document.createElement("div");
+        koerper.className = "beitrag-text";
+        // Bewusst als Text und nicht als HTML: der Inhalt stammt aus einem
+        // Sprachmodell und aus den eigenen Belegen.
+        koerper.textContent = beitrag.text;
+      }
+      karte.append(kopf, koerper);
       verlauf.appendChild(karte);
     }
     verlauf.scrollTop = verlauf.scrollHeight;
@@ -273,9 +286,93 @@ if (beratungForm) {
     }, 1500);
   }
 
+  // --- Bilder anhaengen ---------------------------------------------------
+
+  // Ein Bildschirmfoto entsteht in der Zwischenablage. Es erst speichern zu
+  // muessen, um es dann wieder herauszusuchen, waere der Umweg, den dieses
+  // Feld erspart.
+  const vorschau = document.getElementById("bildvorschau");
+  const bildEingabe = document.getElementById("bild-eingabe");
+  const erlaubteTypen = ["image/png", "image/jpeg", "image/gif", "image/webp"];
+  const MAX_BILDER = 5;
+  let angehaengt = [];
+
+  function zeichneVorschau() {
+    vorschau.textContent = "";
+    vorschau.hidden = angehaengt.length === 0;
+    angehaengt.forEach((bild, index) => {
+      const rahmen = document.createElement("figure");
+      const vorschaubild = document.createElement("img");
+      vorschaubild.src = `data:${bild.medientyp};base64,${bild.daten}`;
+      vorschaubild.alt = bild.name || "angehaengtes Bild";
+      const weg = document.createElement("button");
+      weg.type = "button";
+      weg.textContent = "×";
+      weg.title = "Dieses Bild nicht mitschicken";
+      weg.addEventListener("click", () => {
+        angehaengt.splice(index, 1);
+        zeichneVorschau();
+      });
+      rahmen.append(vorschaubild, weg);
+      vorschau.appendChild(rahmen);
+    });
+  }
+
+  function alsBase64(datei) {
+    return new Promise((fertig, gescheitert) => {
+      const leser = new FileReader();
+      leser.onload = () => fertig(String(leser.result).split(",")[1]);
+      leser.onerror = () => gescheitert(leser.error);
+      leser.readAsDataURL(datei);
+    });
+  }
+
+  async function nimmBilder(dateien) {
+    for (const datei of dateien) {
+      if (!erlaubteTypen.includes(datei.type)) continue;
+      if (angehaengt.length >= MAX_BILDER) {
+        zeigeFehler(`Hoechstens ${MAX_BILDER} Bilder je Nachricht.`);
+        break;
+      }
+      angehaengt.push({
+        name: datei.name || "Bildschirmfoto",
+        medientyp: datei.type,
+        daten: await alsBase64(datei),
+      });
+    }
+    zeichneVorschau();
+  }
+
+  feld.addEventListener("paste", (ereignis) => {
+    const dateien = Array.from(ereignis.clipboardData?.files || []);
+    if (!dateien.length) return;
+    ereignis.preventDefault();
+    nimmBilder(dateien);
+  });
+
+  ["dragenter", "dragover"].forEach((art) =>
+    feld.addEventListener(art, (e) => {
+      e.preventDefault();
+      feld.classList.add("bereit");
+    })
+  );
+  ["dragleave", "drop"].forEach((art) =>
+    feld.addEventListener(art, (e) => {
+      e.preventDefault();
+      feld.classList.remove("bereit");
+    })
+  );
+  feld.addEventListener("drop", (e) => nimmBilder(Array.from(e.dataTransfer?.files || [])));
+
+  document.getElementById("bild-waehlen")?.addEventListener("click", () => bildEingabe.click());
+  bildEingabe?.addEventListener("change", () => {
+    nimmBilder(Array.from(bildEingabe.files || []));
+    bildEingabe.value = "";
+  });
+
   async function abschicken() {
     const text = feld.value.trim();
-    if (!text || senden.disabled) return;
+    if ((!text && !angehaengt.length) || senden.disabled) return;
     zeigeFehler("");
     senden.disabled = true;
     denkt.hidden = false;
@@ -285,6 +382,7 @@ if (beratungForm) {
       body: JSON.stringify({
         nachricht: text,
         modell: document.getElementById("modell-beratung")?.value,
+        bilder: angehaengt.map((b) => ({ medientyp: b.medientyp, daten: b.daten })),
       }),
     });
     const daten = await antwort.json();
@@ -295,6 +393,8 @@ if (beratungForm) {
       return;
     }
     feld.value = "";
+    angehaengt = [];
+    zeichneVorschau();
     document.getElementById("beratung-leer")?.remove();
     await hole();
     beobachte();

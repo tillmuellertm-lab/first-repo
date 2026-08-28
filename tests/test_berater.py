@@ -1,5 +1,6 @@
 """Das Beratungsgespraech muss in die Mappe hineinsehen und in sie hineinschreiben."""
 
+import json
 from pathlib import Path
 
 import pytest
@@ -508,3 +509,103 @@ def test_verbesserung_ohne_anlass_wird_abgewiesen(mappe, regelwerk):
 
 def test_ohne_eintraege_gibt_es_keine_liste(mappe):
     assert berater.verbesserungen(mappe) is None
+
+
+# --- Bilder im Gespraech -----------------------------------------------------
+
+
+def _png() -> bytes:
+    """Ein winziges gueltiges PNG."""
+    import base64
+
+    return base64.b64decode(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
+    )
+
+
+def test_bild_wird_abgelegt_und_nur_einmal_gespeichert(mappe):
+    erst = berater.bild_aufnehmen(mappe, _png(), "image/png")
+    nochmal = berater.bild_aufnehmen(mappe, _png(), "image/png")
+    assert erst["type"] == "bild_verweis"
+    assert erst["datei"] == nochmal["datei"]
+    assert len(list(berater.bilderordner(mappe).iterdir())) == 1
+
+
+def test_fremdes_format_wird_abgelehnt(mappe):
+    with pytest.raises(berater.BeratungsFehler, match="Bildformat"):
+        berater.bild_aufnehmen(mappe, b"%PDF-1.4", "application/pdf")
+
+
+def test_bildpfad_fuehrt_nicht_aus_dem_ordner_heraus(mappe):
+    berater.bild_aufnehmen(mappe, _png(), "image/png")
+    assert berater.bildpfad(mappe, "../dokumente.json") is None
+    assert berater.bildpfad(mappe, "gibtsnicht.png") is None
+
+
+def test_bild_steht_im_verlauf_nur_als_verweis(mappe, regelwerk):
+    """Sonst waere die Verlaufsdatei nach drei Bildschirmfotos unlesbar."""
+    verweis = berater.bild_aufnehmen(mappe, _png(), "image/png")
+    dienst = Dienst(Antwort([{"type": "text", "text": "Ich sehe es."}]))
+    gespraech = berater.Gespraech()
+    berater.nachricht_senden(
+        mappe, gespraech, "Was steht hier?", dienst, regelwerk, bilder=[verweis]
+    )
+
+    gespeichert = json.dumps(gespraech.als_dict())
+    assert "bild_verweis" in gespeichert
+    assert "base64" not in gespeichert
+
+    # Erst auf dem Weg zur API wird das Bild eingesetzt.
+    gesendet = dienst.aufrufe[0]["nachrichten"][0]["content"]
+    assert gesendet[0]["type"] == "image"
+    assert gesendet[0]["source"]["media_type"] == "image/png"
+    assert gesendet[1]["text"] == "Was steht hier?"
+
+
+def test_bild_erscheint_als_eigener_beitrag(mappe, regelwerk):
+    verweis = berater.bild_aufnehmen(mappe, _png(), "image/png")
+    gespraech = berater.Gespraech()
+    berater.nachricht_senden(
+        mappe,
+        gespraech,
+        "Sieh mal",
+        Dienst(Antwort([{"type": "text", "text": "Ja."}])),
+        regelwerk,
+        bilder=[verweis],
+    )
+    rollen = [b.rolle for b in berater.beitraege(gespraech)]
+    assert rollen == ["bild", "mandant", "berater"]
+
+
+def test_ein_bild_ohne_text_reicht(mappe, regelwerk):
+    verweis = berater.bild_aufnehmen(mappe, _png(), "image/png")
+    dienst = Dienst(Antwort([{"type": "text", "text": "Das ist ein Kontoauszug."}]))
+    berater.nachricht_senden(
+        mappe, berater.Gespraech(), "", dienst, regelwerk, bilder=[verweis]
+    )
+    assert dienst.aufrufe[0]["nachrichten"][0]["content"][1]["text"]
+
+
+def test_zu_viele_bilder_werden_abgelehnt(mappe, regelwerk):
+    verweis = berater.bild_aufnehmen(mappe, _png(), "image/png")
+    with pytest.raises(berater.BeratungsFehler, match="Hoechstens"):
+        berater.nachricht_senden(
+            mappe,
+            berater.Gespraech(),
+            "viele",
+            Dienst(),
+            regelwerk,
+            bilder=[verweis] * (berater.MAX_BILDER_JE_NACHRICHT + 1),
+        )
+
+
+def test_geloeschtes_bild_bricht_das_gespraech_nicht_ab(mappe, regelwerk):
+    """Ein stiller Ausfall waere schlimmer: das Modell antwortete ins Leere."""
+    verweis = berater.bild_aufnehmen(mappe, _png(), "image/png")
+    gespraech = berater.Gespraech()
+    gespraech.anhaengen("user", [verweis, {"type": "text", "text": "Was ist das?"}])
+    berater.bildpfad(mappe, verweis["datei"]).unlink()
+
+    gesendet = gespraech.fuer_api(mappe)[0]["content"]
+    assert gesendet[0]["type"] == "text"
+    assert "nicht mehr vorhanden" in gesendet[0]["text"]

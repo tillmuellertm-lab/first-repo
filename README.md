@@ -146,6 +146,17 @@ Entwürfe landen in `berichte/entwuerfe/` und stehen auf der Seite **Beratung** 
 „Entwürfe“ zum Lesen und Kopieren bereit. Versendet wird nichts, und ins ZIP für den
 Steuerberater gehen sie nicht mit.
 
+**Bildschirmfotos** lassen sich mit `Strg`+`V` direkt in das Eingabefeld einfügen, per
+Drag-and-drop hineinziehen oder über „Bild anhängen“ auswählen — höchstens fünf je
+Nachricht, PNG, JPEG, GIF und WebP. Große Bilder werden vor dem Senden auf 1568 Pixel
+an der langen Kante verkleinert; ungekürzt kosten sie ein Vielfaches, ohne mehr zu
+zeigen. Die Bilder liegen als Datei in `.zustand/gespraechsbilder/`, im Verlauf steht
+nur ein Verweis darauf — sonst wäre die Verlaufsdatei nach drei Bildschirmfotos
+unlesbar und um ein Vielfaches größer als das Gespräch selbst.
+
+Ein vollständiger Steuerbeleg gehört trotzdem auf die Übersichtsseite hochgeladen, nicht
+ins Gespräch: nur dort wird er analysiert, benannt und einsortiert.
+
 Der Verlauf liegt in `.zustand/gespraech.json` und wird beim nächsten Start
 fortgesetzt. „Gespräch verwerfen“ löscht ihn; eingetragene Notizen bleiben.
 

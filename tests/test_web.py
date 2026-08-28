@@ -479,3 +479,58 @@ def test_verbesserungsliste_wird_verlinkt_und_angezeigt(klient):
     seite = klient.get("/verbesserungen")
     assert seite.status_code == 200
     assert "Belege anderer Mappen sehen" in seite.get_data(as_text=True)
+
+
+# --- Bildschirmfotos im Gespraech --------------------------------------------
+
+
+def _png_base64() -> str:
+    return (
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
+    )
+
+
+def test_bild_wird_angenommen_und_ausgeliefert(klient, monkeypatch):
+    from steuer import berater
+
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
+    # Der Modellaufruf selbst wird nicht gebraucht: geprueft wird, dass das
+    # Bild ankommt, bevor der Hintergrundlauf ueberhaupt beginnt.
+    monkeypatch.setattr(berater, "nachricht_senden", lambda *a, **k: None)
+
+    antwort = klient.post(
+        "/api/beratung",
+        json={
+            "nachricht": "Was steht auf diesem Bildschirmfoto?",
+            "bilder": [{"medientyp": "image/png", "daten": _png_base64()}],
+        },
+    )
+    assert antwort.status_code == 200
+
+    name = next(p.name for p in berater.bilderordner(klient.mappe).iterdir())
+    bild = klient.get(f"/gespraechsbild/{name}")
+    assert bild.status_code == 200
+    assert klient.get("/gespraechsbild/gibtsnicht.png").status_code == 404
+
+
+def test_unbrauchbares_bild_wird_sofort_abgelehnt(klient, monkeypatch):
+    """Der Fehler soll kommen, bevor eine Minute Arbeit vergeht."""
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
+    antwort = klient.post(
+        "/api/beratung",
+        json={"nachricht": "hier", "bilder": [{"medientyp": "application/pdf", "daten": "AAAA"}]},
+    )
+    assert antwort.status_code == 400
+    assert "Bild abgelehnt" in antwort.get_json()["fehler"]
+
+
+def test_nachricht_nur_aus_einem_bild_ist_erlaubt(klient, monkeypatch):
+    from steuer import berater
+
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
+    monkeypatch.setattr(berater, "nachricht_senden", lambda *a, **k: None)
+    antwort = klient.post(
+        "/api/beratung",
+        json={"nachricht": "", "bilder": [{"medientyp": "image/png", "daten": _png_base64()}]},
+    )
+    assert antwort.status_code == 200
