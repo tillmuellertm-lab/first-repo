@@ -1,20 +1,46 @@
 # Hier geht es weiter
 
-Stand: 28. August 2026. Die Ablage ist fertig, das Paket fuer Dr. Hagn liegt
-bereit. Offen sind Rueckfragen und Besorgungen.
+Stand: 28. August 2026, abends.
 
-**Das Wichtigste zuerst: Es gibt jetzt die Seite „Beratung".** Dort sprechen Sie
-mit dem Modell, das Ihre Belege ausgewertet hat — und dieses Modell sieht die
-Mappe wirklich. Es kann einzelne Belege nachschlagen, sich einen Scan ansehen,
-die Summen nachrechnen und **Ihre Antworten selbst eintragen**. Damit entfällt
-der Umweg, im Chat etwas zu klären und es hinterher von Hand einzutippen.
+## Als Erstes morgen
 
-Fragen, die sich dort lohnen:
+Konsole oeffnen, eine Zeile, Enter:
 
-- „Welche Unterlagen fehlen mir noch am dringendsten?"
-- „Sind die Zinsbescheinigungen für Halstenbek in der Mappe? Bitte such danach."
-- „Ich habe den Transporter für den Umzug gemietet — wo gehört die Rechnung hin?"
-- „Geh mit mir die offenen Rückfragen durch, eine nach der anderen."
+```bash
+cd ~/first-repo-claude-tax-return-document-tool-jesqdh && source .venv/bin/activate && git pull origin claude/tax-return-document-tool-jesqdh && cd steuer-2024 && steuer web
+```
+
+Dann <http://127.0.0.1:5173> im Browser, oben auf **Beratung**.
+
+**Der erste Schritt dort:** Die Datei `Einstieg_Beratung_2024.md` oeffnen, alles
+markieren (Strg+A), kopieren (Strg+C), in das Feld auf der Seite Beratung
+einfuegen (Strg+V), senden. Das ist alles, was wir hier besprochen haben und was
+das Werkzeug noch nicht weiss: die 2.910 EUR doppelte Haushaltsfuehrung, die
+280 EUR Verpflegungsmehraufwand, der Dienstwagen, die geprueffte AfA, die
+Lohnsteuerzahlen, die fehlenden Unterlagen, Ihre Entscheidungen. Das Werkzeug
+traegt die dauerhaften Werte danach selbst als Stammdaten ein - **einmal
+einfuegen genuegt**, danach ist es dauerhaft in der Mappe.
+
+**Der zweite Schritt:** Auf der Uebersicht nach unten scrollen, beide Haken
+gesetzt lassen (Gesamtauswertung, ZIP-Paket), Modell Fable 5, und den blauen
+Knopf **Ordnen und Uebersicht erzeugen** klicken. Damit wird die Gesamtauswertung
+erstmals gespeichert und geht ab dann in jedes Gespraech mit ein.
+
+---
+
+## Was die Beratung heute dazubekommen hat
+
+| Neu | Wofuer |
+| --- | --- |
+| Gesamtauswertung im Blick | die Bewertung der ganzen Mappe, nicht nur einzelner Belege |
+| Ihre Antworten im Klartext | dieselbe Frage kommt nicht zweimal |
+| `stammwert_speichern` | Gebaeude-AfA und Co. dauerhaft, mit Fundstelle |
+| `rechtsstand_lesen` | Fragen zu 2023, 2025, 2026 |
+| `dubletten_finden` | doppelte Belege benennen |
+| `web_search` | Rechtsprechung und kuenftige Aenderungen |
+| `schreiben_entwerfen` | die Mail an Dr. Hagn, als Datei zum Kopieren |
+| `verbesserung_vorschlagen` | was dem Werkzeug im Gebrauch fehlt |
+| **Bildschirmfotos** | Strg+V direkt ins Eingabefeld |
 
 ---
 
