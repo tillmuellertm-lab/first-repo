@@ -459,3 +459,23 @@ def test_entwurf_wird_angezeigt_und_verlinkt(klient):
 
 def test_unbekannter_entwurf_ergibt_404(klient):
     assert klient.get("/entwurf/gibtsnicht.md").status_code == 404
+
+
+def test_verbesserungsliste_wird_verlinkt_und_angezeigt(klient):
+    from steuer import berater, rules
+
+    assert klient.get("/verbesserungen").status_code == 404
+    berater.werkzeug_ausfuehren(
+        "verbesserung_vorschlagen",
+        {
+            "titel": "Belege anderer Mappen sehen",
+            "anlass": "Nach der EUeR der Ehefrau gefragt, sie liegt in einer anderen Mappe.",
+            "beschreibung": "Ein Werkzeug, das mappenuebergreifend sucht.",
+        },
+        klient.mappe,
+        rules.laden(2024),
+    )
+    assert "Was diesem Werkzeug fehlt" in klient.get("/beratung").get_data(as_text=True)
+    seite = klient.get("/verbesserungen")
+    assert seite.status_code == 200
+    assert "Belege anderer Mappen sehen" in seite.get_data(as_text=True)

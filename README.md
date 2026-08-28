@@ -129,12 +129,18 @@ Jahre — die holt sich das Modell bei Bedarf selbst. Dafür kann es
 | `kategorie_setzen` | **korrigiert** eine falsche Zuordnung |
 | `stammwert_speichern` | **hält** einen jahresübergreifenden Wert samt Fundstelle fest |
 | `schreiben_entwerfen` | **legt** einen Text als Datei ab, etwa die Mail an den Steuerberater |
+| `verbesserung_vorschlagen` | **notiert**, was dem Werkzeug im Gebrauch gefehlt hat |
 
-Die letzten vier ändern die Mappe. Das ist der eigentliche Zweck: Was Sie im Gespräch
+Die letzten fünf ändern die Mappe. Das ist der eigentliche Zweck: Was Sie im Gespräch
 über einen Beleg sagen, landet als Notiz an diesem Beleg und erscheint im Bericht für
 den Steuerberater direkt unter der Frage, die es beantwortet — statt im Gesprächsverlauf
 zu versanden. Jeder Zugriff steht als eigene Zeile im Verlauf, damit erkennbar bleibt,
 worauf eine Antwort beruht.
+
+Stößt das Modell an eine Grenze des Werkzeugs — ein Werkzeug, das es gebraucht hätte;
+eine Angabe, die es nicht sehen kann —, schreibt es das mitsamt dem Anlass nach
+`berichte/verbesserungen.md`. Die Liste entsteht also dort, wo die Reibung auftritt,
+und nicht aus der Erinnerung.
 
 Entwürfe landen in `berichte/entwuerfe/` und stehen auf der Seite **Beratung** unter
 „Entwürfe“ zum Lesen und Kopieren bereit. Versendet wird nichts, und ins ZIP für den

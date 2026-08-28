@@ -110,6 +110,13 @@
 </ul>
 {% endif %}
 
+{% if verbesserungen %}
+<p class="klein">
+  <a href="{{ url_for('verbesserungen') }}">Was diesem Werkzeug fehlt</a> &mdash;
+  im Gebrauch aufgefallen und mitgeschrieben.
+</p>
+{% endif %}
+
 {% if beitraege %}
 <form method="post" action="{{ url_for('beratung_loeschen') }}"
       onsubmit="return confirm('Das ganze Gespraech verwerfen? Eingetragene Notizen bleiben erhalten.');">

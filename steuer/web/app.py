@@ -282,6 +282,7 @@ def anwendung_bauen(mappe: Arbeitsmappe) -> Any:
             **grunddaten(),
             beitraege=berater.beitraege(gespraech),
             entwuerfe=berater.entwuerfe(mappe),
+            verbesserungen=berater.verbesserungen(mappe) is not None,
             auswahl_beratung=AUSWAHL_BERATUNG,
             modell_beratung=modell_beratung_pruefen(mappe.einstellungen.get("modell_beratung")),
             laeuft=beratungslauf.laeuft,
@@ -292,6 +293,16 @@ def anwendung_bauen(mappe: Arbeitsmappe) -> Any:
     def entwurf(name: str):
         """Zeigt einen im Gespraech entstandenen Entwurf zum Lesen und Kopieren."""
         datei = berater.entwurf_pfad(mappe, name)
+        if datei is None:
+            abort(404)
+        return render_template(
+            "entwurf.html", **grunddaten(), name=datei.name, text=datei.read_text(encoding="utf-8")
+        )
+
+    @app.get("/verbesserungen")
+    def verbesserungen():
+        """Was dem Werkzeug im Gebrauch gefehlt hat, gesammelt vom Modell selbst."""
+        datei = berater.verbesserungen(mappe)
         if datei is None:
             abort(404)
         return render_template(

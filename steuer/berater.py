@@ -35,6 +35,8 @@ GESPRAECHSDATEI = "gespraech.json"
 # Wohin das Modell Entwuerfe legt: unterhalb der Berichte, damit sie beim
 # Packen des Pakets nicht versehentlich mitgehen, aber leicht zu finden sind.
 ENTWURFSORDNER = "entwuerfe"
+# Was dem Werkzeug im Gebrauch fehlt, gesammelt an einer Stelle.
+VERBESSERUNGSDATEI = "verbesserungen.md"
 VERSION = 1
 
 # Wie viele Nachrichten des Verlaufs an das Modell gehen. Ein Gespraech ueber
@@ -200,6 +202,8 @@ def _vorgangstext(name: str, eingabe: dict[str, Any]) -> str:
         return f"traegt den Stammwert '{eingabe.get('kennung', '?')}' ein"
     if name == "schreiben_entwerfen":
         return f"schreibt einen Entwurf: {eingabe.get('titel', 'ohne Titel')}"
+    if name == "verbesserung_vorschlagen":
+        return f"notiert eine Luecke im Werkzeug: {eingabe.get('titel', '')}"
     if name == "web_search":
         return f"sucht im Internet: {eingabe.get('query', '')}"
     return f"ruft {name} auf"
@@ -430,6 +434,12 @@ def entwuerfe(mappe: Arbeitsmappe) -> list[str]:
     return sorted((p.name for p in ordner.glob("*.md") if p.is_file()), reverse=True)
 
 
+def verbesserungen(mappe: Arbeitsmappe) -> Path | None:
+    """Die gesammelten Verbesserungswuensche, falls schon welche notiert wurden."""
+    ziel = mappe.berichte / VERBESSERUNGSDATEI
+    return ziel if ziel.is_file() else None
+
+
 def entwurf_pfad(mappe: Arbeitsmappe, name: str) -> Path | None:
     """Loest einen Entwurfsnamen auf, ohne aus dem Ordner herauszufuehren.
 
@@ -645,6 +655,32 @@ def werkzeuge() -> list[dict[str, Any]]:
                     },
                 },
                 "required": ["titel", "text"],
+            },
+        },
+        {
+            "name": "verbesserung_vorschlagen",
+            "description": (
+                "Haelt fest, was diesem Werkzeug fehlt. Stoesst du an eine Grenze - ein "
+                "Werkzeug, das du gebraucht haettest und nicht hast; eine Angabe, die du "
+                "nicht sehen kannst; eine Aufgabe, die du nur umstaendlich loesen konntest "
+                "-, dann schreib es auf, statt es zu uebergehen. Der Mandant entwickelt "
+                "das Werkzeug weiter und braucht dafuer den konkreten Anlass, nicht die "
+                "Idee allein. Nur echte Reibung aufschreiben, keine Wunschlisten."
+            ),
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "titel": {"type": "string", "description": "Kurz, in einer Zeile."},
+                    "anlass": {
+                        "type": "string",
+                        "description": "Was gerade nicht ging und woran du es gemerkt hast.",
+                    },
+                    "beschreibung": {
+                        "type": "string",
+                        "description": "Was helfen wuerde, so konkret wie moeglich.",
+                    },
+                },
+                "required": ["titel", "anlass", "beschreibung"],
             },
         },
         {
@@ -929,10 +965,38 @@ def _entwurf_schreiben(mappe: Arbeitsmappe, eingabe: dict[str, Any]) -> str:
     )
 
 
+def _verbesserung_vorschlagen(mappe: Arbeitsmappe, eingabe: dict[str, Any]) -> str:
+    titel = str(eingabe.get("titel") or "").strip()
+    anlass = str(eingabe.get("anlass") or "").strip()
+    beschreibung = str(eingabe.get("beschreibung") or "").strip()
+    if not (titel and anlass and beschreibung):
+        raise BeratungsFehler("Titel, Anlass und Beschreibung sind alle drei noetig.")
+
+    ziel = mappe.berichte / VERBESSERUNGSDATEI
+    kopf = (
+        "# Was diesem Werkzeug fehlt\n\n"
+        "Waehrend der Arbeit aufgefallen, aus der Sicht dessen, der damit arbeiten "
+        "muss. Jeder Eintrag nennt den Anlass, nicht nur die Idee.\n"
+    )
+    bestehend = ziel.read_text(encoding="utf-8") if ziel.is_file() else kopf
+    eintrag = (
+        f"\n## {_dt.date.today().isoformat()} — {titel}\n\n"
+        f"**Anlass:** {anlass}\n\n{beschreibung}\n"
+    )
+    ziel.parent.mkdir(parents=True, exist_ok=True)
+    atomar_schreiben(ziel, bestehend + eintrag)
+    return (
+        f"Notiert unter {ziel}. Der Mandant sieht die Liste auf der Seite 'Beratung' "
+        "und kann sie in die Weiterentwicklung geben."
+    )
+
+
 def werkzeug_ausfuehren(
     name: str, eingabe: dict[str, Any], mappe: Arbeitsmappe, regelwerk: Regelwerk
 ) -> tuple[str, list[dict[str, Any]]]:
     """Fuehrt einen Werkzeugaufruf aus. Rueckgabe: Ergebnistext und Anhaenge."""
+    if name == "verbesserung_vorschlagen":
+        return _verbesserung_vorschlagen(mappe, eingabe), []
     if name == "dubletten_finden":
         return _dubletten_finden(mappe), []
     if name == "rechtsstand_lesen":

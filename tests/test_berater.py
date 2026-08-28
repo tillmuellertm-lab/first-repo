@@ -482,3 +482,29 @@ def test_serverwerkzeug_erscheint_als_vorgang_im_verlauf():
     liste = berater.beitraege(gespraech)
     assert [b.rolle for b in liste] == ["vorgang", "berater"]
     assert "Verpflegungspauschale 2026" in liste[0].text
+
+
+def test_verbesserungen_werden_gesammelt_statt_ueberschrieben(mappe, regelwerk):
+    """Die Liste waechst - der zweite Eintrag darf den ersten nicht verdraengen."""
+    for titel in ("Belege anderer Mappen sehen", "Entfernungspauschale rechnen"):
+        berater.werkzeug_ausfuehren(
+            "verbesserung_vorschlagen",
+            {"titel": titel, "anlass": "kam gerade vor", "beschreibung": "waere hilfreich"},
+            mappe,
+            regelwerk,
+        )
+    text = berater.verbesserungen(mappe).read_text(encoding="utf-8")
+    assert "Belege anderer Mappen sehen" in text
+    assert "Entfernungspauschale rechnen" in text
+    assert text.count("**Anlass:**") == 2
+
+
+def test_verbesserung_ohne_anlass_wird_abgewiesen(mappe, regelwerk):
+    with pytest.raises(berater.BeratungsFehler):
+        berater.werkzeug_ausfuehren(
+            "verbesserung_vorschlagen", {"titel": "Irgendwas"}, mappe, regelwerk
+        )
+
+
+def test_ohne_eintraege_gibt_es_keine_liste(mappe):
+    assert berater.verbesserungen(mappe) is None
