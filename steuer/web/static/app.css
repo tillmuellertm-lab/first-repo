@@ -348,3 +348,18 @@ ul.fehlt li { color: var(--achtung); }
 }
 
 .beratung-eingabe .knopfreihe { align-items: center; }
+
+.entwurfsliste { list-style: none; padding: 0; margin: .5rem 0 1.5rem; }
+.entwurfsliste li { padding: .35rem 0; border-bottom: 1px solid var(--rahmen); }
+
+/* Der Entwurf steht so da, wie er geschrieben wurde - er soll kopierbar sein. */
+.entwurf {
+  white-space: pre-wrap;
+  line-height: 1.55;
+  background: var(--flaeche);
+  border: 1px solid var(--rahmen);
+  border-radius: var(--radius);
+  padding: 1.2rem 1.4rem;
+  font: inherit;
+  overflow-x: auto;
+}

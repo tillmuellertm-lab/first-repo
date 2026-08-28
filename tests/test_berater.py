@@ -360,3 +360,125 @@ def test_lagebild_enthaelt_bereits_gegebene_antworten(mappe, regelwerk):
 def test_lagebild_benennt_veraltete_analysen(mappe, regelwerk):
     lage = berater.lage_text(mappe, regelwerk)
     assert "nicht auf dem aktuellen Stand" in lage
+
+
+# --- Die uebrigen Werkzeuge --------------------------------------------------
+
+
+def test_dubletten_werden_gefunden(mappe, regelwerk, tmp_path):
+    """Derselbe Beleg aus zwei Stapeln - der Chat soll ihn benennen koennen."""
+    from steuer.models import Analyse as A
+
+    quelle = tmp_path / "zinsen_zweiter_scan.txt"
+    quelle.write_text("zweiter scan", encoding="utf-8")
+    zwilling, _ = mappe.datei_aufnehmen(quelle, herkunft_jahr=2024)
+    zwilling.analyse = A(
+        kategorie_id="vermietung",
+        dokumenttyp="Zinsbescheinigung",
+        aussteller="DSL Bank",
+        datum="2024-12-31",
+        steuerjahr=2024,
+        betrag_gesamt=8153.80,
+    )
+    text, _ = berater.werkzeug_ausfuehren("dubletten_finden", {}, mappe, regelwerk)
+    assert "zinsen_zweiter_scan.txt" in text
+    assert "zinsen.txt" in text
+
+
+def test_ohne_dubletten_sagt_das_werkzeug_das(mappe, regelwerk):
+    text, _ = berater.werkzeug_ausfuehren("dubletten_finden", {}, mappe, regelwerk)
+    assert "zweimal" in text
+
+
+def test_rechtsstand_eines_anderen_jahres(mappe, regelwerk):
+    text, _ = berater.werkzeug_ausfuehren("rechtsstand_lesen", {"jahr": 2023}, mappe, regelwerk)
+    assert "Rechtsstand fuer 2023" in text
+    assert "Werte:" in text
+
+
+def test_rechtsstand_ohne_jahr_wird_abgewiesen(mappe, regelwerk):
+    with pytest.raises(berater.BeratungsFehler):
+        berater.werkzeug_ausfuehren("rechtsstand_lesen", {}, mappe, regelwerk)
+
+
+def test_stammwert_braucht_eine_fundstelle(mappe, regelwerk):
+    """Ein Wert ohne Herkunft ist im naechsten Jahr nicht mehr nachpruefbar."""
+    with pytest.raises(berater.BeratungsFehler, match="Fundstelle"):
+        berater.werkzeug_ausfuehren(
+            "stammwert_speichern",
+            {"kennung": "gebaeude_afa_jahresbetrag", "wert": "8971"},
+            mappe,
+            regelwerk,
+        )
+
+
+def test_stammwert_wird_gespeichert_und_ueberlebt(mappe, regelwerk):
+    berater.werkzeug_ausfuehren(
+        "stammwert_speichern",
+        {
+            "kennung": "gebaeude_afa_jahresbetrag",
+            "wert": "8971",
+            "quelle": "Anlage V 2023, Zeile 33",
+        },
+        mappe,
+        regelwerk,
+    )
+    wieder = Arbeitsmappe.laden(mappe.wurzel)
+    eintrag = wieder.stammdaten.eintrag("gebaeude_afa_jahresbetrag")
+    assert eintrag.wert == "8971"
+    assert eintrag.quelle == "Anlage V 2023, Zeile 33"
+
+
+def test_geaenderter_stammwert_nennt_den_alten(mappe, regelwerk):
+    for wert in ("8971", "9200"):
+        text, _ = berater.werkzeug_ausfuehren(
+            "stammwert_speichern",
+            {"kennung": "gebaeude_afa_jahresbetrag", "wert": wert, "quelle": "Anlage V"},
+            mappe,
+            regelwerk,
+        )
+    assert "8971" in text
+
+
+def test_entwurf_wird_abgelegt_und_ist_auffindbar(mappe, regelwerk):
+    text, _ = berater.werkzeug_ausfuehren(
+        "schreiben_entwerfen",
+        {"titel": "Mail an Dr. Hagn", "text": "Sehr geehrter Herr Dr. Hagn, ..."},
+        mappe,
+        regelwerk,
+    )
+    assert "Gespeichert als" in text
+    liste = berater.entwuerfe(mappe)
+    assert len(liste) == 1 and "Mail-an-Dr-Hagn" in liste[0]
+    pfad = berater.entwurf_pfad(mappe, liste[0])
+    assert "Sehr geehrter Herr Dr. Hagn" in pfad.read_text(encoding="utf-8")
+
+
+def test_entwurfspfad_fuehrt_nicht_aus_dem_ordner_heraus(mappe):
+    """Der Name kommt aus der Adresszeile und ist damit nicht vertrauenswuerdig."""
+    assert berater.entwurf_pfad(mappe, "../../steuer.json") is None
+    assert berater.entwurf_pfad(mappe, "gibtsnicht.md") is None
+
+
+def test_websuche_gehoert_zu_den_werkzeugen():
+    namen = {w.get("name") for w in berater.werkzeuge()}
+    assert "web_search" in namen
+    assert {"dubletten_finden", "rechtsstand_lesen", "stammwert_speichern",
+            "schreiben_entwerfen"} <= namen
+
+
+def test_serverwerkzeug_erscheint_als_vorgang_im_verlauf():
+    """Die Websuche fuehrt die API selbst aus - sichtbar sein muss sie trotzdem."""
+    gespraech = berater.Gespraech()
+    gespraech.anhaengen(
+        "assistant",
+        [
+            {"type": "server_tool_use", "id": "s1", "name": "web_search",
+             "input": {"query": "Verpflegungspauschale 2026"}},
+            {"type": "web_search_tool_result", "tool_use_id": "s1", "content": []},
+            {"type": "text", "text": "Ab 2026 sind es 32 Euro."},
+        ],
+    )
+    liste = berater.beitraege(gespraech)
+    assert [b.rolle for b in liste] == ["vorgang", "berater"]
+    assert "Verpflegungspauschale 2026" in liste[0].text

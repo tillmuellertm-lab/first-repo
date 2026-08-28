@@ -122,17 +122,32 @@ Jahre — die holt sich das Modell bei Bedarf selbst. Dafür kann es
 | `beleg_ansehen` | hängt den Originalscan ans Gespräch, wenn die Analyse nicht reicht |
 | `offene_punkte` | die offenen Punkte, gebündelt nach der Besorgung dahinter |
 | `kennzahlen_abrufen` | rechnet Summen und Befunde neu aus |
+| `dubletten_finden` | benennt doppelt vorliegende Belege |
+| `rechtsstand_lesen` | Werte, Fristen und Checkliste **jedes** Veranlagungsjahres |
+| `web_search` | Recherche zu Rechtsfragen jenseits der hinterlegten Werte |
 | `notiz_speichern` | **schreibt** Ihre Auskunft zum Beleg in die Mappe |
 | `kategorie_setzen` | **korrigiert** eine falsche Zuordnung |
+| `stammwert_speichern` | **hält** einen jahresübergreifenden Wert samt Fundstelle fest |
+| `schreiben_entwerfen` | **legt** einen Text als Datei ab, etwa die Mail an den Steuerberater |
 
-Die letzten beiden ändern die Mappe. Das ist der eigentliche Zweck: Was Sie im Gespräch
+Die letzten vier ändern die Mappe. Das ist der eigentliche Zweck: Was Sie im Gespräch
 über einen Beleg sagen, landet als Notiz an diesem Beleg und erscheint im Bericht für
 den Steuerberater direkt unter der Frage, die es beantwortet — statt im Gesprächsverlauf
 zu versanden. Jeder Zugriff steht als eigene Zeile im Verlauf, damit erkennbar bleibt,
 worauf eine Antwort beruht.
 
+Entwürfe landen in `berichte/entwuerfe/` und stehen auf der Seite **Beratung** unter
+„Entwürfe“ zum Lesen und Kopieren bereit. Versendet wird nichts, und ins ZIP für den
+Steuerberater gehen sie nicht mit.
+
 Der Verlauf liegt in `.zustand/gespraech.json` und wird beim nächsten Start
 fortgesetzt. „Gespräch verwerfen“ löscht ihn; eingetragene Notizen bleiben.
+
+**Die Websuche ist die einzige Stelle, an der etwas den Rechner verlässt.** Sie dient
+Rechtsfragen jenseits der hinterlegten Werte — Rechtsprechung, Änderungen kommender
+Jahre. Der Systemprompt verbietet ausdrücklich, Namen, Anschriften, Steuernummern,
+Arbeitgeber oder Beträge aus den Belegen in eine Suchanfrage zu schreiben. Was gesucht
+wurde, steht als graue Zeile im Verlauf.
 
 ---
 

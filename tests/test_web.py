@@ -437,3 +437,25 @@ def test_gespraech_laesst_sich_verwerfen(klient):
 
     klient.post("/beratung/loeschen", follow_redirects=True)
     assert berater.laden(klient.mappe).nachrichten == []
+
+
+def test_entwurf_wird_angezeigt_und_verlinkt(klient):
+    from steuer import berater, rules
+
+    berater.werkzeug_ausfuehren(
+        "schreiben_entwerfen",
+        {"titel": "Mail an den Steuerberater", "text": "Sehr geehrter Herr Dr. Hagn,"},
+        klient.mappe,
+        rules.laden(2024),
+    )
+    seite = klient.get("/beratung").get_data(as_text=True)
+    assert "Mail-an-den-Steuerberater" in seite
+
+    name = berater.entwuerfe(klient.mappe)[0]
+    entwurf = klient.get(f"/entwurf/{name}")
+    assert entwurf.status_code == 200
+    assert "Sehr geehrter Herr Dr. Hagn," in entwurf.get_data(as_text=True)
+
+
+def test_unbekannter_entwurf_ergibt_404(klient):
+    assert klient.get("/entwurf/gibtsnicht.md").status_code == 404

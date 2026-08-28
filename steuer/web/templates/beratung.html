@@ -97,6 +97,19 @@
   &bdquo;Nachgeschlagen&ldquo; zeigen Ihnen, worauf eine Antwort beruht.
 </p>
 
+{% if entwuerfe %}
+<h2>Entwuerfe</h2>
+<p class="klein">
+  Texte, die im Gespraech entstanden sind &mdash; gespeichert, nicht verschickt.
+  Sie liegen unter <span class="ordner">berichte/entwuerfe/</span>.
+</p>
+<ul class="entwurfsliste">
+  {% for name in entwuerfe %}
+  <li><a href="{{ url_for('entwurf', name=name) }}">{{ name }}</a></li>
+  {% endfor %}
+</ul>
+{% endif %}
+
 {% if beitraege %}
 <form method="post" action="{{ url_for('beratung_loeschen') }}"
       onsubmit="return confirm('Das ganze Gespraech verwerfen? Eingetragene Notizen bleiben erhalten.');">

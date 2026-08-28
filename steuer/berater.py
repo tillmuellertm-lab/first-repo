@@ -22,16 +22,19 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
-from . import gaps, offen as offen_modul, taxonomy
+from . import gaps, offen as offen_modul, stammdaten as stammdaten_modul, taxonomy
 from .extract import inhalt_aufbereiten
 from .formatierung import euro
 from .models import EIGNUNG_LABEL, Dokument
 from .rules import Regelwerk
-from .workspace import Arbeitsmappe, atomar_schreiben
+from .workspace import Arbeitsmappe, atomar_schreiben, sichere_bezeichnung
 
 LOG = logging.getLogger(__name__)
 
 GESPRAECHSDATEI = "gespraech.json"
+# Wohin das Modell Entwuerfe legt: unterhalb der Berichte, damit sie beim
+# Packen des Pakets nicht versehentlich mitgehen, aber leicht zu finden sind.
+ENTWURFSORDNER = "entwuerfe"
 VERSION = 1
 
 # Wie viele Nachrichten des Verlaufs an das Modell gehen. Ein Gespraech ueber
@@ -189,6 +192,16 @@ def _vorgangstext(name: str, eingabe: dict[str, Any]) -> str:
         return "ruft den aktuellen Stand der Mappe ab"
     if name == "offene_punkte":
         return "sieht die offenen Punkte durch"
+    if name == "dubletten_finden":
+        return "sucht nach doppelt vorliegenden Belegen"
+    if name == "rechtsstand_lesen":
+        return f"schlaegt den Rechtsstand {eingabe.get('jahr', '?')} nach"
+    if name == "stammwert_speichern":
+        return f"traegt den Stammwert '{eingabe.get('kennung', '?')}' ein"
+    if name == "schreiben_entwerfen":
+        return f"schreibt einen Entwurf: {eingabe.get('titel', 'ohne Titel')}"
+    if name == "web_search":
+        return f"sucht im Internet: {eingabe.get('query', '')}"
     return f"ruft {name} auf"
 
 
@@ -208,7 +221,7 @@ def beitraege(gespraech: Gespraech) -> list[Beitrag]:
                 text = str(block.get("text") or "").strip()
                 if text:
                     ergebnis.append(Beitrag("berater", text, zeit))
-            elif rolle == "assistant" and art == "tool_use":
+            elif rolle == "assistant" and art in ("tool_use", "server_tool_use"):
                 ergebnis.append(
                     Beitrag(
                         "vorgang",
@@ -409,9 +422,38 @@ def lage_text(mappe: Arbeitsmappe, regelwerk: Regelwerk) -> str:
 # ------------------------------------------------------------ Werkzeuge ------
 
 
+def entwuerfe(mappe: Arbeitsmappe) -> list[str]:
+    """Die im Gespraech entstandenen Entwuerfe, neueste zuerst."""
+    ordner = mappe.berichte / ENTWURFSORDNER
+    if not ordner.is_dir():
+        return []
+    return sorted((p.name for p in ordner.glob("*.md") if p.is_file()), reverse=True)
+
+
+def entwurf_pfad(mappe: Arbeitsmappe, name: str) -> Path | None:
+    """Loest einen Entwurfsnamen auf, ohne aus dem Ordner herauszufuehren.
+
+    Der Name kommt aus der Adresszeile und damit von aussen; ein Pfad mit ".."
+    wuerde sonst beliebige Dateien der Maschine ausliefern.
+    """
+    ordner = (mappe.berichte / ENTWURFSORDNER).resolve()
+    ziel = (ordner / name).resolve()
+    if ziel.parent != ordner or ziel.suffix != ".md" or not ziel.is_file():
+        return None
+    return ziel
+
+
 def werkzeuge() -> list[dict[str, Any]]:
-    """Die Werkzeuge, mit denen das Modell in die Mappe hineinsehen kann."""
+    """Die Werkzeuge, mit denen das Modell in die Mappe hineinsehen kann.
+
+    Die Websuche fuehrt die API selbst aus; sie taucht deshalb in
+    ``werkzeug_ausfuehren`` nicht auf. Sie ist die einzige, die etwas nach
+    aussen gibt - was der Systemprompt entsprechend einschraenkt.
+    """
+    from .analyze import WEB_SUCHE_WERKZEUG  # lokal, um Zirkelbezuege zu vermeiden
+
     return [
+        WEB_SUCHE_WERKZEUG,
         {
             "name": "dokumente_suchen",
             "description": (
@@ -526,6 +568,83 @@ def werkzeuge() -> list[dict[str, Any]]:
                     },
                 },
                 "required": ["dokument_id", "notiz"],
+            },
+        },
+        {
+            "name": "dubletten_finden",
+            "description": (
+                "Findet Belege, die zweimal in der Mappe liegen: gleicher Aussteller, "
+                "gleiches Datum, gleicher Betrag. Entfernen kann der Mandant sie selbst "
+                "auf der Seite 'Dubletten' - nenne ihm, was du gefunden hast."
+            ),
+            "input_schema": {"type": "object", "properties": {}},
+        },
+        {
+            "name": "rechtsstand_lesen",
+            "description": (
+                "Liest den hinterlegten Rechtsstand eines beliebigen Veranlagungsjahres: "
+                "Pauschalen, Grenzen, Hoechstbetraege, Fristen und die Checkliste der "
+                "erwarteten Unterlagen. Fuer Fragen zu Vorjahren und Folgejahren."
+            ),
+            "input_schema": {
+                "type": "object",
+                "properties": {"jahr": {"type": "integer"}},
+                "required": ["jahr"],
+            },
+        },
+        {
+            "name": "stammwert_speichern",
+            "description": (
+                "Haelt einen jahresuebergreifenden Wert fest, der in keinem einzelnen "
+                "Beleg steht und aus den Vorjahren fortgeschrieben wird - Gebaeude-AfA, "
+                "Bemessungsgrundlage, Verlustvortrag, Steuernummer, Finanzamt. Diese "
+                "Werte gehen in jede kuenftige Analyse ein. Immer eine Fundstelle "
+                "angeben, damit nachvollziehbar bleibt, woher der Wert stammt. Nur "
+                "speichern, was der Mandant bestaetigt hat oder was du aus einem Beleg "
+                "belegen kannst - nie eine Schaetzung."
+            ),
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "kennung": {
+                        "type": "string",
+                        "description": (
+                            "Vorzugsweise eine bekannte Kennung: "
+                            + ", ".join(v.id for v in stammdaten_modul.VORLAGEN)
+                            + ". Eigene Kennungen sind erlaubt."
+                        ),
+                    },
+                    "wert": {"type": "string"},
+                    "quelle": {
+                        "type": "string",
+                        "description": "Fundstelle, etwa 'Anlage V 2023, Zeile 33' oder 'Angabe des Mandanten'.",
+                    },
+                    "gilt_ab_jahr": {"type": "integer"},
+                    "hinweis": {"type": "string"},
+                },
+                "required": ["kennung", "wert", "quelle"],
+            },
+        },
+        {
+            "name": "schreiben_entwerfen",
+            "description": (
+                "Legt einen Text als Datei in der Mappe ab, damit der Mandant ihn "
+                "verschicken, ausdrucken oder dem Steuerberater beilegen kann - eine "
+                "E-Mail an den Steuerberater, ein Anschreiben an den Vermieter, eine "
+                "Eigenaufstellung. Der Text wird nicht versendet, sondern nur "
+                "gespeichert; der Mandant liest ihn und entscheidet selbst. Schreibe "
+                "vollstaendig ausformuliert, nicht in Stichpunkten."
+            ),
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "titel": {"type": "string"},
+                    "text": {
+                        "type": "string",
+                        "description": "Der vollstaendige Text. Markdown ist erlaubt.",
+                    },
+                },
+                "required": ["titel", "text"],
             },
         },
         {
@@ -709,10 +828,119 @@ def _kategorie_setzen(mappe: Arbeitsmappe, eingabe: dict[str, Any]) -> str:
     )
 
 
+def _dubletten_finden(mappe: Arbeitsmappe) -> str:
+    gruppen = gaps.dubletten_gruppen(mappe.dokumente)
+    if not gruppen:
+        return "Kein Beleg kommt mit gleichem Aussteller, Datum und Betrag zweimal vor."
+    zeilen = [
+        f"{len(gruppen)} Gruppen, teuerste zuerst. Entfernen kann der Mandant sie "
+        "selbst auf der Seite 'Dubletten':"
+    ]
+    for gruppe in gruppen:
+        zeilen.append("")
+        for dokument in gruppe:
+            zeilen.append(_dokumentzeile(dokument))
+    return "\n".join(zeilen)
+
+
+def _rechtsstand_lesen(eingabe: dict[str, Any]) -> str:
+    from . import rules  # lokal, um Zirkelbezuege zu vermeiden
+
+    try:
+        jahr = int(eingabe.get("jahr") or 0)
+    except (TypeError, ValueError):
+        jahr = 0
+    if not jahr:
+        raise BeratungsFehler("Ohne Jahresangabe laesst sich kein Rechtsstand lesen.")
+
+    werk = rules.laden(jahr)
+    zeilen = [f"Rechtsstand fuer {werk.jahr}, Stand {werk.stand}, Status {werk.status}."]
+    if werk.ist_ersatz:
+        zeilen.append(
+            f"ACHTUNG: Fuer {jahr} ist kein eigener Rechtsstand gepflegt. Die Werte "
+            f"stammen aus {werk.quelle_jahr} und koennen veraltet sein. Sage das dem "
+            "Mandanten, bevor du dich darauf stuetzt."
+        )
+    zeilen.append("")
+    zeilen.append("Werte:")
+    for schluessel, eintrag in (werk.werte or {}).items():
+        if not isinstance(eintrag, dict):
+            continue
+        teile = [f"{eintrag.get('label', schluessel)}: {eintrag.get('wert')} {eintrag.get('einheit', '')}".strip()]
+        for feld in ("max_betrag", "max_steuerermaessigung", "rechtsgrundlage"):
+            if eintrag.get(feld):
+                teile.append(f"{feld}: {eintrag[feld]}")
+        zeilen.append("- " + "; ".join(teile))
+
+    if werk.fristen:
+        zeilen.append("")
+        zeilen.append("Fristen: " + json.dumps(werk.fristen, ensure_ascii=False))
+    if werk.checkliste:
+        zeilen.append("")
+        zeilen.append("Erwartete Unterlagen laut Checkliste dieses Jahres:")
+        for eintrag in werk.checkliste:
+            erwartet = "; ".join(str(e) for e in (eintrag.get("erwartete_dokumente") or []))
+            zeilen.append(f"- {eintrag.get('titel', eintrag.get('id'))}: {erwartet}")
+    zeilen.append("")
+    zeilen.append(f"Gepflegte Jahre: {rules.verfuegbare_jahre()}")
+    return "\n".join(zeilen)
+
+
+def _stammwert_speichern(mappe: Arbeitsmappe, eingabe: dict[str, Any]) -> str:
+    kennung = str(eingabe.get("kennung") or "").strip()
+    wert = str(eingabe.get("wert") or "").strip()
+    quelle = str(eingabe.get("quelle") or "").strip()
+    if not kennung or not wert:
+        raise BeratungsFehler("Kennung und Wert sind beide noetig.")
+    if not quelle:
+        raise BeratungsFehler(
+            "Ohne Fundstelle wird kein Stammwert gespeichert. Ein Wert ohne Herkunft "
+            "ist im naechsten Jahr nicht mehr nachpruefbar."
+        )
+    vorher = mappe.stammdaten.eintrag(kennung)
+    jahr = eingabe.get("gilt_ab_jahr")
+    eintrag = mappe.stammdaten.setzen(
+        kennung,
+        wert,
+        quelle=quelle,
+        gilt_ab_jahr=int(jahr) if jahr else mappe.jahr,
+        hinweis=str(eingabe.get("hinweis") or ""),
+    )
+    mappe.stammdaten_speichern()
+    meldung = f"Gespeichert: {eintrag.label or kennung} = {wert} (Quelle: {quelle})."
+    if vorher and vorher.ist_gesetzt and str(vorher.wert) != wert:
+        meldung += f" Der bisherige Wert war {vorher.wert}; sage dem Mandanten, dass du ihn ersetzt hast."
+    return meldung
+
+
+def _entwurf_schreiben(mappe: Arbeitsmappe, eingabe: dict[str, Any]) -> str:
+    titel = str(eingabe.get("titel") or "").strip()
+    text = str(eingabe.get("text") or "").strip()
+    if not titel or not text:
+        raise BeratungsFehler("Titel und Text sind beide noetig.")
+    ordner = mappe.berichte / ENTWURFSORDNER
+    ordner.mkdir(parents=True, exist_ok=True)
+    name = f"{_dt.date.today().isoformat()}_{sichere_bezeichnung(titel)}.md"
+    ziel = ordner / name
+    atomar_schreiben(ziel, f"# {titel}\n\n{text}\n")
+    return (
+        f"Gespeichert als {ziel}. Der Mandant findet den Entwurf auf der Seite "
+        "'Beratung' unter 'Entwuerfe' und kann ihn dort oeffnen und kopieren."
+    )
+
+
 def werkzeug_ausfuehren(
     name: str, eingabe: dict[str, Any], mappe: Arbeitsmappe, regelwerk: Regelwerk
 ) -> tuple[str, list[dict[str, Any]]]:
     """Fuehrt einen Werkzeugaufruf aus. Rueckgabe: Ergebnistext und Anhaenge."""
+    if name == "dubletten_finden":
+        return _dubletten_finden(mappe), []
+    if name == "rechtsstand_lesen":
+        return _rechtsstand_lesen(eingabe), []
+    if name == "stammwert_speichern":
+        return _stammwert_speichern(mappe, eingabe), []
+    if name == "schreiben_entwerfen":
+        return _entwurf_schreiben(mappe, eingabe), []
     if name == "dokumente_suchen":
         return _suchen(mappe, eingabe), []
     if name == "dokument_lesen":
