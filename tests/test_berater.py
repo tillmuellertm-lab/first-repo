@@ -863,3 +863,19 @@ def test_jahr_setzen_bricht_bei_unbekannter_kennung_ab(mappe, regelwerk):
             regelwerk,
         )
     assert dokument.gehoert_ins_jahr == 2024
+
+
+def test_suche_findet_belege_ohne_jahreszuordnung(mappe, tmp_path, regelwerk):
+    """Sie gehen in keine Summe ein - und waren bisher nicht gezielt auffindbar."""
+    from steuer.models import Analyse as A
+
+    quelle = tmp_path / "ohne_jahr.txt"
+    quelle.write_text("x", encoding="utf-8")
+    dokument, _ = mappe.datei_aufnehmen(quelle)
+    dokument.analyse = A(dokumenttyp="Google Rechnung", aussteller="Google")
+
+    text, _ = berater.werkzeug_ausfuehren(
+        "dokumente_suchen", {"ohne_jahreszuordnung": True}, mappe, regelwerk
+    )
+    assert "ohne_jahr.txt" in text
+    assert "zinsen.txt" not in text

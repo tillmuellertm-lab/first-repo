@@ -307,6 +307,8 @@ def _vorgangstext(name: str, eingabe: dict[str, Any]) -> str:
     """
     if name == "dokumente_suchen":
         teile = [str(eingabe.get(f) or "") for f in ("suchbegriff", "kategorie", "steuerjahr")]
+        if eingabe.get("ohne_jahreszuordnung"):
+            teile.append("ohne Jahreszuordnung")
         beschreibung = ", ".join(t for t in teile if t) or "alle Belege"
         return f"durchsucht die Mappe: {beschreibung}"
     if name == "dokument_lesen":
@@ -710,6 +712,14 @@ def werkzeuge() -> list[dict[str, Any]]:
                     },
                     "kategorie": {"type": "string", "enum": taxonomy.ids()},
                     "steuerjahr": {"type": "integer"},
+                    "ohne_jahreszuordnung": {
+                        "type": "boolean",
+                        "description": (
+                            "Nur Belege, denen kein Jahr zugeordnet ist. Sie gehen in "
+                            "keine Summe ein und kommen nicht in die Ablage - deshalb "
+                            "sind sie die wichtigste Gruppe zum Durchsehen."
+                        ),
+                    },
                     "nur_mit_offenen_punkten": {
                         "type": "boolean",
                         "description": "Nur Belege, bei denen noch Nachweise oder Auskuenfte fehlen.",
@@ -994,6 +1004,8 @@ def _passt(dokument: Dokument, eingabe: dict[str, Any]) -> bool:
     analyse = dokument.analyse
     kategorie = str(eingabe.get("kategorie") or "").strip()
     if kategorie and dokument.wirksame_kategorie != kategorie:
+        return False
+    if eingabe.get("ohne_jahreszuordnung") and dokument.gehoert_ins_jahr is not None:
         return False
     jahr = eingabe.get("steuerjahr")
     if jahr and dokument.gehoert_ins_jahr != int(jahr):
