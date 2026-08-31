@@ -128,6 +128,7 @@ Jahre — die holt sich das Modell bei Bedarf selbst. Dafür kann es
 | `notiz_speichern` | **schreibt** Ihre Auskunft zum Beleg in die Mappe |
 | `kategorie_setzen` | **korrigiert** eine falsche Zuordnung |
 | `stammwert_speichern` | **hält** einen jahresübergreifenden Wert samt Fundstelle fest |
+| `entwurf_lesen` | zeigt einen eigenen Entwurf wieder an, oder listet sie auf |
 | `schreiben_entwerfen` | **legt** einen Text als Datei ab, etwa die Mail an den Steuerberater |
 | `verbesserung_vorschlagen` | **notiert**, was dem Werkzeug im Gebrauch gefehlt hat |
 
@@ -143,7 +144,9 @@ eine Angabe, die es nicht sehen kann —, schreibt es das mitsamt dem Anlass nac
 und nicht aus der Erinnerung.
 
 Entwürfe landen in `berichte/entwuerfe/` und stehen auf der Seite **Beratung** unter
-„Entwürfe“ zum Lesen und Kopieren bereit. Versendet wird nichts, und ins ZIP für den
+„Entwürfe“ zum Lesen und Kopieren bereit. Ein langer Text entsteht in Teilen: mit
+`anhaengen` wächst ein Entwurf weiter, statt sich selbst zu ersetzen, und
+`entwurf_lesen` zeigt, was schon darin steht. Versendet wird nichts, und ins ZIP für den
 Steuerberater gehen sie nicht mit.
 
 **Bildschirmfotos** lassen sich mit `Strg`+`V` direkt in das Eingabefeld einfügen, per

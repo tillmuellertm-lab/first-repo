@@ -681,3 +681,57 @@ def test_abgeschnittene_antwort_wird_im_verlauf_benannt(mappe, regelwerk):
         for nachricht in gespraech.fuer_api(mappe)
         for block in nachricht["content"]
     )
+
+
+# --- Lange Entwuerfe in Teilen -----------------------------------------------
+
+
+def test_entwurf_kann_fortgesetzt_statt_ersetzt_werden(mappe, regelwerk):
+    """Ein zwoelfteiliger Text entsteht in Teilen, nicht in einem Zug."""
+    berater.werkzeug_ausfuehren(
+        "schreiben_entwerfen",
+        {"titel": "Durchsicht", "text": "Punkt 1 bis 4."},
+        mappe,
+        regelwerk,
+    )
+    berater.werkzeug_ausfuehren(
+        "schreiben_entwerfen",
+        {"titel": "Durchsicht", "text": "Punkt 5 bis 12.", "anhaengen": True},
+        mappe,
+        regelwerk,
+    )
+    inhalt = berater.entwurf_pfad(mappe, berater.entwuerfe(mappe)[0]).read_text(encoding="utf-8")
+    assert "Punkt 1 bis 4." in inhalt
+    assert "Punkt 5 bis 12." in inhalt
+    assert len(berater.entwuerfe(mappe)) == 1
+
+
+def test_ersetzter_entwurf_wird_benannt(mappe, regelwerk):
+    """Stilles Ueberschreiben kostete gestern eine halbe Analyse."""
+    berater.werkzeug_ausfuehren(
+        "schreiben_entwerfen", {"titel": "Durchsicht", "text": "alt"}, mappe, regelwerk
+    )
+    meldung, _ = berater.werkzeug_ausfuehren(
+        "schreiben_entwerfen", {"titel": "Durchsicht", "text": "neu"}, mappe, regelwerk
+    )
+    assert "ersetzt" in meldung
+
+
+def test_entwurf_laesst_sich_wieder_lesen(mappe, regelwerk):
+    leer, _ = berater.werkzeug_ausfuehren("entwurf_lesen", {}, mappe, regelwerk)
+    assert "noch kein Entwurf" in leer
+
+    berater.werkzeug_ausfuehren(
+        "schreiben_entwerfen", {"titel": "Durchsicht", "text": "Punkt 1."}, mappe, regelwerk
+    )
+    liste, _ = berater.werkzeug_ausfuehren("entwurf_lesen", {}, mappe, regelwerk)
+    assert "Durchsicht" in liste
+
+    name = berater.entwuerfe(mappe)[0]
+    inhalt, _ = berater.werkzeug_ausfuehren("entwurf_lesen", {"name": name}, mappe, regelwerk)
+    assert "Punkt 1." in inhalt
+
+
+def test_unbekannter_entwurf_ergibt_einen_hinweis(mappe, regelwerk):
+    with pytest.raises(berater.BeratungsFehler, match="keinen Entwurf"):
+        berater.werkzeug_ausfuehren("entwurf_lesen", {"name": "../steuer.json"}, mappe, regelwerk)

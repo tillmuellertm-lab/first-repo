@@ -330,7 +330,11 @@ def _vorgangstext(name: str, eingabe: dict[str, Any]) -> str:
     if name == "stammwert_speichern":
         return f"traegt den Stammwert '{eingabe.get('kennung', '?')}' ein"
     if name == "schreiben_entwerfen":
-        return f"schreibt einen Entwurf: {eingabe.get('titel', 'ohne Titel')}"
+        verb = "ergaenzt" if eingabe.get("anhaengen") else "schreibt"
+        return f"{verb} einen Entwurf: {eingabe.get('titel', 'ohne Titel')}"
+    if name == "entwurf_lesen":
+        ziel = eingabe.get("name") or "die Liste der Entwuerfe"
+        return f"sieht nach: {ziel}"
     if name == "verbesserung_vorschlagen":
         return f"notiert eine Luecke im Werkzeug: {eingabe.get('titel', '')}"
     if name == "web_search":
@@ -786,8 +790,29 @@ def werkzeuge() -> list[dict[str, Any]]:
                         "type": "string",
                         "description": "Der vollstaendige Text. Markdown ist erlaubt.",
                     },
+                    "anhaengen": {
+                        "type": "boolean",
+                        "description": (
+                            "An einen Entwurf gleichen Titels vom selben Tag anhaengen, "
+                            "statt ihn zu ersetzen. So entsteht ein langer Text in "
+                            "Teilen, ohne ihn jedes Mal ganz neu zu schreiben."
+                        ),
+                    },
                 },
                 "required": ["titel", "text"],
+            },
+        },
+        {
+            "name": "entwurf_lesen",
+            "description": (
+                "Zeigt einen bereits abgelegten Entwurf wieder an. Ohne Namen "
+                "aufgerufen kommt die Liste der vorhandenen. Nuetzlich, bevor du "
+                "einen Text fortsetzt oder ersetzt - du siehst sonst nicht, was "
+                "schon darin steht."
+            ),
+            "input_schema": {
+                "type": "object",
+                "properties": {"name": {"type": "string", "description": "Dateiname aus der Liste."}},
             },
         },
         {
@@ -1095,11 +1120,45 @@ def _entwurf_schreiben(mappe: Arbeitsmappe, eingabe: dict[str, Any]) -> str:
     ordner.mkdir(parents=True, exist_ok=True)
     name = f"{_dt.date.today().isoformat()}_{sichere_bezeichnung(titel)}.md"
     ziel = ordner / name
-    atomar_schreiben(ziel, f"# {titel}\n\n{text}\n")
+
+    bestand = ziel.read_text(encoding="utf-8") if ziel.is_file() else ""
+    if bestand and eingabe.get("anhaengen"):
+        # Ein langer Text entsteht in Teilen. Ohne diesen Weg muesste das
+        # Modell den ganzen Entwurf jedes Mal neu schreiben - und genau daran
+        # ist es an der Token-Grenze schon einmal gescheitert.
+        atomar_schreiben(ziel, f"{bestand.rstrip()}\n\n{text}\n")
+        meldung = f"An {ziel} angehaengt."
+    else:
+        atomar_schreiben(ziel, f"# {titel}\n\n{text}\n")
+        meldung = f"Gespeichert als {ziel}."
+        if bestand:
+            # Nicht stillschweigend ueberschreiben: der Mandant koennte den
+            # alten Stand noch gebraucht haben.
+            meldung += (
+                " ACHTUNG: Ein Entwurf mit diesem Titel von heute wurde dabei "
+                "ersetzt. Sag das dem Mandanten. Wolltest du fortsetzen statt "
+                "ersetzen, ruf erneut mit anhaengen=true auf."
+            )
     return (
-        f"Gespeichert als {ziel}. Der Mandant findet den Entwurf auf der Seite "
-        "'Beratung' unter 'Entwuerfe' und kann ihn dort oeffnen und kopieren."
+        f"{meldung} Der Mandant findet den Entwurf auf der Seite 'Beratung' unter "
+        "'Entwuerfe' und kann ihn dort oeffnen und kopieren."
     )
+
+
+def _entwurf_lesen(mappe: Arbeitsmappe, eingabe: dict[str, Any]) -> str:
+    """Zeigt einen eigenen Entwurf wieder an - oder listet auf, welche es gibt."""
+    name = str(eingabe.get("name") or "").strip()
+    if not name:
+        vorhanden = entwuerfe(mappe)
+        if not vorhanden:
+            return "Es liegt noch kein Entwurf vor."
+        return "Vorhandene Entwuerfe, neueste zuerst:\n" + "\n".join(f"- {n}" for n in vorhanden)
+    datei = entwurf_pfad(mappe, name)
+    if datei is None:
+        raise BeratungsFehler(
+            f"Es gibt keinen Entwurf '{name}'. Ohne Namen aufgerufen bekommst du die Liste."
+        )
+    return datei.read_text(encoding="utf-8")
 
 
 def _verbesserung_vorschlagen(mappe: Arbeitsmappe, eingabe: dict[str, Any]) -> str:
@@ -1142,6 +1201,8 @@ def werkzeug_ausfuehren(
         return _stammwert_speichern(mappe, eingabe), []
     if name == "schreiben_entwerfen":
         return _entwurf_schreiben(mappe, eingabe), []
+    if name == "entwurf_lesen":
+        return _entwurf_lesen(mappe, eingabe), []
     if name == "dokumente_suchen":
         return _suchen(mappe, eingabe), []
     if name == "dokument_lesen":
