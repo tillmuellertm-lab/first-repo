@@ -1,46 +1,79 @@
 # Hier geht es weiter
 
-Stand: 28. August 2026, abends.
+Stand: 31. August 2026, nachmittags.
 
-## Als Erstes morgen
-
-Konsole oeffnen, eine Zeile, Enter:
+## Als Erstes
 
 ```bash
 cd ~/first-repo-claude-tax-return-document-tool-jesqdh && source .venv/bin/activate && git pull origin claude/tax-return-document-tool-jesqdh && cd steuer-2024 && steuer web
 ```
 
-Dann <http://127.0.0.1:5173> im Browser, oben auf **Beratung**.
+Dann <http://127.0.0.1:5173>, oben auf **Beratung**. Im Browser einmal
+Strg+Umschalt+R, sonst nimmt Chrome die alte Oberflaeche.
 
-**Der erste Schritt dort:** Die Datei `Einstieg_Beratung_2024.md` oeffnen, alles
-markieren (Strg+A), kopieren (Strg+C), in das Feld auf der Seite Beratung
-einfuegen (Strg+V), senden. Das ist alles, was wir hier besprochen haben und was
-das Werkzeug noch nicht weiss: die 2.910 EUR doppelte Haushaltsfuehrung, die
-280 EUR Verpflegungsmehraufwand, der Dienstwagen, die geprueffte AfA, die
-Lohnsteuerzahlen, die fehlenden Unterlagen, Ihre Entscheidungen. Das Werkzeug
-traegt die dauerhaften Werte danach selbst als Stammdaten ein - **einmal
-einfuegen genuegt**, danach ist es dauerhaft in der Mappe.
+## Die drei offenen Faeden im Gespraech
 
-**Der zweite Schritt:** Auf der Uebersicht nach unten scrollen, beide Haken
-gesetzt lassen (Gesamtauswertung, ZIP-Paket), Modell Fable 5, und den blauen
-Knopf **Ordnen und Uebersicht erzeugen** klicken. Damit wird die Gesamtauswertung
-erstmals gespeichert und geht ab dann in jedes Gespraech mit ein.
+Diesen Text abschicken, er raeumt alle drei gleichzeitig ab:
 
----
+> Der Server laeuft jetzt mit der neuen Fassung. Drei Dinge:
+>
+> **1.** Trag bitte die Jahre ein: Wuttke Umzug (`e61fb77dfc28`) 2024, Wuttke
+> Renovierung Leipzig (`50f695a6c90e`) 2025 - im Januar 2025 bezahlt, gehoert
+> nach § 11 EStG dorthin. Und dann die restlichen Belege ohne Jahr aus deiner
+> Liste, mit `ohne_jahreszuordnung` kannst du gezielt danach suchen.
+>
+> **2.** Pruef vorrangig die 3.000 Euro: Die Umzugsrechnung Wuttke lautet ueber
+> 3.000 Euro, der Umzugskostenzuschuss des 1. FC Koeln ebenfalls. Sieh in den
+> vier Koelner Gehaltsabrechnungen nach, ob der Zuschuss steuerpflichtig als
+> Arbeitslohn lief oder steuerfrei als Auslagenersatz. Falls steuerfrei,
+> erfasse ihn als Erstattung gegen die Umzugsrechnung.
+>
+> **3.** Bei den sonstigen Werbungskosten gibt es jetzt eine Formularzuordnung
+> mit vier Abschnitten: doppelte Haushaltsfuehrung, Umzugskosten, Reisekosten,
+> weitere Werbungskosten. Sie teilt Summen nicht selbst auf. Schreib deshalb bei
+> jedem Beleg dieser Kategorie als Notiz dazu, in welchen Abschnitt er gehoert.
 
-## Was die Beratung heute dazubekommen hat
+## Die 3.000 Euro sind der teuerste offene Punkt
+
+Umzugsrechnung Wuttke 3.000 Euro, Umzugskostenzuschuss 1. FC Koeln 3.000 Euro.
+Wenn der Verein steuerfreien Auslagenersatz nach § 3 Nr. 16 EStG gezahlt hat,
+faellt der Werbungskostenabzug in dieser Hoehe weg. Die Umzugskostenpauschale
+nach § 10 BUKG (2.893 Euro) bliebe daneben bestehen - sie deckt andere Posten
+ab. Es geht um rund 1.260 Euro Steuer.
+
+## Danach
+
+| Schritt | Wo |
+| --- | --- |
+| 1. Restliche Rueckfragen beantworten | Seite **Beratung** |
+| 2. **Alles neu analysieren** (5-15 Euro, 30-60 Min) | Seite **Uebersicht** |
+| 3. **Ordnen** mit Gesamtauswertung und ZIP | Seite **Uebersicht**, unten |
+| 4. Formularzuordnung durchsehen | Seite **Formular** |
+
+Die Neuanalyse ist noetig, weil die neue Betragsart `erstattung` und die
+korrigierte Regel zum Zahlungsdatum nur eine frische Analyse setzen kann.
+
+## Was heute dazugekommen ist
 
 | Neu | Wofuer |
 | --- | --- |
-| Gesamtauswertung im Blick | die Bewertung der ganzen Mappe, nicht nur einzelner Belege |
-| Ihre Antworten im Klartext | dieselbe Frage kommt nicht zweimal |
-| `stammwert_speichern` | Gebaeude-AfA und Co. dauerhaft, mit Fundstelle |
-| `rechtsstand_lesen` | Fragen zu 2023, 2025, 2026 |
-| `dubletten_finden` | doppelte Belege benennen |
-| `web_search` | Rechtsprechung und kuenftige Aenderungen |
-| `schreiben_entwerfen` | die Mail an Dr. Hagn, als Datei zum Kopieren |
-| `verbesserung_vorschlagen` | was dem Werkzeug im Gebrauch fehlt |
-| **Bildschirmfotos** | Strg+V direkt ins Eingabefeld |
+| Betragsart `erstattung` | Kassenerstattung, Arbeitgeberzuschuss und Fahrtkostenersatz mindern den Aufwand |
+| § 11 EStG im Prompt | Zahlungsdatum gilt bei allen Ausgaben, dazu die Zehn-Tage-Regel |
+| `jahr_setzen` | Jahr im Gespraech nachtragen, statt jede Belegseite einzeln zu oeffnen |
+| `ohne_jahreszuordnung` | Belege ohne Jahr gezielt finden - sie fielen aus allem heraus |
+| Vollstaendiges Lagebild | alle Belege der Mappe, nicht nur die des Jahres |
+| `unterlagen_lesen` | das Modell liest das Handbuch, bevor es ueber das Werkzeug urteilt |
+| **Seite Formular** | wo welcher Betrag in der Steuererklaerung hingehoert |
+| Bildschirmfotos | Strg+V direkt ins Eingabefeld |
+| Abgabefrist | wird nur noch einmal gemeldet statt doppelt |
+| BUKG | Pauschale und Transportkosten stehen nebeneinander, nicht zur Wahl |
+
+## Zur Uebermittlung ans Finanzamt
+
+Direkt aus diesem Werkzeug: nein. Jede Uebermittlung laeuft ueber ERiC, eine
+Bibliothek der Finanzverwaltung, die eine Herstellerregistrierung voraussetzt.
+Das ist eine harte Grenze. Und solange Dr. Hagn beauftragt ist, gilt die
+Fristverlaengerung bis 30.04.2026 nur ueber ihn.
 
 ---
 
