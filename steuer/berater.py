@@ -486,7 +486,7 @@ def gesamtauswertung_text(mappe: Arbeitsmappe) -> str:
         )
 
     zeilen = []
-    stand = daten.get("erstellt_am")
+    stand = str(daten.get("erstellt_am") or "")
     modell = daten.get("modell")
     kopf = "Gesamtauswertung der Mappe"
     if stand:
@@ -494,6 +494,19 @@ def gesamtauswertung_text(mappe: Arbeitsmappe) -> str:
     if modell:
         kopf += f" ({modell})"
     zeilen.append(kopf + ":")
+
+    # Eine Gesamtauswertung altert schlecht. Was sie als fehlend meldet, kann
+    # laengst in der Mappe liegen; sie weiss nur nichts davon. Das ungeprueft
+    # weiterzugeben hiesse, dem Mandanten einen Beleg als fehlend zu nennen,
+    # den er selbst hochgeladen hat.
+    neuestes = max((d.hinzugefuegt_am for d in mappe.dokumente if d.hinzugefuegt_am), default="")
+    if stand and neuestes > stand:
+        zeilen.append(
+            f"ACHTUNG: Seit dieser Auswertung sind Belege dazugekommen, zuletzt am "
+            f"{neuestes}. Was sie als fehlend meldet, kann inzwischen vorliegen. "
+            "Pruefe jede solche Aussage mit 'dokumente_suchen' nach, bevor du sie "
+            "weitergibst."
+        )
     if daten.get("gesamteinschaetzung"):
         zeilen.append(str(daten["gesamteinschaetzung"]))
 

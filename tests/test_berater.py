@@ -772,3 +772,19 @@ def test_unterlagen_fuehren_nicht_aus_dem_projekt_heraus(mappe_im_projekt):
 def test_mappe_ausserhalb_des_projekts_sagt_das(mappe, regelwerk):
     text, _ = berater.werkzeug_ausfuehren("unterlagen_lesen", {}, mappe, regelwerk)
     assert "keine Projektunterlagen erreichbar" in text
+
+
+def test_veraltete_gesamtauswertung_wird_als_solche_gekennzeichnet(mappe, regelwerk):
+    """Was sie als fehlend meldet, kann laengst hochgeladen sein."""
+    mappe.gesamtauswertung_speichern(
+        {"gesamteinschaetzung": "x", "luecken": [], "chancen": [], "erstellt_am": "2020-01-01"}
+    )
+    lage = berater.lage_text(mappe, regelwerk)
+    assert "Seit dieser Auswertung sind Belege dazugekommen" in lage
+
+
+def test_frische_gesamtauswertung_ohne_warnung(mappe, regelwerk):
+    mappe.gesamtauswertung_speichern(
+        {"gesamteinschaetzung": "x", "luecken": [], "chancen": [], "erstellt_am": "2099-01-01"}
+    )
+    assert "Belege dazugekommen" not in berater.lage_text(mappe, regelwerk)
