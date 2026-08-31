@@ -735,3 +735,40 @@ def test_entwurf_laesst_sich_wieder_lesen(mappe, regelwerk):
 def test_unbekannter_entwurf_ergibt_einen_hinweis(mappe, regelwerk):
     with pytest.raises(berater.BeratungsFehler, match="keinen Entwurf"):
         berater.werkzeug_ausfuehren("entwurf_lesen", {"name": "../steuer.json"}, mappe, regelwerk)
+
+
+# --- Das Werkzeug liest seine eigenen Unterlagen -----------------------------
+
+
+@pytest.fixture
+def mappe_im_projekt(tmp_path: Path) -> Arbeitsmappe:
+    """Eine Mappe, wie sie tatsaechlich liegt: im Verzeichnis des Werkzeugs."""
+    projekt = tmp_path / "werkzeug"
+    projekt.mkdir()
+    (projekt / "pyproject.toml").write_text("[project]\nname = 'steuer'\n", encoding="utf-8")
+    (projekt / "README.md").write_text("# Handbuch\n\nErstattungen mindern den Aufwand.\n", encoding="utf-8")
+    (projekt / "WEITER-HIER.md").write_text("# Stand\n", encoding="utf-8")
+    (projekt / "geheim.txt").write_text("kein Markdown", encoding="utf-8")
+    return Arbeitsmappe.anlegen(projekt / "steuer-2024", 2024, Profil(veranlagungsjahr=2024))
+
+
+def test_unterlagen_werden_gefunden_und_gelesen(mappe_im_projekt, regelwerk):
+    liste, _ = berater.werkzeug_ausfuehren("unterlagen_lesen", {}, mappe_im_projekt, regelwerk)
+    assert "README.md" in liste and "WEITER-HIER.md" in liste
+    assert "geheim.txt" not in liste
+
+    text, _ = berater.werkzeug_ausfuehren(
+        "unterlagen_lesen", {"name": "README.md"}, mappe_im_projekt, regelwerk
+    )
+    assert "Erstattungen mindern den Aufwand." in text
+
+
+def test_unterlagen_fuehren_nicht_aus_dem_projekt_heraus(mappe_im_projekt):
+    assert berater.projektunterlage_pfad(mappe_im_projekt, "../README.md") is None
+    assert berater.projektunterlage_pfad(mappe_im_projekt, "steuer-2024/steuer.json") is None
+    assert berater.projektunterlage_pfad(mappe_im_projekt, "gibtsnicht.md") is None
+
+
+def test_mappe_ausserhalb_des_projekts_sagt_das(mappe, regelwerk):
+    text, _ = berater.werkzeug_ausfuehren("unterlagen_lesen", {}, mappe, regelwerk)
+    assert "keine Projektunterlagen erreichbar" in text

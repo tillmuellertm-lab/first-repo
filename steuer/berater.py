@@ -335,6 +335,9 @@ def _vorgangstext(name: str, eingabe: dict[str, Any]) -> str:
     if name == "entwurf_lesen":
         ziel = eingabe.get("name") or "die Liste der Entwuerfe"
         return f"sieht nach: {ziel}"
+    if name == "unterlagen_lesen":
+        ziel = eingabe.get("name") or "die Liste der Unterlagen"
+        return f"liest die Unterlagen des Werkzeugs: {ziel}"
     if name == "verbesserung_vorschlagen":
         return f"notiert eine Luecke im Werkzeug: {eingabe.get('titel', '')}"
     if name == "web_search":
@@ -577,6 +580,44 @@ def verbesserungen(mappe: Arbeitsmappe) -> Path | None:
     return ziel if ziel.is_file() else None
 
 
+# Hoechstens so viele Zeichen aus einer Projektunterlage. README und
+# Arbeitsstand sind zusammen rund 45.000 Zeichen; einzeln passen sie bequem.
+MAX_UNTERLAGE_ZEICHEN = 80_000
+
+
+def projektwurzel(mappe: Arbeitsmappe) -> Path | None:
+    """Sucht das Verzeichnis des Werkzeugs oberhalb der Arbeitsmappe.
+
+    Die Mappe liegt ueblicherweise im Projektverzeichnis. Gefunden wird es an
+    der ``pyproject.toml``; liegt die Mappe woanders, gibt es eben keine
+    Unterlagen zu lesen.
+    """
+    for kandidat in [mappe.wurzel, *mappe.wurzel.parents]:
+        if (kandidat / "pyproject.toml").is_file():
+            return kandidat
+    return None
+
+
+def projektunterlagen(mappe: Arbeitsmappe) -> list[str]:
+    """Die Textdokumente des Werkzeugs selbst, alphabetisch."""
+    wurzel = projektwurzel(mappe)
+    if wurzel is None:
+        return []
+    return sorted(p.name for p in wurzel.glob("*.md") if p.is_file())
+
+
+def projektunterlage_pfad(mappe: Arbeitsmappe, name: str) -> Path | None:
+    """Loest einen Unterlagennamen auf, ohne aus dem Projektverzeichnis zu fuehren."""
+    wurzel = projektwurzel(mappe)
+    if wurzel is None:
+        return None
+    wurzel = wurzel.resolve()
+    ziel = (wurzel / name).resolve()
+    if ziel.parent != wurzel or ziel.suffix != ".md" or not ziel.is_file():
+        return None
+    return ziel
+
+
 def entwurf_pfad(mappe: Arbeitsmappe, name: str) -> Path | None:
     """Loest einen Entwurfsnamen auf, ohne aus dem Ordner herauszufuehren.
 
@@ -800,6 +841,20 @@ def werkzeuge() -> list[dict[str, Any]]:
                     },
                 },
                 "required": ["titel", "text"],
+            },
+        },
+        {
+            "name": "unterlagen_lesen",
+            "description": (
+                "Liest die Textunterlagen des Werkzeugs selbst - Handbuch, Arbeitsstand "
+                "und was sonst im Projektverzeichnis liegt. Ohne Namen aufgerufen kommt "
+                "die Liste. Immer zuerst hier nachsehen, bevor du ueber das Werkzeug "
+                "urteilst: Ein Papier, das dir jemand in den Text kopiert, kann veraltet "
+                "sein, und eine Kritik am falschen Stand hilft niemandem."
+            ),
+            "input_schema": {
+                "type": "object",
+                "properties": {"name": {"type": "string", "description": "Dateiname aus der Liste."}},
             },
         },
         {
@@ -1161,6 +1216,29 @@ def _entwurf_lesen(mappe: Arbeitsmappe, eingabe: dict[str, Any]) -> str:
     return datei.read_text(encoding="utf-8")
 
 
+def _unterlagen_lesen(mappe: Arbeitsmappe, eingabe: dict[str, Any]) -> str:
+    """Gibt eine Unterlage des Werkzeugs aus - oder listet auf, welche es gibt."""
+    name = str(eingabe.get("name") or "").strip()
+    vorhanden = projektunterlagen(mappe)
+    if not vorhanden:
+        return (
+            "Zu dieser Mappe sind keine Projektunterlagen erreichbar. Sie liegt "
+            "offenbar ausserhalb des Werkzeugverzeichnisses."
+        )
+    if not name:
+        return "Unterlagen des Werkzeugs:\n" + "\n".join(f"- {n}" for n in vorhanden)
+
+    datei = projektunterlage_pfad(mappe, name)
+    if datei is None:
+        raise BeratungsFehler(
+            f"Es gibt keine Unterlage '{name}'. Vorhanden sind: {', '.join(vorhanden)}."
+        )
+    text = datei.read_text(encoding="utf-8")
+    if len(text) > MAX_UNTERLAGE_ZEICHEN:
+        text = text[:MAX_UNTERLAGE_ZEICHEN] + "\n\n[... gekuerzt, die Unterlage ist laenger]"
+    return text
+
+
 def _verbesserung_vorschlagen(mappe: Arbeitsmappe, eingabe: dict[str, Any]) -> str:
     titel = str(eingabe.get("titel") or "").strip()
     anlass = str(eingabe.get("anlass") or "").strip()
@@ -1203,6 +1281,8 @@ def werkzeug_ausfuehren(
         return _entwurf_schreiben(mappe, eingabe), []
     if name == "entwurf_lesen":
         return _entwurf_lesen(mappe, eingabe), []
+    if name == "unterlagen_lesen":
+        return _unterlagen_lesen(mappe, eingabe), []
     if name == "dokumente_suchen":
         return _suchen(mappe, eingabe), []
     if name == "dokument_lesen":

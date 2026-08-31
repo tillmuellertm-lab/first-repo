@@ -130,6 +130,7 @@ Jahre — die holt sich das Modell bei Bedarf selbst. Dafür kann es
 | `kategorie_setzen` | **korrigiert** eine falsche Zuordnung |
 | `stammwert_speichern` | **hält** einen jahresübergreifenden Wert samt Fundstelle fest |
 | `entwurf_lesen` | zeigt einen eigenen Entwurf wieder an, oder listet sie auf |
+| `unterlagen_lesen` | liest dieses Handbuch und die übrigen Projektunterlagen |
 | `schreiben_entwerfen` | **legt** einen Text als Datei ab, etwa die Mail an den Steuerberater |
 | `verbesserung_vorschlagen` | **notiert**, was dem Werkzeug im Gebrauch gefehlt hat |
 
@@ -138,6 +139,11 @@ Die letzten fünf ändern die Mappe. Das ist der eigentliche Zweck: Was Sie im G
 den Steuerberater direkt unter der Frage, die es beantwortet — statt im Gesprächsverlauf
 zu versanden. Jeder Zugriff steht als eigene Zeile im Verlauf, damit erkennbar bleibt,
 worauf eine Antwort beruht.
+
+Fragen Sie das Modell nach dem Werkzeug selbst, liest es mit `unterlagen_lesen` zuerst
+den aktuellen Stand — dieses Handbuch und die übrigen `*.md`-Dateien im
+Projektverzeichnis. Der Grund ist praktisch: Ein Konzeptpapier, das man ihm in den Text
+kopiert, kann älter sein als der Code, und eine Kritik am falschen Stand kostet nur Zeit.
 
 Stößt das Modell an eine Grenze des Werkzeugs — ein Werkzeug, das es gebraucht hätte;
 eine Angabe, die es nicht sehen kann —, schreibt es das mitsamt dem Anlass nach
