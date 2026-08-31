@@ -53,6 +53,9 @@ MAX_RUNDEN = 8
 
 MAX_TREFFER = 60
 MAX_BESTANDSZEILEN = 250
+# Belege anderer Jahre stehen nur in Kurzform da, dafuer aber vollstaendig:
+# Was nicht in der Liste steht, wird sonst fuer nicht vorhanden gehalten.
+MAX_UEBRIGE_ZEILEN = 400
 # Eine Antwort muss einen ausformulierten Brief tragen koennen. Bei 4096 Token
 # brach das Modell mitten im Werkzeugaufruf ab: der Entwurf kam leer an und die
 # angebrochene Antwort hinterliess einen leeren Textblock im Verlauf.
@@ -566,13 +569,42 @@ def lage_text(mappe: Arbeitsmappe, regelwerk: Regelwerk) -> str:
             f"... {len(sortiert) - MAX_BESTANDSZEILEN} weitere Belege dieses Jahres. "
             "Sie stehen nicht in dieser Liste, sind aber ueber 'dokumente_suchen' erreichbar."
         )
-    if ansicht.fremde or ansicht.ohne_jahr:
+
+    # Die uebrigen Belege in Kurzform. Sie gehen in keine Summe ein, liegen aber
+    # sehr wohl in der Mappe - und wurden zweimal als fehlend gemeldet, weil sie
+    # hier nicht standen: erst eine Lohnsteuerbescheinigung, dann eine ganze
+    # Reihe Kontoauszuege. Ein Beleg, den der Mandant hochgeladen hat, darf
+    # nicht daran scheitern, dass eine Liste ihn nicht kennt.
+    uebrige = sorted(
+        ansicht.ohne_jahr + ansicht.fremde,
+        key=lambda d: (str(d.gehoert_ins_jahr or "0000"), d.dateiname),
+    )
+    if uebrige:
         zeilen.append("")
         zeilen.append(
-            f"Nicht aufgefuehrt: {len(ansicht.fremde)} Belege anderer Jahre und "
-            f"{len(ansicht.ohne_jahr)} ohne Jahreszuordnung. Auch sie liegen in der Mappe "
-            "und sind ueber 'dokumente_suchen' erreichbar."
+            f"Weitere {len(uebrige)} Belege in derselben Mappe, die nicht zum "
+            f"Veranlagungsjahr {mappe.jahr} gehoeren und in keine Summe eingehen. "
+            "Sie sind trotzdem da; je Zeile: Kennung | Jahr | Bezeichnung | Dateiname"
         )
+        for dokument in uebrige[:MAX_UEBRIGE_ZEILEN]:
+            analyse = dokument.analyse
+            bezeichnung = ""
+            if analyse:
+                bezeichnung = " - ".join(t for t in (analyse.dokumenttyp, analyse.aussteller) if t)
+            zeilen.append(
+                " | ".join(
+                    [
+                        dokument.id,
+                        str(dokument.gehoert_ins_jahr or "ohne Jahr"),
+                        bezeichnung or "ohne Bezeichnung",
+                        dokument.dateiname,
+                    ]
+                )
+            )
+        if len(uebrige) > MAX_UEBRIGE_ZEILEN:
+            zeilen.append(
+                f"... {len(uebrige) - MAX_UEBRIGE_ZEILEN} weitere, ueber 'dokumente_suchen' erreichbar."
+            )
     return "\n".join(zeilen)
 
 

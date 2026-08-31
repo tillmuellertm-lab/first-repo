@@ -788,3 +788,20 @@ def test_frische_gesamtauswertung_ohne_warnung(mappe, regelwerk):
         {"gesamteinschaetzung": "x", "luecken": [], "chancen": [], "erstellt_am": "2099-01-01"}
     )
     assert "Belege dazugekommen" not in berater.lage_text(mappe, regelwerk)
+
+
+def test_lagebild_fuehrt_auch_belege_ohne_und_mit_fremdem_jahr(mappe, tmp_path, regelwerk):
+    """Zweimal wurde ein vorhandener Beleg als fehlend gemeldet, weil er hier fehlte."""
+    from steuer.models import Analyse as A
+
+    for name, jahr in (("report_ohne_jahr.txt", None), ("report_2025.txt", 2025)):
+        quelle = tmp_path / name
+        quelle.write_text(name, encoding="utf-8")
+        dokument, _ = mappe.datei_aufnehmen(quelle)
+        dokument.analyse = A(dokumenttyp="Finanzreport", aussteller="comdirect", steuerjahr=jahr)
+
+    lage = berater.lage_text(mappe, regelwerk)
+    assert "report_ohne_jahr.txt" in lage
+    assert "report_2025.txt" in lage
+    # Und der Zusammenhang muss erkennbar bleiben: sie gehen in keine Summe ein.
+    assert "in keine Summe eingehen" in lage
