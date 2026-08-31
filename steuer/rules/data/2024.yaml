@@ -330,3 +330,198 @@ fristen:
   hinweis: >-
     Bei Antragsveranlagung (freiwillige Abgabe) betraegt die Frist vier Jahre
     nach Ablauf des Veranlagungszeitraums.
+
+# Zuordnung der Kategorien zu den Formularen. Sie ersetzt das Suchen im
+# Formular: aus "Werbungskosten 12.920,58 EUR" wird "Anlage N, Abschnitt
+# Doppelte Haushaltsfuehrung: 2.910,00 EUR".
+#
+# Die Abschnittsbezeichnungen sind die der amtlichen Vordrucke und in ELSTER
+# suchbar. Zeilennummern stehen nur dort, wo sie belegt sind - eine falsche
+# Nummer waere schlimmer als keine. Fehlende Nummern lassen sich mit
+# 'steuer recht-update' nachtragen.
+formularzeilen_geprueft: false
+formularzeilen:
+  - id: nichtselbstaendige_arbeit
+    anlage: Anlage N
+    abschnitte:
+      - bezeichnung: Angaben zum Arbeitslohn
+        standard: true
+        hinweis: >-
+          Bruttoarbeitslohn, Lohnsteuer, Solidaritaetszuschlag und Kirchensteuer
+          werden aus der Lohnsteuerbescheinigung uebernommen. Je Arbeitsverhaeltnis
+          eine eigene Anlage N.
+
+  - id: werbungskosten_fahrten
+    anlage: Anlage N
+    abschnitte:
+      - bezeichnung: Wege zwischen Wohnung und erster Taetigkeitsstaette
+        standard: true
+        hinweis: >-
+          Je Zeitraum eine Zeile: Arbeitstage, einfache Entfernung, Verkehrsmittel.
+          Pauschal versteuerte Arbeitgeberzuschuesse (Zeile 18 der
+          Lohnsteuerbescheinigung) mindern den Betrag.
+
+  - id: werbungskosten_arbeitsmittel
+    anlage: Anlage N
+    abschnitte:
+      - bezeichnung: Aufwendungen fuer Arbeitsmittel
+        standard: true
+        hinweis: >-
+          Bis 800 EUR netto sofort, darueber verteilt auf die Nutzungsdauer.
+
+  - id: werbungskosten_arbeitszimmer
+    anlage: Anlage N
+    abschnitte:
+      - bezeichnung: Haeusliches Arbeitszimmer oder Tagespauschale
+        standard: true
+        hinweis: >-
+          Entweder Jahrespauschale 1.260 EUR bei Mittelpunkt der Taetigkeit oder
+          Tagespauschale 6 EUR je Arbeitstag zu Hause, hoechstens 1.260 EUR.
+
+  - id: werbungskosten_fortbildung
+    anlage: Anlage N
+    abschnitte:
+      - bezeichnung: Fortbildungskosten
+        standard: true
+
+  - id: werbungskosten_sonstige
+    anlage: Anlage N
+    abschnitte:
+      - bezeichnung: Mehraufwendungen fuer doppelte Haushaltsfuehrung
+        hinweis: >-
+          Unterkunft hoechstens 1.000 EUR im Monat, Verpflegungspauschalen nur
+          drei Monate, Familienheimfahrten eine je Woche.
+      - bezeichnung: Umzugskosten
+        hinweis: >-
+          Umzugskostenpauschale nach Paragraf 10 BUKG und tatsaechliche
+          Befoerderungsauslagen nach Paragraf 6 BUKG stehen nebeneinander.
+          Ein Arbeitgeberzuschuss mindert den Abzug.
+      - bezeichnung: Reisekosten bei beruflich veranlasster Auswaertstaetigkeit
+        hinweis: Verpflegungspauschalen, Uebernachtung, Fahrtkosten.
+      - bezeichnung: Weitere Werbungskosten
+        standard: true
+        hinweis: >-
+          Sammelposten. Was sich einem der Abschnitte darueber zuordnen laesst,
+          gehoert dorthin - der Sammelposten faellt bei der Pruefung eher auf.
+
+  - id: kapitalertraege
+    anlage: Anlage KAP
+    abschnitte:
+      - bezeichnung: Kapitalertraege, die dem inlaendischen Steuerabzug unterlegen haben
+        standard: true
+        hinweis: >-
+          Aus der Steuerbescheinigung der Bank. Werbungskosten sind nach
+          Paragraf 20 Abs. 9 EStG nicht abziehbar, nur der Sparer-Pauschbetrag.
+
+  - id: vermietung
+    anlage: Anlage V
+    abschnitte:
+      - bezeichnung: Einnahmen aus Vermietung und Verpachtung
+        hinweis: Mieteinnahmen und umlagefaehige Nebenkosten, die der Mieter erstattet.
+      - bezeichnung: Absetzung fuer Abnutzung
+        hinweis: >-
+          Gebaeude-AfA und AfA beweglicher Wirtschaftsgueter. Wird aus dem
+          Vorjahr fortgeschrieben, siehe Stammdaten.
+      - bezeichnung: Schuldzinsen
+        hinweis: Aus den Zinsbescheinigungen der finanzierenden Banken.
+      - bezeichnung: Erhaltungsaufwendungen
+        hinweis: Reparatur und Instandhaltung, sofort abziehbar.
+      - bezeichnung: Sonstige Werbungskosten
+        standard: true
+        hinweis: Grundsteuer, Versicherungen, Verwaltung, Fahrten zum Objekt.
+
+  - id: selbstaendig
+    anlage: Anlage G oder S mit Anlage EUeR
+    abschnitte:
+      - bezeichnung: Einnahmen-Ueberschuss-Rechnung
+        standard: true
+        hinweis: >-
+          Eigene Anlage je Betrieb. Die Aufstellung erzeugt 'steuer euer'.
+
+  - id: lohnersatzleistungen
+    anlage: Anlage N
+    abschnitte:
+      - bezeichnung: Steuerfreie Lohnersatzleistungen
+        standard: true
+        hinweis: >-
+          Arbeitslosen-, Kranken-, Eltern- und Kurzarbeitergeld. Unterliegen dem
+          Progressionsvorbehalt nach Paragraf 32b EStG. Massgeblich ist der
+          Leistungsnachweis, nicht der Bewilligungsbescheid.
+
+  - id: vorsorgeaufwendungen
+    anlage: Anlage Vorsorgeaufwand
+    abschnitte:
+      - bezeichnung: Beitraege zur Kranken- und Pflegeversicherung
+        standard: true
+      - bezeichnung: Weitere sonstige Vorsorgeaufwendungen
+        hinweis: >-
+          Haftpflicht, Berufsunfaehigkeit, Risikoleben, Unfall. Eine reine
+          Rechtsschutzversicherung gehoert nicht dazu.
+
+  - id: altersvorsorge_av
+    anlage: Anlage AV
+    abschnitte:
+      - bezeichnung: Riester-Beitraege
+        standard: true
+
+  - id: sonderausgaben
+    anlage: Anlage Sonderausgaben
+    abschnitte:
+      - bezeichnung: Gezahlte Kirchensteuer
+      - bezeichnung: Zuwendungen und Mitgliedsbeitraege
+        standard: true
+        hinweis: Zuwendungsbestaetigung noetig, bei Kleinspenden bis 300 EUR der Kontoauszug.
+
+  - id: kinder
+    anlage: Anlage Kind
+    abschnitte:
+      - bezeichnung: Kinderbetreuungskosten
+        standard: true
+        hinweis: >-
+          Zwei Drittel der Aufwendungen, hoechstens 4.000 EUR je Kind. Rechnung
+          und unbare Zahlung sind Voraussetzung. Verpflegung und Unterricht
+          zaehlen nicht. Je Kind eine eigene Anlage.
+
+  - id: aussergewoehnliche_belastungen
+    anlage: Mantelbogen
+    abschnitte:
+      - bezeichnung: Andere aussergewoehnliche Belastungen
+        standard: true
+        hinweis: >-
+          Wirkt sich nur oberhalb der zumutbaren Belastung aus. Erstattungen der
+          Kasse oder einer Zusatzversicherung sind gegenzurechnen.
+
+  - id: haushaltsnahe_aufwendungen
+    anlage: Anlage Haushaltsnahe Aufwendungen
+    abschnitte:
+      - bezeichnung: Haushaltsnahe Dienstleistungen
+        standard: true
+        hinweis: 20 Prozent, hoechstens 4.000 EUR Ermaessigung.
+      - bezeichnung: Handwerkerleistungen
+        hinweis: >-
+          20 Prozent des Lohnanteils, hoechstens 1.200 EUR Ermaessigung. Nur
+          Lohn-, Fahrt- und Maschinenkosten, kein Material. Unbare Zahlung zwingend.
+
+  - id: unterhalt
+    anlage: Anlage Unterhalt
+    abschnitte:
+      - bezeichnung: Unterhaltsleistungen an beduerftige Personen
+        standard: true
+
+  - id: renten
+    anlage: Anlage R
+    abschnitte:
+      - bezeichnung: Leibrenten und andere Leistungen
+        standard: true
+
+  - id: sonstige_einkuenfte
+    anlage: Anlage SO
+    abschnitte:
+      - bezeichnung: Private Veraeusserungsgeschaefte
+        standard: true
+
+  - id: auslandseinkuenfte
+    anlage: Anlage AUS
+    abschnitte:
+      - bezeichnung: Auslaendische Einkuenfte
+        standard: true

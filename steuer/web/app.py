@@ -20,6 +20,7 @@ from typing import Any
 
 from .. import (
     berater,
+    formular as formular_modul,
     gaps,
     offen as offen_modul,
     organize,
@@ -514,6 +515,17 @@ def anwendung_bauen(mappe: Arbeitsmappe) -> Any:
         if not pfad.exists():
             abort(404)
         return send_file(pfad, mimetype=eintrag.medientyp or None)
+
+    @app.get("/formular")
+    def formularzuordnung():
+        """Wo jeder Betrag in der Steuererklaerung hingehoert."""
+        werk = regelwerk()
+        return render_template(
+            "formular.html",
+            **grunddaten(),
+            posten=formular_modul.aufstellung(mappe.jahresansicht().eigene, werk),
+            geprueft=bool(werk.daten.get("formularzeilen_geprueft")),
+        )
 
     @app.get("/bericht")
     def bericht():

@@ -534,3 +534,23 @@ def test_nachricht_nur_aus_einem_bild_ist_erlaubt(klient, monkeypatch):
         json={"nachricht": "", "bilder": [{"medientyp": "image/png", "daten": _png_base64()}]},
     )
     assert antwort.status_code == 200
+
+
+def test_formularseite_ordnet_die_kategorien_zu(klient):
+    seite = klient.get("/formular")
+    assert seite.status_code == 200
+    text = seite.get_data(as_text=True)
+    assert "Anlage Haushaltsnahe Aufwendungen" in text
+    assert "Handwerkerleistungen" in text
+    # Solange die Zeilennummern nicht geprueft sind, muss das dabeistehen.
+    assert "nicht amtlich geprueft" in text
+
+
+def test_formularseite_haelt_auch_leere_mappe_aus(tmp_path):
+    leer = Arbeitsmappe.anlegen(tmp_path / "leer", 2024, Profil(veranlagungsjahr=2024))
+    app = anwendung_bauen(leer)
+    app.config["TESTING"] = True
+    with app.test_client() as klient:
+        antwort = klient.get("/formular")
+    assert antwort.status_code == 200
+    assert "Noch nichts zuzuordnen" in antwort.get_data(as_text=True)

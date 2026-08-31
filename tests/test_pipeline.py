@@ -188,7 +188,7 @@ def test_berichte_werden_geschrieben(mappe: Arbeitsmappe, tmp_path: Path):
     pfade = report.berichte_schreiben(
         mappe.berichte, mappe.dokumente, auswertung, REGELWERK, mappe.profil
     )
-    assert len(pfade) == 3
+    assert len(pfade) == 4
     html = (mappe.berichte / "Uebersicht_2024.html").read_text(encoding="utf-8")
     assert "Steuerunterlagen 2024" in html
     assert "Handwerkerrechnung" in html
@@ -321,3 +321,16 @@ def test_uebernehmen_loest_namenskollision_auf(mappe: Arbeitsmappe, tmp_path: Pa
     assert ziel.dokument_uebernehmen(dokument, mappe.pfad_zu(dokument))
     assert ziel.dokumente[0].dateiname != "beleg.txt"
     assert (ziel.eingang / "beleg.txt").read_text(encoding="utf-8") == "schon da"
+
+
+def test_formularzuordnung_liegt_dem_paket_bei(mappe: Arbeitsmappe, tmp_path: Path):
+    """Wer die Erklaerung ausfuellt, braucht die Zuordnung neben dem Formular."""
+    _befuellen(mappe, tmp_path)
+    auswertung = gaps.auswerten(mappe.dokumente, REGELWERK, mappe.profil)
+    pfade = report.berichte_schreiben(
+        mappe.berichte, mappe.dokumente, auswertung, REGELWERK, mappe.profil
+    )
+    zuordnung = next(p for p in pfade if p.name.startswith("Formularzuordnung"))
+    text = zuordnung.read_text(encoding="utf-8")
+    assert "Aufstellung nach Formularabschnitten" in text
+    assert "Anlage" in text

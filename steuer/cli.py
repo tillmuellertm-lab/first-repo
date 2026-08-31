@@ -1427,6 +1427,25 @@ def befehl_beantworten(args: argparse.Namespace) -> int:
     return 0
 
 
+def befehl_zeilen(args: argparse.Namespace) -> int:
+    """Gibt aus, in welchen Formularabschnitt jeder Betrag gehoert."""
+    from . import formular  # lokal, damit der Start des Programms schlank bleibt
+
+    mappe = _mappe_oeffnen(args)
+    regelwerk = _regelwerk(mappe)
+    posten = formular.aufstellung(mappe.jahresansicht().eigene, regelwerk)
+    text = formular.als_markdown(posten, regelwerk, mappe.jahr)
+
+    if args.datei:
+        ziel = Path(args.datei).expanduser()
+        ziel.parent.mkdir(parents=True, exist_ok=True)
+        ziel.write_text(text, encoding="utf-8")
+        print(f"Geschrieben: {ziel}")
+        return 0
+    print(text)
+    return 0
+
+
 def befehl_bestand(args: argparse.Namespace) -> int:
     """Gibt den Bestand so aus, dass er sich in ein Gespraech kopieren laesst.
 
@@ -1819,6 +1838,13 @@ def parser_bauen() -> argparse.ArgumentParser:
     )
     p.add_argument("--alle", action="store_true", help="Alle Jahre statt nur das Veranlagungsjahr.")
     p.set_defaults(funktion=befehl_bestand)
+
+    p = unter.add_parser(
+        "zeilen",
+        help="Aufstellung nach Formularabschnitten - wo welcher Betrag hingehoert.",
+    )
+    p.add_argument("--datei", type=Path, help="In eine Datei schreiben statt auf den Bildschirm.")
+    p.set_defaults(funktion=befehl_zeilen)
 
     p = unter.add_parser("liste", help="Alle Dokumente nach Anlagen sortiert auflisten.")
     p.add_argument("--kategorie", choices=taxonomy.ids(), help="Nur diese Kategorie zeigen.")

@@ -526,6 +526,20 @@ def berichte_schreiben(
     pfad.write_text(csv_export(dokumente), encoding="utf-8-sig")
     erzeugt.append(pfad)
 
+    # Eigene Datei statt eines Abschnitts im Bericht: Wer die Erklaerung
+    # ausfuellt, hat sie dann neben dem Formular offen und muss nicht durch
+    # eine Uebersicht blaettern.
+    from . import formular  # lokal, um Zirkelbezuege zu vermeiden
+
+    pfad = ordner / f"Formularzuordnung_{regelwerk.jahr}.md"
+    pfad.write_text(
+        formular.als_markdown(
+            formular.aufstellung(dokumente, regelwerk), regelwerk, regelwerk.jahr
+        ),
+        encoding="utf-8",
+    )
+    erzeugt.append(pfad)
+
     return erzeugt
 
 

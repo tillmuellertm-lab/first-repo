@@ -29,6 +29,7 @@ fehlt** und **wo Geld liegen bleibt**.
 | Aktuell bleiben | versionierte Regeldateien je Jahr plus Recherche-Befehl mit Web-Suche |
 | Sammelscans trennen | erkennt mehrere Dokumente in einer PDF und zerlegt sie seitengenau |
 | Rückfragen klären | Gespräch mit dem Modell über den eigenen Bestand — es liest Belege nach und trägt Ihre Antworten ein |
+| Formular zuordnen | sagt je Kategorie, in welchen Abschnitt der Steuererklärung der Betrag gehört |
 
 ---
 
@@ -178,6 +179,33 @@ wurde, steht als graue Zeile im Verlauf.
 
 ---
 
+## Formularzuordnung: wo die Beträge hingehören
+
+Die Kennzahlen sagen „Werbungskosten 12.920,58 €". Wer das in ELSTER oder in eine
+Steuersoftware eintragen soll, weiß damit noch nicht, in welches Feld. Der Menüpunkt
+**Formular** — und `steuer zeilen` — ordnet jede Kategorie ihrem Abschnitt im Vordruck
+zu und legt die Belege darunter.
+
+Zwei Dinge tut die Zuordnung bewusst nicht:
+
+* **Sie erfindet keine Zeilennummer.** Zeilen ändern sich jährlich; eine falsche Nummer
+  wäre schlimmer als keine. Hinterlegt sind die Abschnittsbezeichnungen der amtlichen
+  Vordrucke, nach denen sich in ELSTER suchen lässt. Wo eine geprüfte Nummer vorliegt,
+  steht sie dabei. Gepflegt wird das je Jahr in `steuer/rules/data/<jahr>.yaml` unter
+  `formularzeilen`, zusammen mit dem Kennzeichen `formularzeilen_geprueft`.
+* **Sie verteilt keine Summe auf mehrere Abschnitte.** Welcher Teil der sonstigen
+  Werbungskosten auf die doppelte Haushaltsführung entfällt und welcher auf den Umzug,
+  steht in keinem Beleg. Solche Kategorien werden ungeteilt mit allen in Frage kommenden
+  Abschnitten ausgewiesen — offen sichtbar statt plausibel geraten.
+
+Beim Ordnen entsteht daraus `berichte/Formularzuordnung_<jahr>.md`, die mit dem Paket an
+den Steuerberater geht.
+
+> **Keine Übermittlung ans Finanzamt.** Das Werkzeug bereitet vor; die Erklärung wird
+> über ELSTER, eine zugelassene Steuersoftware oder den Steuerberater eingereicht.
+
+---
+
 ## Die Arbeitsmappe
 
 ```
@@ -194,6 +222,7 @@ steuer-2025/
 │   ├── Uebersicht_2025.html    zum Ausdrucken oder als PDF speichern
 │   ├── Uebersicht_2025.md
 │   ├── Dokumentliste_2025.csv
+│   ├── Formularzuordnung_2025.md   wo welcher Betrag im Formular hingehört
 │   └── Steuerunterlagen_2025.zip
 └── .zustand/dokumente.json     alle Analyseergebnisse, lesbares JSON
 ```
@@ -212,6 +241,7 @@ Die Originale bleiben unangetastet, die Ablage wird bei jedem Lauf frisch aufgeb
 | `steuer stammdaten [--bearbeiten] [--aus MAPPE]` | jahresübergreifende Werte wie die Gebäude-AfA pflegen und fortschreiben |
 | `steuer hinzufuegen <Pfade> [--herkunft] [--jahr]` | Dateien oder Ordner aufnehmen; Herkunft und Steuerjahr des Stapels gleich mitgeben |
 | `steuer analyse [--alle] [--nachtragen] [--hoechstens N]` | Dokumente prüfen; `--nachtragen` holt nur nach, was mit älterem Stand geprüft wurde |
+| `steuer zeilen [--datei PFAD]` | Aufstellung nach Formularabschnitten — wo welcher Betrag hingehört |
 | `steuer liste` | alle Dokumente nach Anlagen sortiert |
 | `steuer dateien` | Größe und Seitenzahl aller Dateien, findet Ausreißer |
 | `steuer ausgliedern` | Dokumente nach Herkunft, Kategorie oder Steuerjahr in eine andere Mappe verschieben |
@@ -530,6 +560,7 @@ Tests laufen ohne API-Schlüssel und ohne Netzzugriff.
 | `steuer/naming.py`, `organize.py` | Benennung und Ablage |
 | `steuer/report.py` | HTML, Markdown, CSV |
 | `steuer/euer.py` | Aufstellung der Betriebseinnahmen und -ausgaben |
+| `steuer/formular.py` | Zuordnung der Kategorien zu den Formularabschnitten |
 | `steuer/stammdaten.py` | jahresübergreifende, bestätigte Werte |
 | `steuer/lawupdate.py` | Rechtsstandsrecherche und Entwurfsverwaltung |
 | `steuer/web/` | lokale Weboberfläche |
