@@ -440,7 +440,7 @@ def _zahl(wert: Any) -> float | None:
 
 def _betragsart(wert: Any) -> str:
     text = str(wert or "").strip().lower()
-    return text if text in ("aufwand", "einnahme", "vertragswert", "saldo") else ""
+    return text if text in ("aufwand", "erstattung", "einnahme", "vertragswert", "saldo") else ""
 
 
 def _geschaeftsvorfall(wert: Any) -> str:

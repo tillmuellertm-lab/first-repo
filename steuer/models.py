@@ -32,7 +32,7 @@ EIGNUNG_REIHENFOLGE = [EIGNUNG_GEEIGNET, EIGNUNG_BEDINGT, EIGNUNG_UNKLAR, EIGNUN
 # Wird erhoeht, wenn die Analyse neue Felder erhebt. So laesst sich erkennen,
 # welche Dokumente von einer aelteren Fassung geprueft wurden und nachgeholt
 # werden muessen, ohne den gesamten Bestand erneut zu bezahlen.
-ANALYSE_VERSION = 2
+ANALYSE_VERSION = 3
 
 STATUS_NEU = "neu"
 STATUS_ANALYSIERT = "analysiert"
@@ -280,7 +280,7 @@ class Analyse:
     zahlungsart: str = ""  # unbar, bar, unbekannt
     # Was der Betrag ueberhaupt bedeutet. Ohne diese Unterscheidung wandert
     # die Summe eines Darlehensvertrags in die Werbungskosten.
-    betragsart: str = ""  # aufwand, einnahme, vertragswert, saldo
+    betragsart: str = ""  # aufwand, erstattung, einnahme, vertragswert, saldo
     # Nur bei betrieblichen Belegen gefuellt; steuert die EUeR-Aufstellung.
     geschaeftsvorfall: str = ""  # einnahme, ausgabe, kein_betrieblicher_vorgang
     euer_posten: str = ""  # Posten-Id aus steuer.euer
@@ -365,6 +365,19 @@ def zaehlt_als_aufwand(analyse: "Analyse | None") -> bool:
         return False
     art = analyse.betragsart or betragsart_erraten(analyse)
     return art == "aufwand"
+
+
+def ist_erstattung(analyse: "Analyse | None") -> bool:
+    """Ob der Betrag einen bereits erfassten Aufwand mindert.
+
+    Erstattungen sind der gefaehrlichere Fall als ein Vertragswert. Eine
+    Darlehenssumme faellt als Ausreisser auf; eine erstattete Zahnreinigung
+    von 124,88 EUR steht plausibel zwischen echten Aufwendungen und macht die
+    Summe still zu hoch. Abziehbar ist immer nur, was am Ende getragen wurde.
+    """
+    if analyse is None:
+        return False
+    return (analyse.betragsart or betragsart_erraten(analyse)) == "erstattung"
 
 
 @dataclass

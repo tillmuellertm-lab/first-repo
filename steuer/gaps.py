@@ -16,6 +16,7 @@ from typing import Any, Iterable
 from . import taxonomy
 from .formatierung import euro
 from .models import (
+    ist_erstattung,
     EIGNUNG_BEDINGT,
     EIGNUNG_GEEIGNET,
     EIGNUNG_UNGEEIGNET,
@@ -164,13 +165,17 @@ def _summe(dokumente: Iterable[Dokument]) -> float:
         analyse = dokument.analyse
         if not analyse or analyse.eignung == EIGNUNG_UNGEEIGNET:
             continue
-        if not zaehlt_als_aufwand(analyse):
+        erstattung = ist_erstattung(analyse)
+        if not erstattung and not zaehlt_als_aufwand(analyse):
             continue
         betrag = analyse.betrag_abzugsfaehig
         if betrag is None:
             betrag = analyse.betrag_gesamt
         if betrag:
-            gesamt += float(betrag)
+            # Eine Erstattung mindert den Aufwand, den sie ersetzt. Abziehbar
+            # ist, was der Steuerpflichtige am Ende getragen hat - nicht, was
+            # zwischenzeitlich ueber sein Konto lief.
+            gesamt += -abs(float(betrag)) if erstattung else float(betrag)
     return round(gesamt, 2)
 
 
@@ -211,45 +216,66 @@ def kennzahlen(dokumente: list[Dokument], regelwerk: Regelwerk, profil: Profil) 
 
 
 def _frist_pruefen(regelwerk: Regelwerk, heute: _dt.date) -> list[Befund]:
-    befunde: list[Befund] = []
+    """Meldet die Abgabefrist - genau einmal.
+
+    Es gibt zwei Fristen, mit und ohne Steuerberater. Beide zu melden ergab
+    zweimal denselben Satz mit derselben Prioritaet, und wer eine Warnung
+    zweimal liest, liest die naechste gar nicht mehr. Massgeblich ist die
+    spaetere: wer sie einhaelt, haelt auch die fruehere ein oder braucht sie
+    nicht.
+    """
     fristen = regelwerk.fristen or {}
+    termine: list[tuple[_dt.date, str]] = []
     for schluessel, beschriftung in (
-        ("abgabe_mit_berater", "Abgabefrist mit Steuerberater"),
-        ("abgabe_ohne_berater", "Abgabefrist ohne Steuerberater"),
+        ("abgabe_mit_berater", "mit Steuerberater"),
+        ("abgabe_ohne_berater", "ohne Steuerberater"),
     ):
         roh = fristen.get(schluessel)
         if not roh:
             continue
         try:
-            frist = _dt.date.fromisoformat(str(roh))
+            termine.append((_dt.date.fromisoformat(str(roh)), beschriftung))
         except ValueError:
             continue
-        tage = (frist - heute).days
-        if tage < 0:
-            befunde.append(
-                Befund(
-                    art="warnung",
-                    id=f"frist_{schluessel}",
-                    titel=f"{beschriftung} verstrichen",
-                    beschreibung=(
-                        f"Die Frist ist am {frist.strftime('%d.%m.%Y')} abgelaufen. "
-                        "Der Steuerberater sollte moeglichst bald ueber den Stand informiert werden; "
-                        "Verspaetungszuschlaege sind moeglich."
-                    ),
-                    prioritaet="hoch",
-                )
+    if not termine:
+        return []
+
+    termine.sort()
+    frist, beschriftung = termine[-1]
+    zusatz = ""
+    if len(termine) > 1:
+        frueher, frueher_wer = termine[0]
+        zusatz = f" Ohne Vertretung galt bereits der {frueher.strftime('%d.%m.%Y')} ({frueher_wer})."
+
+    tage = (frist - heute).days
+    if tage < 0:
+        return [
+            Befund(
+                art="warnung",
+                id="frist_abgabe",
+                titel="Abgabefrist verstrichen",
+                beschreibung=(
+                    f"Die spaeteste Frist ({beschriftung}) ist am "
+                    f"{frist.strftime('%d.%m.%Y')} abgelaufen.{zusatz} "
+                    "Verspaetungszuschlaege sind moeglich."
+                ),
+                prioritaet="hoch",
             )
-        elif tage <= 90:
-            befunde.append(
-                Befund(
-                    art="warnung",
-                    id=f"frist_{schluessel}",
-                    titel=f"{beschriftung} in {tage} Tagen",
-                    beschreibung=f"Die Frist laeuft am {frist.strftime('%d.%m.%Y')} ab.",
-                    prioritaet="hoch" if tage <= 30 else "mittel",
-                )
+        ]
+    if tage <= 90:
+        return [
+            Befund(
+                art="warnung",
+                id="frist_abgabe",
+                titel=f"Abgabefrist in {tage} Tagen",
+                beschreibung=(
+                    f"Die Frist {beschriftung} laeuft am "
+                    f"{frist.strftime('%d.%m.%Y')} ab.{zusatz}"
+                ),
+                prioritaet="hoch" if tage <= 30 else "mittel",
             )
-    return befunde
+        ]
+    return []
 
 
 def dubletten_gruppen(dokumente: list[Dokument]) -> list[list[Dokument]]:
@@ -532,7 +558,7 @@ def _nicht_gezaehlte_betraege(dokumente: list[Dokument]) -> list[Befund]:
         if not analyse or analyse.eignung == EIGNUNG_UNGEEIGNET:
             continue
         betrag = analyse.betrag_abzugsfaehig or analyse.betrag_gesamt
-        if not betrag or zaehlt_als_aufwand(analyse):
+        if not betrag or zaehlt_als_aufwand(analyse) or ist_erstattung(analyse):
             continue
         art = analyse.betragsart or "vertragswert oder Saldo"
         name = analyse.dokumenttyp or dokument.dateiname

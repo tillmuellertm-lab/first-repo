@@ -20,6 +20,7 @@ fehlt** und **wo Geld liegen bleibt**.
 | Dokument verstehen | Claude liest den Scan direkt (PDF oder Bild), erkennt Art, Aussteller, Datum, Beträge |
 | Eignung prüfen | vier Stufen: geeignet, bedingt geeignet, nicht geeignet, unklar — mit Begründung |
 | Formfehler finden | Barzahlung bei § 35a, fehlender Lohnanteil, falsches Steuerjahr, fehlender Zahlungsnachweis |
+| Erstattungen gegenrechnen | Kassenerstattung, Arbeitgeberzuschuss, Fahrtkostenersatz mindern den Aufwand, statt ihn aufzublähen |
 | Sinnvoll benennen | `03_2024-03-15_Handwerkerrechnung_Elektro-Mueller_1189-42EUR_PRUEFEN.pdf` |
 | Struktur erzeugen | Ordner in der Reihenfolge der Steuererklärung, von `00_Stammdaten` bis `99_Nicht_steuerrelevant` |
 | Übersicht erstellen | HTML zum Ausdrucken oder als PDF, Markdown und CSV für den Berater |

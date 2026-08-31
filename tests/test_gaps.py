@@ -188,8 +188,17 @@ def test_dublette_wird_erkannt():
 
 def test_frist_wird_als_verstrichen_gemeldet():
     ergebnis = gaps.auswerten([], REGELWERK, profil(), heute=dt.date(2026, 8, 1))
-    treffer = [b for b in ergebnis.warnungen if b.id == "frist_abgabe_mit_berater"]
+    treffer = [b for b in ergebnis.warnungen if b.id == "frist_abgabe"]
     assert treffer and "verstrichen" in treffer[0].titel
+
+
+def test_die_abgabefrist_wird_nur_einmal_gemeldet():
+    """Zwei Fristen, ein Befund - wer eine Warnung doppelt liest, liest die naechste nicht."""
+    ergebnis = gaps.auswerten([], REGELWERK, profil(), heute=dt.date(2026, 8, 1))
+    fristbefunde = [b for b in ergebnis.warnungen if b.id.startswith("frist")]
+    assert len(fristbefunde) == 1
+    # Die frueher abgelaufene Frist steht als Nebensatz darin, nicht als eigener Befund.
+    assert "31.07.2025" in fristbefunde[0].beschreibung
 
 
 def test_ersatzrechtsstand_wird_gemeldet():
@@ -551,3 +560,33 @@ def test_dublettengruppen_sortieren_nach_betrag():
     gruppen = gaps.dubletten_gruppen(klein + gross)
 
     assert [g[0].analyse.aussteller for g in gruppen] == ["RasenBallsport", "RentMyTrailer"]
+
+
+def test_erstattung_mindert_die_summe_ihrer_kategorie():
+    """124,88 EUR erstattete Zahnreinigung sind kein Aufwand von 124,88 EUR."""
+    aufwand = dokument("aussergewoehnliche_belastungen", 300.0, kennung="a")
+    aufwand.analyse.betragsart = "aufwand"
+    erstattung = dokument("aussergewoehnliche_belastungen", 124.88, kennung="b")
+    erstattung.analyse.betragsart = "erstattung"
+
+    zahlen = gaps.kennzahlen([aufwand, erstattung], REGELWERK, profil())
+    assert zahlen["aussergewoehnliche_belastungen_gesamt"] == 175.12
+
+
+def test_erstattung_wirkt_auch_mit_positivem_vorzeichen():
+    """Das Modell liefert den Betrag mal so, mal so - die Richtung darf nicht daran haengen."""
+    aufwand = dokument("werbungskosten_sonstige", 3000.0, kennung="a")
+    aufwand.analyse.betragsart = "aufwand"
+    zuschuss = dokument("werbungskosten_sonstige", -500.0, kennung="b")
+    zuschuss.analyse.betragsart = "erstattung"
+
+    zahlen = gaps.kennzahlen([aufwand, zuschuss], REGELWERK, profil())
+    assert zahlen["werbungskosten_gesamt"] == 2500.0
+
+
+def test_erstattung_erscheint_nicht_als_uebergangener_betrag():
+    """Sie geht ja in die Summe ein - nur mit umgekehrtem Vorzeichen."""
+    erstattung = dokument("werbungskosten_sonstige", 72.0, typ="Fahrtkostenersatz", kennung="a")
+    erstattung.analyse.betragsart = "erstattung"
+    ergebnis = gaps.auswerten([erstattung], REGELWERK, profil(), heute=dt.date(2025, 1, 15))
+    assert not [b for b in ergebnis.befunde if "keine Ausgabe" in b.beschreibung]

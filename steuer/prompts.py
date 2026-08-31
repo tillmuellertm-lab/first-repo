@@ -136,14 +136,33 @@ Zur Bewertung der Eignung:
 - "unklar": das Dokument ist nicht lesbar genug fuer eine Bewertung.
 
 Weitere Regeln:
-- "steuerjahr" ist das Jahr, in das der Beleg steuerlich gehoert. Bei
-  Paragraf 35a und bei Sonderausgaben zaehlt das Zahlungsdatum, nicht das
-  Rechnungsdatum. Weicht das Jahr vom Veranlagungszeitraum ab, sage das deutlich
-  in der Begruendung.
-- "betragsart" entscheidet, ob der Betrag in eine Summe eingeht. Nur "aufwand"
-  zaehlt als Ausgabe. Ein Darlehensvertrag ueber 100.000 EUR, ein Kontoauszug
-  mit einem Saldo und ein Mietvertrag mit der Monatsmiete tragen alle eine
-  Zahl - keine davon ist eine Ausgabe.
+- "steuerjahr" ist das Jahr, in das der Beleg steuerlich gehoert. Massgeblich
+  ist nach Paragraf 11 EStG das Jahr der **Zahlung**, nicht das der Rechnung -
+  und zwar bei allen Ausgaben, nicht nur bei Paragraf 35a: auch bei
+  Werbungskosten, Sonderausgaben, aussergewoehnlichen Belastungen, bei
+  Vermietung und in der Einnahmen-Ueberschuss-Rechnung. Ausgenommen sind
+  Abschreibungen, die sich ueber die Nutzungsdauer verteilen.
+- Zehn-Tage-Regel (Paragraf 11 Abs. 1 Satz 2 und Abs. 2 Satz 2 EStG): Eine
+  regelmaessig wiederkehrende Zahlung rund um den Jahreswechsel gehoert in das
+  Jahr, zu dem sie wirtschaftlich zaehlt. Eine am 05.01.2025 gezahlte
+  Dezembermiete gehoert noch in 2024. Das gilt nur fuer wiederkehrende
+  Zahlungen, nicht fuer eine Jahresabrechnung.
+- Steht das Zahlungsdatum nicht im Beleg, rate es nicht aus dem
+  Rechnungsdatum. Setze das Jahr nach bestem Wissen, senke "vertrauen" und
+  schreib in "fehlende_nachweise", dass der Zahlungszeitpunkt zu klaeren ist.
+  Ein falsches Jahr kostet den Abzug ganz.
+- Weicht das Jahr vom Veranlagungszeitraum ab, sage das deutlich in der
+  Begruendung.
+- "betragsart" entscheidet, ob und wie der Betrag in eine Summe eingeht. Nur
+  "aufwand" zaehlt als Ausgabe. Ein Darlehensvertrag ueber 100.000 EUR, ein
+  Kontoauszug mit einem Saldo und ein Mietvertrag mit der Monatsmiete tragen
+  alle eine Zahl - keine davon ist eine Ausgabe.
+- "erstattung" ist der Gegenposten zu einem Aufwand und wird von der Summe
+  abgezogen: die Erstattung der Krankenkasse oder einer Zusatzversicherung, ein
+  Umzugskostenzuschuss des Arbeitgebers, ein Fahrtkostenersatz, eine
+  Beitragsrueckerstattung, eine Gutschrift. Abziehbar ist nur, was der
+  Steuerpflichtige am Ende selbst getragen hat. Nenne in der Zusammenfassung,
+  welchen Aufwand die Erstattung mindert, damit sich beides zuordnen laesst.
 - "betrag_abzugsfaehig" ist der steuerlich nutzbare Teil, bei Handwerkern also
   nur Lohn-, Fahrt- und Maschinenkosten ohne Material.
 - "zahlungsart": "unbar", wenn Ueberweisung, Lastschrift oder Karte erkennbar
@@ -202,13 +221,17 @@ WERKZEUG_ANALYSE: dict[str, Any] = {
             "betrag_gesamt": {"type": "number", "description": "Gesamtbetrag des Belegs."},
             "betragsart": {
                 "type": "string",
-                "enum": ["aufwand", "einnahme", "vertragswert", "saldo"],
+                "enum": ["aufwand", "erstattung", "einnahme", "vertragswert", "saldo"],
                 "description": (
                     "Was der Betrag bedeutet. aufwand = tatsaechlich gezahlte oder "
-                    "geschuldete Ausgabe. einnahme = Zufluss. vertragswert = vereinbarte "
-                    "Summe ohne Zahlung, etwa Darlehenssumme, Versicherungssumme, "
-                    "Monatsmiete in einem Mietvertrag, Kaufpreis in einem Vertrag. "
-                    "saldo = Kontostand, Depotwert, Jahresmeldung, Standmitteilung."
+                    "geschuldete Ausgabe. erstattung = Gegenposten zu einem Aufwand, "
+                    "der von der Summe abgezogen wird: Kassenerstattung, "
+                    "Arbeitgeberzuschuss, Fahrtkostenersatz, Beitragsrueckerstattung, "
+                    "Gutschrift. einnahme = Zufluss, der kein Aufwand mindert. "
+                    "vertragswert = vereinbarte Summe ohne Zahlung, etwa Darlehenssumme, "
+                    "Versicherungssumme, Monatsmiete in einem Mietvertrag, Kaufpreis in "
+                    "einem Vertrag. saldo = Kontostand, Depotwert, Jahresmeldung, "
+                    "Standmitteilung."
                 ),
             },
             "betrag_abzugsfaehig": {

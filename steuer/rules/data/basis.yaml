@@ -100,9 +100,17 @@ checkliste:
     gilt_wenn: [umzug]
     erwartete_dokumente:
       - Rechnung des Umzugsunternehmens
-      - Maklerrechnung
+      - Maklerrechnung fuer die Wohnungssuche
       - Nachweis der beruflichen Veranlassung
-    hinweis: "Beruflich veranlasst sind es Werbungskosten, privat greift zumindest § 35a fuer die Umzugsfirma."
+      - Fahrtkosten und Mietwagen- oder Transporterrechnungen des Umzugstages
+      - Bescheinigung des Arbeitgebers ueber einen Umzugskostenzuschuss
+    hinweis: >-
+      Beruflich veranlasst sind es Werbungskosten, privat greift zumindest § 35a
+      fuer die Umzugsfirma. Wichtig: Die Pauschale fuer sonstige Umzugsauslagen
+      (§ 10 BUKG) und die tatsaechlichen Befoerderungsauslagen (§ 6 BUKG) stehen
+      nebeneinander, nicht zur Wahl. Die Speditions- oder Transporterrechnung
+      wird also zusaetzlich zur Pauschale angesetzt. Ein Zuschuss des
+      Arbeitgebers mindert den Abzug und ist als Erstattung zu erfassen.
 
   - id: gewerkschaft
     titel: Beitraege zu Berufsverbaenden
