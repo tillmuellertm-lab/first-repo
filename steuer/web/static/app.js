@@ -91,12 +91,32 @@ async function lade(dateien) {
     const antwort = await fetch("/api/hochladen", { method: "POST", body: formular });
     const daten = await antwort.json();
     fuellung.style.width = "100%";
+    const neu = daten.aufgenommen || [];
+    const schon = daten.dubletten || [];
+    const abgelehnt = daten.abgelehnt || [];
+
     const zeilen = [];
-    (daten.aufgenommen || []).forEach((n) => zeilen.push(`aufgenommen: ${n}`));
-    (daten.dubletten || []).forEach((n) => zeilen.push(`Dublette, uebersprungen: ${n}`));
-    (daten.abgelehnt || []).forEach((e) => zeilen.push(`abgelehnt: ${e.datei} (${e.grund})`));
+    neu.forEach((n) => zeilen.push(`aufgenommen: ${n}`));
+    schon.forEach((n) => zeilen.push(`liegt bereits in der Mappe als: ${n}`));
+    abgelehnt.forEach((e) => zeilen.push(`abgelehnt: ${e.datei} (${e.grund})`));
     protokoll.textContent = zeilen.join("\n");
-    fortschrittText.textContent = `${(daten.aufgenommen || []).length} neu aufgenommen. Seite wird neu geladen ...`;
+
+    // "0 neu aufgenommen" sieht aus wie ein Fehler, auch wenn alles in Ordnung
+    // ist: eine bereits vorhandene Datei wird absichtlich nicht noch einmal
+    // aufgenommen. Der Grund gehoert deshalb in die Hauptzeile, nicht ins
+    // Protokoll darunter.
+    const teile = [];
+    if (neu.length) teile.push(`${neu.length} neu aufgenommen`);
+    if (schon.length) {
+      teile.push(
+        schon.length === 1
+          ? "1 Datei lag schon in der Mappe und wurde nicht doppelt aufgenommen"
+          : `${schon.length} Dateien lagen schon in der Mappe und wurden nicht doppelt aufgenommen`
+      );
+    }
+    if (abgelehnt.length) teile.push(`${abgelehnt.length} abgelehnt, siehe unten`);
+    if (!teile.length) teile.push("Nichts uebertragen");
+    fortschrittText.textContent = `${teile.join(" · ")}. Seite wird neu geladen ...`;
     setTimeout(() => window.location.reload(), 1400);
   } catch (fehler) {
     fortschrittText.textContent = `Upload fehlgeschlagen: ${fehler}`;
