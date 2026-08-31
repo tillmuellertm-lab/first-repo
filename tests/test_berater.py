@@ -805,3 +805,61 @@ def test_lagebild_fuehrt_auch_belege_ohne_und_mit_fremdem_jahr(mappe, tmp_path, 
     assert "report_2025.txt" in lage
     # Und der Zusammenhang muss erkennbar bleiben: sie gehen in keine Summe ein.
     assert "in keine Summe eingehen" in lage
+
+
+# --- Das Veranlagungsjahr nachtragen -----------------------------------------
+
+
+def test_jahr_setzen_holt_belege_ins_jahr(mappe, tmp_path, regelwerk):
+    """Ohne Jahr geht ein Beleg in keine Summe ein und fehlt in der Ablage."""
+    from steuer.models import Analyse as A
+
+    quelle = tmp_path / "finanzreport.txt"
+    quelle.write_text("report", encoding="utf-8")
+    dokument, _ = mappe.datei_aufnehmen(quelle)
+    dokument.analyse = A(dokumenttyp="Finanzreport", aussteller="comdirect")
+    assert dokument.gehoert_ins_jahr is None
+
+    meldung, _ = berater.werkzeug_ausfuehren(
+        "jahr_setzen",
+        {"dokument_ids": [dokument.id], "jahr": 2024, "begruendung": "Kontoauszug 2024"},
+        mappe,
+        regelwerk,
+    )
+    assert "ohne Jahr -> 2024" in meldung
+    assert Arbeitsmappe.laden(mappe.wurzel).dokument(dokument.id).gehoert_ins_jahr == 2024
+
+
+def test_jahr_setzen_meldet_was_schon_stimmte(mappe, regelwerk):
+    kennung = beleg(mappe, "zinsen.txt").id
+    meldung, _ = berater.werkzeug_ausfuehren(
+        "jahr_setzen",
+        {"dokument_ids": [kennung], "jahr": 2024, "begruendung": "passt schon"},
+        mappe,
+        regelwerk,
+    )
+    assert "Unveraendert" in meldung
+
+
+def test_jahr_setzen_weist_unsinnige_jahre_ab(mappe, regelwerk):
+    kennung = beleg(mappe, "zinsen.txt").id
+    with pytest.raises(berater.BeratungsFehler, match="plausibles"):
+        berater.werkzeug_ausfuehren(
+            "jahr_setzen",
+            {"dokument_ids": [kennung], "jahr": 24, "begruendung": "Tippfehler"},
+            mappe,
+            regelwerk,
+        )
+
+
+def test_jahr_setzen_bricht_bei_unbekannter_kennung_ab(mappe, regelwerk):
+    """Lieber gar nichts aendern als die Haelfte und dann abbrechen - sichtbar bleibt es so."""
+    dokument = beleg(mappe, "anhaenger.txt")
+    with pytest.raises(berater.BeratungsFehler, match="keinen Beleg"):
+        berater.werkzeug_ausfuehren(
+            "jahr_setzen",
+            {"dokument_ids": [dokument.id, "gibtsnicht"], "jahr": 2023, "begruendung": "x"},
+            mappe,
+            regelwerk,
+        )
+    assert dokument.gehoert_ins_jahr == 2024

@@ -317,6 +317,9 @@ def _vorgangstext(name: str, eingabe: dict[str, Any]) -> str:
         return f"sieht sich den Originalscan von Beleg {eingabe.get('dokument_id', '?')} an{zusatz}"
     if name == "notiz_speichern":
         return f"traegt Ihre Antwort bei Beleg {eingabe.get('dokument_id', '?')} ein"
+    if name == "jahr_setzen":
+        anzahl = len(eingabe.get("dokument_ids") or [])
+        return f"traegt bei {anzahl} Belegen das Jahr {eingabe.get('jahr', '?')} ein"
     if name == "kategorie_setzen":
         return (
             f"ordnet Beleg {eingabe.get('dokument_id', '?')} neu zu: "
@@ -942,6 +945,31 @@ def werkzeuge() -> list[dict[str, Any]]:
             },
         },
         {
+            "name": "jahr_setzen",
+            "description": (
+                "Traegt das Veranlagungsjahr bei einem oder mehreren Belegen ein. "
+                "Ein Beleg ohne Jahr geht in keine Summe ein und kommt nicht in die "
+                "Ablage fuer den Steuerberater - er faellt also still unter den Tisch. "
+                "Die Angabe hat Vorrang vor dem Datum, das die Analyse gelesen hat, und "
+                "ist deshalb genau dann richtig, wenn der Mandant es weiss: eine "
+                "Dezemberabrechnung, die im Januar kommt, ein Kontoauszug ohne Datum. "
+                "Nur setzen, was der Mandant bestaetigt hat."
+            ),
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "dokument_ids": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Kennungen der Belege, hoechstens 50 auf einmal.",
+                    },
+                    "jahr": {"type": "integer"},
+                    "begruendung": {"type": "string"},
+                },
+                "required": ["dokument_ids", "jahr", "begruendung"],
+            },
+        },
+        {
             "name": "kategorie_setzen",
             "description": (
                 "Ordnet einen Beleg einer anderen Kategorie zu, wenn die Analyse ihn "
@@ -1106,6 +1134,63 @@ def _notiz_speichern(mappe: Arbeitsmappe, eingabe: dict[str, Any]) -> str:
     if alt and eingabe.get("ersetzen"):
         hinweis = f" Die bisherige Notiz lautete: {alt}"
     return f"Gespeichert bei {dokument.id}. Die Notiz lautet jetzt: {dokument.notiz}{hinweis}"
+
+
+MAX_JAHR_AUF_EINMAL = 50
+
+
+def _jahr_setzen(mappe: Arbeitsmappe, eingabe: dict[str, Any]) -> str:
+    kennungen = [str(k).strip() for k in (eingabe.get("dokument_ids") or []) if str(k).strip()]
+    if not kennungen:
+        raise BeratungsFehler("Ohne Kennungen laesst sich kein Jahr setzen.")
+    if len(kennungen) > MAX_JAHR_AUF_EINMAL:
+        raise BeratungsFehler(
+            f"Hoechstens {MAX_JAHR_AUF_EINMAL} Belege auf einmal. Nenne sie einzeln, "
+            "damit der Mandant sieht, was sich aendert."
+        )
+    try:
+        jahr = int(eingabe.get("jahr") or 0)
+    except (TypeError, ValueError):
+        jahr = 0
+    if not 1990 <= jahr <= 2100:
+        raise BeratungsFehler(f"'{eingabe.get('jahr')}' ist kein plausibles Veranlagungsjahr.")
+
+    # Erst alle Kennungen pruefen, dann aendern. Sonst waere bei einer falschen
+    # Kennung die Haelfte umgestellt und die andere nicht - und niemand wuesste,
+    # welche Haelfte.
+    dokumente = []
+    for kennung in kennungen:
+        dokument = mappe.dokument(kennung)
+        if dokument is None:
+            raise BeratungsFehler(
+                f"Es gibt keinen Beleg mit der Kennung '{kennung}'. Es wurde nichts "
+                "geaendert; pruefe die Kennungen und ruf erneut auf."
+            )
+        dokumente.append(dokument)
+
+    geaendert: list[str] = []
+    unveraendert: list[str] = []
+    for dokument in dokumente:
+        kennung = dokument.id
+        vorher = dokument.gehoert_ins_jahr
+        if vorher == jahr:
+            unveraendert.append(f"{kennung} ({dokument.dateiname})")
+            continue
+        dokument.herkunft_jahr = jahr
+        geaendert.append(f"{kennung} ({dokument.dateiname}): {vorher or 'ohne Jahr'} -> {jahr}")
+    mappe.speichern()
+
+    zeilen = []
+    if geaendert:
+        zeilen.append(f"{len(geaendert)} Belege auf {jahr} gesetzt:")
+        zeilen.extend(f"- {z}" for z in geaendert)
+        zeilen.append(
+            "Sie gehen ab jetzt in die Summen des Jahres ein und kommen beim Ordnen "
+            "in die Ablage. Sag dem Mandanten, was du geaendert hast."
+        )
+    if unveraendert:
+        zeilen.append(f"Unveraendert, weil schon auf {jahr}: " + ", ".join(unveraendert))
+    return "\n".join(zeilen)
 
 
 def _kategorie_setzen(mappe: Arbeitsmappe, eingabe: dict[str, Any]) -> str:
@@ -1340,6 +1425,8 @@ def werkzeug_ausfuehren(
         return kennzahlen_text(mappe, regelwerk), []
     if name == "notiz_speichern":
         return _notiz_speichern(mappe, eingabe), []
+    if name == "jahr_setzen":
+        return _jahr_setzen(mappe, eingabe), []
     if name == "kategorie_setzen":
         return _kategorie_setzen(mappe, eingabe), []
     raise BeratungsFehler(f"Unbekanntes Werkzeug: {name}")
