@@ -221,7 +221,21 @@ if (beratungForm) {
     bild: "Ihr Bild",
   };
 
+  // Der Verlauf steht im Seitenfluss, das Eingabefeld darunter. Wer die Seite
+  // oeffnet, will das Neueste sehen und antworten koennen - nicht erst an
+  // hundert Zeilen vorbeiscrollen.
+  function amEnde() {
+    return window.innerHeight + window.scrollY >= document.body.scrollHeight - 150;
+  }
+
+  function ansEnde() {
+    window.scrollTo(0, document.body.scrollHeight);
+  }
+
   function zeichne(beitraege) {
+    // Wer hochgescrollt hat, liest gerade etwas. Ihn dabei nach unten zu
+    // reissen, weil eine Antwort eintrifft, waere schlimmer als das Scrollen.
+    const folgt = amEnde();
     verlauf.textContent = "";
     for (const beitrag of beitraege) {
       const karte = document.createElement("div");
@@ -249,7 +263,7 @@ if (beratungForm) {
       karte.append(kopf, koerper);
       verlauf.appendChild(karte);
     }
-    verlauf.scrollTop = verlauf.scrollHeight;
+    if (folgt) ansEnde();
   }
 
   function zeigeFehler(text) {
@@ -416,4 +430,11 @@ if (beratungForm) {
 
   // Ein Zug kann laufen, waehrend die Seite neu geladen wird.
   if (!denkt.hidden) beobachte();
+
+  // Beim Oeffnen ans Ende springen. Der Browser wuerde sonst die alte
+  // Scrollposition wiederherstellen, und Bilder im Verlauf verschieben sie
+  // nachtraeglich - deshalb noch einmal, wenn alles geladen ist.
+  if ("scrollRestoration" in history) history.scrollRestoration = "manual";
+  ansEnde();
+  window.addEventListener("load", ansEnde);
 }
