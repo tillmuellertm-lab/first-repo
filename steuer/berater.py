@@ -53,7 +53,10 @@ MAX_RUNDEN = 8
 
 MAX_TREFFER = 60
 MAX_BESTANDSZEILEN = 250
-MAX_ANTWORT_TOKEN = 4096
+# Eine Antwort muss einen ausformulierten Brief tragen koennen. Bei 4096 Token
+# brach das Modell mitten im Werkzeugaufruf ab: der Entwurf kam leer an und die
+# angebrochene Antwort hinterliess einen leeren Textblock im Verlauf.
+MAX_ANTWORT_TOKEN = 16000
 
 
 class BeratungsFehler(RuntimeError):
@@ -102,10 +105,22 @@ class Gespraech:
         gewaehlt = self.nachrichten[-MAX_NACHRICHTEN:]
         while gewaehlt and _enthaelt(gewaehlt[0], "tool_result"):
             gewaehlt = gewaehlt[1:]
-        return [
-            {"role": n["rolle"], "content": _bilder_einsetzen(n["inhalt"], mappe)}
-            for n in gewaehlt
-        ]
+
+        fertig: list[dict[str, Any]] = []
+        for nachricht in gewaehlt:
+            inhalt = _fuer_api_bloecke(nachricht["inhalt"], mappe)
+            if not inhalt:
+                # Eine Nachricht ohne Inhalt weist die API zurueck. Uebrig
+                # bleibt sie nur, wenn sie ausschliesslich aus leerem Text
+                # bestand - dann fehlt nichts, was noch gebraucht wuerde.
+                continue
+            if fertig and fertig[-1]["role"] == nachricht["rolle"]:
+                # Faellt eine Nachricht weg, stossen zwei gleiche Rollen
+                # aneinander. Die API verlangt Abwechslung, also zusammenlegen.
+                fertig[-1]["content"] = fertig[-1]["content"] + inhalt
+                continue
+            fertig.append({"role": nachricht["rolle"], "content": inhalt})
+        return fertig
 
     def als_dict(self) -> dict[str, Any]:
         return {
@@ -193,15 +208,30 @@ def bildpfad(mappe: Arbeitsmappe, name: str) -> Path | None:
     return ziel
 
 
-def _bilder_einsetzen(
+def _fuer_api_bloecke(
     inhalt: list[dict[str, Any]], mappe: Arbeitsmappe | None
 ) -> list[dict[str, Any]]:
-    """Ersetzt Bildverweise durch die Bilddaten, die die API erwartet."""
-    if not any(isinstance(b, dict) and b.get("type") == "bild_verweis" for b in inhalt):
-        return inhalt
+    """Bringt gespeicherte Bloecke in die Form, die die API annimmt.
+
+    Zwei Dinge passieren hier. Bildverweise werden durch die Bilddaten ersetzt.
+    Und leere Textbloecke fallen heraus: Die API weist eine Nachricht mit einem
+    leeren Textblock ab ("text content blocks must be non-empty"), und weil der
+    ganze Verlauf bei jedem Zug erneut mitgeht, macht ein einziger solcher Block
+    das Gespraech dauerhaft unbrauchbar. Sie entstehen, wenn eine Antwort an der
+    Token-Grenze abgeschnitten wird. Hier greift die Reparatur auch rueckwirkend,
+    fuer Verlaeufe, die schon einen solchen Block enthalten.
+    """
     ergebnis: list[dict[str, Any]] = []
     for block in inhalt:
-        if not isinstance(block, dict) or block.get("type") != "bild_verweis":
+        if not isinstance(block, dict):
+            continue
+        art = block.get("type")
+        if art == "text" and not str(block.get("text") or "").strip():
+            continue
+        if art == "hinweis":
+            # Nur fuer die Anzeige gedacht, nicht fuer das Modell.
+            continue
+        if art != "bild_verweis":
             ergebnis.append(block)
             continue
         datei = bildpfad(mappe, str(block.get("datei") or "")) if mappe else None
@@ -326,6 +356,8 @@ def beitraege(gespraech: Gespraech) -> list[Beitrag]:
                 text = str(block.get("text") or "").strip()
                 if text:
                     ergebnis.append(Beitrag("berater", text, zeit))
+            elif art == "hinweis":
+                ergebnis.append(Beitrag("vorgang", str(block.get("text") or ""), zeit))
             elif rolle == "assistant" and art in ("tool_use", "server_tool_use"):
                 ergebnis.append(
                     Beitrag(
@@ -1054,7 +1086,11 @@ def _entwurf_schreiben(mappe: Arbeitsmappe, eingabe: dict[str, Any]) -> str:
     titel = str(eingabe.get("titel") or "").strip()
     text = str(eingabe.get("text") or "").strip()
     if not titel or not text:
-        raise BeratungsFehler("Titel und Text sind beide noetig.")
+        raise BeratungsFehler(
+            "Titel und Text sind beide noetig. War dein Text sehr lang, wurde er "
+            "womoeglich an der Token-Grenze abgeschnitten - schreib ihn kuerzer "
+            "oder leg ihn in zwei Teilen ab."
+        )
     ordner = mappe.berichte / ENTWURFSORDNER
     ordner.mkdir(parents=True, exist_ok=True)
     name = f"{_dt.date.today().isoformat()}_{sichere_bezeichnung(titel)}.md"
@@ -1182,8 +1218,20 @@ def nachricht_senden(
             werkzeuge=[] if letzte_runde else liste,
             nachrichten=gespraech.fuer_api(mappe),
             modell=modell,
+            max_tokens=MAX_ANTWORT_TOKEN,
         )
         bloecke = [_als_dict(block) for block in getattr(antwort, "content", []) or []]
+        if getattr(antwort, "stop_reason", "") == "max_tokens":
+            # Nicht verschweigen: eine abgeschnittene Antwort sieht sonst aus
+            # wie eine vollstaendige, die mitten im Satz endet.
+            LOG.warning("Antwort an der Token-Grenze abgeschnitten")
+            bloecke.append(
+                {
+                    "type": "hinweis",
+                    "text": "Die Antwort war zu lang und wurde abgeschnitten. "
+                    "Bitten Sie um eine kuerzere Fassung oder um einen Teil davon.",
+                }
+            )
         gespraech.anhaengen("assistant", bloecke)
         if sichern:
             sichern(gespraech)

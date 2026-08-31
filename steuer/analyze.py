@@ -316,6 +316,7 @@ class Analysedienst:
         werkzeuge: list[dict[str, Any]],
         nachrichten: list[dict[str, Any]],
         modell: str = "",
+        max_tokens: int = 16000,
     ) -> Any:
         """Ein Zug im Gespraech mit dem Mandanten.
 
@@ -330,7 +331,7 @@ class Analysedienst:
         # Unterschied zwischen brauchbar und unbezahlbar.
         argumente: dict[str, Any] = {
             "model": modell or self.modell_beratung,
-            "max_tokens": 4096,
+            "max_tokens": max_tokens,
             "system": [
                 {"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}
             ],

@@ -25,9 +25,15 @@ class Dienst:
         self.antworten = list(antworten)
         self.aufrufe: list[dict] = []
 
-    def beratung(self, system, werkzeuge, nachrichten, modell=""):
+    def beratung(self, system, werkzeuge, nachrichten, modell="", max_tokens=0):
         self.aufrufe.append(
-            {"system": system, "werkzeuge": werkzeuge, "nachrichten": nachrichten, "modell": modell}
+            {
+                "system": system,
+                "werkzeuge": werkzeuge,
+                "nachrichten": nachrichten,
+                "modell": modell,
+                "max_tokens": max_tokens,
+            }
         )
         return self.antworten.pop(0)
 
@@ -609,3 +615,69 @@ def test_geloeschtes_bild_bricht_das_gespraech_nicht_ab(mappe, regelwerk):
     gesendet = gespraech.fuer_api(mappe)[0]["content"]
     assert gesendet[0]["type"] == "text"
     assert "nicht mehr vorhanden" in gesendet[0]["text"]
+
+
+# --- Ein leerer Textblock darf das Gespraech nicht vergiften ------------------
+
+
+def test_leerer_textblock_geht_nicht_an_die_api(mappe):
+    """Die API weist ihn ab - und der ganze Verlauf geht bei jedem Zug erneut mit."""
+    gespraech = berater.Gespraech()
+    gespraech.anhaengen("user", [{"type": "text", "text": "Frage"}])
+    gespraech.anhaengen("assistant", [{"type": "text", "text": ""}])
+    gespraech.anhaengen("user", [{"type": "text", "text": "Und weiter?"}])
+
+    verlauf = gespraech.fuer_api(mappe)
+    assert all(
+        block["text"].strip()
+        for nachricht in verlauf
+        for block in nachricht["content"]
+        if block["type"] == "text"
+    )
+
+
+def test_weggefallene_nachricht_hinterlaesst_keine_doppelte_rolle(mappe):
+    """Zwei Nachrichten derselben Rolle nacheinander weist die API ebenfalls ab."""
+    gespraech = berater.Gespraech()
+    gespraech.anhaengen("user", [{"type": "text", "text": "Erste Frage"}])
+    gespraech.anhaengen("assistant", [{"type": "text", "text": "   "}])
+    gespraech.anhaengen("user", [{"type": "text", "text": "Zweite Frage"}])
+
+    verlauf = gespraech.fuer_api(mappe)
+    assert [n["role"] for n in verlauf] == ["user"]
+    assert len(verlauf[0]["content"]) == 2
+
+
+def test_werkzeugaufruf_bleibt_neben_leerem_text_erhalten(mappe):
+    gespraech = berater.Gespraech()
+    gespraech.anhaengen("user", [{"type": "text", "text": "Such mal"}])
+    gespraech.anhaengen(
+        "assistant",
+        [
+            {"type": "text", "text": ""},
+            {"type": "tool_use", "id": "a", "name": "dokumente_suchen", "input": {}},
+        ],
+    )
+    gespraech.anhaengen("user", [{"type": "tool_result", "tool_use_id": "a", "content": "ok"}])
+
+    verlauf = gespraech.fuer_api(mappe)
+    assert [n["role"] for n in verlauf] == ["user", "assistant", "user"]
+    assert [b["type"] for b in verlauf[1]["content"]] == ["tool_use"]
+
+
+def test_abgeschnittene_antwort_wird_im_verlauf_benannt(mappe, regelwerk):
+    """Sonst sieht sie aus wie eine vollstaendige, die mitten im Satz endet."""
+    dienst = Dienst(
+        Antwort([{"type": "text", "text": "Sehr geehrter Herr Dr."}], stop_reason="max_tokens")
+    )
+    gespraech = berater.Gespraech()
+    berater.nachricht_senden(mappe, gespraech, "Schreib mir eine Mail.", dienst, regelwerk)
+
+    texte = [b.text for b in berater.beitraege(gespraech)]
+    assert any("abgeschnitten" in t for t in texte)
+    # Der Hinweis ist fuer den Menschen, nicht fuer das Modell.
+    assert all(
+        block["type"] != "hinweis"
+        for nachricht in gespraech.fuer_api(mappe)
+        for block in nachricht["content"]
+    )
