@@ -150,8 +150,13 @@ def anwendung_bauen(mappe: Arbeitsmappe) -> Any:
             # zuletzt getroffene Wahl, damit das Auswahlfeld sie wieder anzeigt
             "modell_dokument": modell_dokument_pruefen(mappe.einstellungen.get("modell_dokument")),
             "modell_strategie": modell_strategie_pruefen(mappe.einstellungen.get("modell_strategie")),
-            # Dokumente, deren Analyse einen aelteren Wissensstand hat.
-            "nachzutragen": len(mappe.nachzutragen()),
+            # Dokumente, deren Analyse einen aelteren Wissensstand hat -
+            # getrennt danach, ob ein Lauf sie ueberhaupt anfassen wuerde.
+            "nachzutragen": len(mappe.nachzutragen())
+            - len(mappe.uebersprungen_fremdes_jahr(mappe.nachzutragen())),
+            "nachtrag_fremdes_jahr": len(
+                mappe.uebersprungen_fremdes_jahr(mappe.nachzutragen())
+            ),
             "jahresansicht": mappe.jahresansicht(),
         }
 

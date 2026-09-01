@@ -277,3 +277,40 @@ def test_ablage_nimmt_nur_belege_des_jahres(tmp_path):
     assert ablage.anzahl == 1
     assert any("heuer" in name for name in abgelegt)
     assert not any("vorjahr" in name or "naechstes" in name for name in abgelegt)
+
+
+# ----------------------------------------------- bewusst uebersprungene -----
+#
+# "Alles neu analysieren" laesst Belege aus, die der Nutzer selbst einem anderen
+# Jahr zugeordnet hat. Richtig - aber die Uebersicht zaehlte sie trotzdem unter
+# "wird nachgeholt". Wer daraufhin den teuren Knopf drueckte, zahlte fuer einen
+# Lauf, nach dem dieselbe Zahl unveraendert dastand.
+
+def test_fremdes_jahr_wird_getrennt_gezaehlt(tmp_path):
+    from steuer.models import Dokument
+    from steuer.workspace import Arbeitsmappe
+
+    mappe = Arbeitsmappe.anlegen(tmp_path / "m", 2024)
+    mappe.dokumente = [
+        Dokument(id="a", dateiname="a.pdf", sha256="1"),
+        Dokument(id="b", dateiname="b.pdf", sha256="2", herkunft_jahr=2025),
+        Dokument(id="c", dateiname="c.pdf", sha256="3", herkunft_jahr=2024),
+    ]
+
+    offen = mappe.nachzutragen()
+    assert {d.id for d in offen} == {"a", "b", "c"}
+
+    uebersprungen = mappe.uebersprungen_fremdes_jahr(offen)
+    assert [d.id for d in uebersprungen] == ["b"]
+
+
+def test_ohne_liste_zaehlt_die_ganze_mappe(tmp_path):
+    from steuer.models import Dokument
+    from steuer.workspace import Arbeitsmappe
+
+    mappe = Arbeitsmappe.anlegen(tmp_path / "m2", 2024)
+    mappe.dokumente = [
+        Dokument(id="a", dateiname="a.pdf", sha256="1", herkunft_jahr=2023),
+        Dokument(id="b", dateiname="b.pdf", sha256="2"),
+    ]
+    assert [d.id for d in mappe.uebersprungen_fremdes_jahr()] == ["a"]

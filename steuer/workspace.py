@@ -428,6 +428,20 @@ class Arbeitsmappe:
             or d.analyse.kontext != kontext
         ]
 
+    def uebersprungen_fremdes_jahr(self, liste: list[Dokument] | None = None) -> list[Dokument]:
+        """Belege, die ein Lauf bewusst auslaesst, weil sie einem anderen Jahr gehoeren.
+
+        Wer selbst ein Jahr gesetzt hat, hat damit entschieden: Der Beleg wird
+        nicht geprueft und kostet nichts. Das ist richtig - nur darf die
+        Oberflaeche solche Belege dann nicht als "wird nachgeholt" auszeichnen.
+        Sonst drueckt man den teuren Knopf und die Zahl bleibt stehen.
+        """
+        return [
+            d
+            for d in (self.dokumente if liste is None else liste)
+            if d.herkunft_jahr and d.herkunft_jahr != self.jahr
+        ]
+
 
 def _freier_name(ordner: Path, wunschname: str) -> str:
     ziel = ordner / wunschname
