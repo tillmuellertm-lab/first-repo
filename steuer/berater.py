@@ -20,6 +20,7 @@ import datetime as _dt
 import hashlib as _hashlib
 import json
 import logging
+import time as _zeit
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
@@ -80,7 +81,12 @@ class Gespraech:
 
     nachrichten: list[dict[str, Any]] = field(default_factory=list)
     modell: str = ""
+    denktiefe: str = ""
     begonnen_am: str = ""
+    # Messwerte des zuletzt abgeschlossenen Zuges. Sie beantworten die Frage,
+    # ob eine lange Wartezeit am Modell, an der Mappe oder an der Leitung lag -
+    # raten muss man darueber nicht.
+    letzter_zug: dict[str, Any] = field(default_factory=dict)
 
     def anhaengen(self, rolle: str, inhalt: list[dict[str, Any]]) -> None:
         if not self.begonnen_am:
@@ -129,7 +135,9 @@ class Gespraech:
         return {
             "version": VERSION,
             "modell": self.modell,
+            "denktiefe": self.denktiefe,
             "begonnen_am": self.begonnen_am,
+            "letzter_zug": self.letzter_zug,
             "nachrichten": self.nachrichten,
         }
 
@@ -139,7 +147,9 @@ class Gespraech:
         return cls(
             nachrichten=list(daten.get("nachrichten") or []),
             modell=str(daten.get("modell") or ""),
+            denktiefe=str(daten.get("denktiefe") or ""),
             begonnen_am=str(daten.get("begonnen_am") or ""),
+            letzter_zug=dict(daten.get("letzter_zug") or {}),
         )
 
 
@@ -1556,6 +1566,71 @@ def werkzeug_ausfuehren(
 # ---------------------------------------------------------------- Lauf -------
 
 
+@dataclass
+class _Messung:
+    """Zaehlt mit, woran die Wartezeit eines Zuges liegt.
+
+    Eine langsame Antwort hat drei moegliche Ursachen, und sie fuehren zu ganz
+    verschiedenen Abhilfen: Das Modell denkt lange nach (Denktiefe senken), es
+    schlaegt viele Belege nach (Runden), oder der Bestand geht ungespeichert
+    jedes Mal neu mit (Zwischenspeicher greift nicht). Ohne Messung raet man.
+    """
+
+    system_zeichen: int = 0
+    runden: int = 0
+    sekunden: float = 0.0
+    eingabe_token: int = 0
+    ausgabe_token: int = 0
+    zwischenspeicher_token: int = 0
+
+    def runde_buchen(self, dauer: float, antwort: Any) -> None:
+        self.runden += 1
+        self.sekunden += dauer
+        verbrauch = getattr(antwort, "usage", None)
+        if verbrauch is None:
+            return
+        self.eingabe_token += int(getattr(verbrauch, "input_tokens", 0) or 0)
+        self.ausgabe_token += int(getattr(verbrauch, "output_tokens", 0) or 0)
+        self.zwischenspeicher_token += int(
+            getattr(verbrauch, "cache_read_input_tokens", 0) or 0
+        )
+
+    def ergebnis(self) -> dict[str, Any]:
+        return {
+            "zeitpunkt": _dt.datetime.now().isoformat(timespec="seconds"),
+            "sekunden": round(self.sekunden, 1),
+            "runden": self.runden,
+            "system_zeichen": self.system_zeichen,
+            "eingabe_token": self.eingabe_token,
+            "ausgabe_token": self.ausgabe_token,
+            "zwischenspeicher_token": self.zwischenspeicher_token,
+        }
+
+
+def zug_bericht(zug: dict[str, Any]) -> str:
+    """Die Messwerte eines Zuges in einem Satz, fuer die Oberflaeche."""
+    if not zug:
+        return ""
+    def tausender(zahl: int) -> str:
+        return f"{zahl:,d}".replace(",", ".")
+
+    teile = [f"{float(zug.get('sekunden') or 0):.0f} Sekunden"]
+    runden = int(zug.get("runden") or 0)
+    if runden > 1:
+        teile.append(f"{runden} Runden - das Modell hat zwischendurch nachgeschlagen")
+    gelesen = int(zug.get("zwischenspeicher_token") or 0)
+    frisch = int(zug.get("eingabe_token") or 0)
+    if gelesen:
+        teile.append(f"{tausender(gelesen)} Token aus dem Zwischenspeicher")
+    elif frisch > 20000:
+        teile.append(
+            f"{tausender(frisch)} Token neu gelesen - der Zwischenspeicher hat "
+            "nicht gegriffen, weil sich die Mappe seit der letzten Frage "
+            "geaendert hat"
+        )
+    return " · ".join(teile)
+
+
 def _als_dict(block: Any) -> dict[str, Any]:
     """Macht aus einem Antwortblock des SDK ein Dict, das sich speichern laesst."""
     if isinstance(block, dict):
@@ -1574,6 +1649,7 @@ def nachricht_senden(
     modell: str = "",
     sichern: Callable[[Gespraech], None] | None = None,
     bilder: list[dict[str, Any]] | None = None,
+    denktiefe: str = "",
 ) -> Gespraech:
     """Stellt eine Frage und laesst das Modell antworten, notfalls ueber Umwege.
 
@@ -1594,6 +1670,7 @@ def nachricht_senden(
         )
 
     gespraech.modell = modell or gespraech.modell
+    gespraech.denktiefe = denktiefe or gespraech.denktiefe
     # Das Bild zuerst, die Frage danach: so weiss das Modell beim Lesen des
     # Bildes schon nicht, worauf es achten soll - aber die Frage bezieht sich
     # eindeutig auf das, was darueber steht.
@@ -1604,16 +1681,20 @@ def nachricht_senden(
 
     system = system_beratung(regelwerk, mappe.profil, mappe.stammdaten, lage_text(mappe, regelwerk))
     liste = werkzeuge()
+    messung = _Messung(system_zeichen=len(system))
 
     for runde in range(MAX_RUNDEN):
         letzte_runde = runde == MAX_RUNDEN - 1
+        begonnen = _zeit.monotonic()
         antwort = dienst.beratung(
             system=system,
             werkzeuge=[] if letzte_runde else liste,
             nachrichten=gespraech.fuer_api(mappe),
             modell=modell,
             max_tokens=MAX_ANTWORT_TOKEN,
+            denktiefe=denktiefe,
         )
+        messung.runde_buchen(_zeit.monotonic() - begonnen, antwort)
         bloecke = [_als_dict(block) for block in getattr(antwort, "content", []) or []]
         if getattr(antwort, "stop_reason", "") == "max_tokens":
             # Nicht verschweigen: eine abgeschnittene Antwort sieht sonst aus
@@ -1660,6 +1741,7 @@ def nachricht_senden(
         if sichern:
             sichern(gespraech)
 
+    gespraech.letzter_zug = messung.ergebnis()
     if sichern:
         sichern(gespraech)
     return gespraech
@@ -1678,4 +1760,5 @@ __all__ = [
     "speichern",
     "werkzeuge",
     "werkzeug_ausfuehren",
+    "zug_bericht",
 ]

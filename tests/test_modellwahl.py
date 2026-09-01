@@ -13,11 +13,13 @@ import pytest
 
 from steuer.analyze import (
     AUSWAHL_BERATUNG,
+    AUSWAHL_DENKTIEFE,
     AUSWAHL_DOKUMENT,
     AUSWAHL_STRATEGIE,
     modell_beratung_pruefen,
     modell_dokument_pruefen,
     modell_strategie_pruefen,
+    denktiefe_pruefen,
 )
 
 # Kennungen, die es bei Anthropic wirklich gibt. Eine Kennung, die hier nicht
@@ -68,3 +70,45 @@ def test_fable_steht_dort_zur_wahl_wo_abgewogen_wird():
     """Fable 5 ist das staerkste Modell - es gehoert dorthin, wo geurteilt wird."""
     assert "claude-fable-5" in {k for k, _, _ in AUSWAHL_STRATEGIE}
     assert "claude-fable-5" in {k for k, _, _ in AUSWAHL_BERATUNG}
+
+
+# --------------------------------------------------------------- Denktiefe ---
+#
+# Die Denktiefe ist die groesste Stellschraube fuer die Wartezeit. Sie geht als
+# output_config.effort an die API; ein Wert, den die API nicht kennt, wuerde die
+# Anfrage mit einem Fehler beantworten statt sie langsamer zu machen.
+
+ERLAUBTE_STUFEN = {"low", "medium", "high", "xhigh", "max"}
+
+
+def test_jede_angebotene_denktiefe_kommt_an():
+    for stufe, bezeichnung, _ in AUSWAHL_DENKTIEFE:
+        assert denktiefe_pruefen(stufe) == stufe, f"'{bezeichnung}' faellt zurueck"
+
+
+def test_nur_von_der_api_gekannte_stufen():
+    for stufe, _, _ in AUSWAHL_DENKTIEFE:
+        assert stufe in ERLAUBTE_STUFEN
+
+
+def test_unbekannte_stufe_faellt_auf_den_standard_zurueck():
+    assert denktiefe_pruefen("sehr-gruendlich") in ERLAUBTE_STUFEN
+    assert denktiefe_pruefen(None) in ERLAUBTE_STUFEN
+
+
+def test_denktiefe_erreicht_die_api():
+    """Ohne diese Zusicherung waere die Wahl im Feld reine Zierde."""
+    gesehen = {}
+
+    class Client:
+        class messages:  # noqa: N801 - spiegelt die SDK-Form
+            @staticmethod
+            def create(**argumente):
+                gesehen.update(argumente)
+                return object()
+
+    from steuer.analyze import Analysedienst
+
+    dienst = Analysedienst(api_key="x", _client=Client())
+    dienst.beratung(system="s", werkzeuge=[], nachrichten=[], denktiefe="low")
+    assert gesehen["output_config"] == {"effort": "low"}

@@ -416,6 +416,7 @@ if (beratungForm) {
       body: JSON.stringify({
         nachricht: text,
         modell: document.getElementById("modell-beratung")?.value,
+        denktiefe: document.getElementById("denktiefe-beratung")?.value,
         bilder: angehaengt.map((b) => ({ medientyp: b.medientyp, daten: b.daten })),
       }),
     });
@@ -447,6 +448,7 @@ if (beratungForm) {
   });
 
   zeigeModellhinweis("modell-beratung", "hinweis-beratung");
+  zeigeModellhinweis("denktiefe-beratung", "hinweis-denktiefe");
 
   // Ein Zug kann laufen, waehrend die Seite neu geladen wird.
   if (!denkt.hidden) beobachte();

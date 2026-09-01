@@ -32,9 +32,11 @@ from .. import (
 from ..formatierung import eingabewert, euro, zahl_lesen
 from ..analyze import (
     AUSWAHL_BERATUNG,
+    AUSWAHL_DENKTIEFE,
     AUSWAHL_DOKUMENT,
     AUSWAHL_STRATEGIE,
     Analysedienst,
+    denktiefe_pruefen,
     modell_beratung_pruefen,
     modell_dokument_pruefen,
     modell_strategie_pruefen,
@@ -288,6 +290,9 @@ def anwendung_bauen(mappe: Arbeitsmappe) -> Any:
             verbesserungen=berater.verbesserungen(mappe) is not None,
             auswahl_beratung=AUSWAHL_BERATUNG,
             modell_beratung=modell_beratung_pruefen(mappe.einstellungen.get("modell_beratung")),
+            auswahl_denktiefe=AUSWAHL_DENKTIEFE,
+            denktiefe=denktiefe_pruefen(mappe.einstellungen.get("denktiefe_beratung")),
+            zug_bericht=berater.zug_bericht(gespraech.letzter_zug),
             laeuft=beratungslauf.laeuft,
             fehler=beratungslauf.fehler,
         )
@@ -369,6 +374,8 @@ def anwendung_bauen(mappe: Arbeitsmappe) -> Any:
 
         modell = modell_beratung_pruefen(daten.get("modell") or mappe.einstellungen.get("modell_beratung"))
         mappe.einstellungen["modell_beratung"] = modell
+        tiefe = denktiefe_pruefen(daten.get("denktiefe") or mappe.einstellungen.get("denktiefe_beratung"))
+        mappe.einstellungen["denktiefe_beratung"] = tiefe
         mappe.speichern()
 
         beratungslauf.laeuft = True
@@ -390,6 +397,7 @@ def anwendung_bauen(mappe: Arbeitsmappe) -> Any:
                         modell=modell,
                         sichern=lambda g: berater.speichern(mappe, g),
                         bilder=bilder,
+                        denktiefe=tiefe,
                     )
             except Exception as fehler:  # noqa: BLE001 - jeder Fehler gehoert auf die Seite
                 beratungslauf.fehler = str(fehler)

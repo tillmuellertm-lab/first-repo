@@ -25,7 +25,9 @@ class Dienst:
         self.antworten = list(antworten)
         self.aufrufe: list[dict] = []
 
-    def beratung(self, system, werkzeuge, nachrichten, modell="", max_tokens=0):
+    def beratung(
+        self, system, werkzeuge, nachrichten, modell="", max_tokens=0, denktiefe=""
+    ):
         self.aufrufe.append(
             {
                 "system": system,
@@ -33,6 +35,7 @@ class Dienst:
                 "nachrichten": nachrichten,
                 "modell": modell,
                 "max_tokens": max_tokens,
+                "denktiefe": denktiefe,
             }
         )
         return self.antworten.pop(0)

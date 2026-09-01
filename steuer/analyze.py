@@ -93,6 +93,39 @@ def modell_beratung_pruefen(modell: str | None) -> str:
     return _pruefen(modell, AUSWAHL_BERATUNG, MODELL_BERATUNG)
 
 
+# Denktiefe des Gespraechs. Sie steuert, wie lange das Modell nachdenkt, bevor
+# es antwortet - und damit ganz unmittelbar, wie lange man wartet. Voreingestellt
+# ist die mittlere Stufe: spuerbar schneller als die Voreinstellung der API
+# ("high"), ohne dass es bei den Fragen dieses Werkzeugs auffiele.
+DENKTIEFE_BERATUNG = os.environ.get("STEUER_DENKTIEFE_BERATUNG", "medium")
+
+AUSWAHL_DENKTIEFE: tuple[tuple[str, str, str], ...] = (
+    (
+        "low",
+        "Schnell",
+        "Kurze Antwortzeit. Fuer Routine - Jahr nachtragen, Beleg suchen, "
+        "Betrag setzen. Das Modell schlaegt dabei weniger nach.",
+    ),
+    (
+        "medium",
+        "Zuegig",
+        "Die Voreinstellung. Fuer die allermeisten Fragen der richtige "
+        "Kompromiss aus Wartezeit und Gruendlichkeit.",
+    ),
+    (
+        "high",
+        "Gruendlich",
+        "Laengeres Nachdenken, entsprechend laengere Wartezeit. Fuer "
+        "Rechtsfragen, bei denen es auf die Abwaegung ankommt.",
+    ),
+)
+
+
+def denktiefe_pruefen(stufe: str | None) -> str:
+    erlaubt = {kennung for kennung, _, _ in AUSWAHL_DENKTIEFE}
+    return stufe if stufe in erlaubt else DENKTIEFE_BERATUNG
+
+
 MAX_VERSUCHE = 4
 WEB_SUCHE_WERKZEUG = {"type": "web_search_20250305", "name": "web_search", "max_uses": 12}
 
@@ -326,6 +359,7 @@ class Analysedienst:
         nachrichten: list[dict[str, Any]],
         modell: str = "",
         max_tokens: int = 16000,
+        denktiefe: str = "",
     ) -> Any:
         """Ein Zug im Gespraech mit dem Mandanten.
 
@@ -333,6 +367,10 @@ class Analysedienst:
         nachschlaegt oder einfach antwortet. Eine leere Werkzeugliste wird
         weggelassen statt uebergeben - so laesst sich die letzte Runde erzwingen,
         in der es zusammenfassen und nicht weitersuchen soll.
+
+        ``denktiefe`` ist die groesste Stellschraube fuer die Wartezeit. Ohne
+        Angabe denkt das Modell so lange nach, wie die API voreingestellt hat -
+        das ist die gruendlichste und langsamste Stufe.
         """
         # Der Systemprompt traegt den gesamten Bestand der Mappe und geht in
         # jeder Werkzeugrunde erneut mit. Zwischengespeichert kostet er nur
@@ -348,6 +386,9 @@ class Analysedienst:
         }
         if werkzeuge:
             argumente["tools"] = werkzeuge
+        stufe = denktiefe_pruefen(denktiefe)
+        if stufe:
+            argumente["output_config"] = {"effort": stufe}
         return self._mit_wiederholung(lambda: self.client.messages.create(**argumente))
 
     # -- Rechtsupdate --------------------------------------------------------
@@ -532,12 +573,14 @@ def _analyse_aus_rohdaten(rohdaten: dict[str, Any]) -> Analyse:
 
 __all__ = [
     "AUSWAHL_BERATUNG",
+    "AUSWAHL_DENKTIEFE",
     "AUSWAHL_DOKUMENT",
     "AUSWAHL_STRATEGIE",
     "AnalyseFehler",
     "Analysedienst",
     "ExtraktionsFehler",
     "KeinSchluessel",
+    "denktiefe_pruefen",
     "modell_beratung_pruefen",
     "modell_dokument_pruefen",
     "modell_strategie_pruefen",
