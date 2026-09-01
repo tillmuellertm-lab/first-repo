@@ -175,6 +175,21 @@ def markdown_bericht(
             a(befund.beschreibung)
             a("")
 
+    nicht_angesetzt = [d for d in dokumente if d.nicht_ansetzen]
+    if nicht_angesetzt:
+        a("## Bewusst nicht angesetzte Belege")
+        a("")
+        a(
+            "Diese Belege liegen vor und sind steuerlich bedeutsam, gehen aber "
+            "absichtlich in keine Summe ein."
+        )
+        a("")
+        for dokument in nicht_angesetzt:
+            name = dokument.zieldateiname or dokument.dateiname
+            grund = dokument.nicht_ansetzen_grund or "ohne Begruendung"
+            a(f"- {name}: {grund}")
+        a("")
+
     _befunde("Was noch fehlt", auswertung.luecken)
     _befunde("Wo Geld liegen bleibt", auswertung.chancen)
     _befunde("Warnungen", auswertung.warnungen)

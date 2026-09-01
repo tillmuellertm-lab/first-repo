@@ -879,3 +879,88 @@ def test_suche_findet_belege_ohne_jahreszuordnung(mappe, tmp_path, regelwerk):
     )
     assert "ohne_jahr.txt" in text
     assert "zinsen.txt" not in text
+
+
+# --- Betrag setzen und Belege bewusst nicht ansetzen -------------------------
+
+
+def test_betrag_setzen_wirkt_sofort_in_den_summen(mappe, regelwerk):
+    """Eine geklaerte Kategorie allein aendert keine Summe, wenn kein Betrag drinsteht."""
+    kennung = beleg(mappe, "anhaenger.txt").id
+    meldung, _ = berater.werkzeug_ausfuehren(
+        "betrag_setzen",
+        {"dokument_id": kennung, "betrag": 239.88, "begruendung": "beruflich, laut Mandant"},
+        mappe,
+        regelwerk,
+    )
+    assert "239,88" in meldung
+    assert Arbeitsmappe.laden(mappe.wurzel).dokument(kennung).wirksamer_betrag == 239.88
+
+
+def test_betrag_setzen_nennt_die_fremdwaehrung(mappe, regelwerk):
+    kennung = beleg(mappe, "anhaenger.txt").id
+    mappe.dokument(kennung).analyse.waehrung = "USD"
+    meldung, _ = berater.werkzeug_ausfuehren(
+        "betrag_setzen",
+        {"dokument_id": kennung, "betrag": 132.40, "begruendung": "Kreditkartenabrechnung"},
+        mappe,
+        regelwerk,
+    )
+    assert "USD" in meldung
+
+
+def test_betrag_setzen_ohne_begruendung_wird_abgewiesen(mappe, regelwerk):
+    with pytest.raises(berater.BeratungsFehler, match="Begruendung"):
+        berater.werkzeug_ausfuehren(
+            "betrag_setzen",
+            {"dokument_id": beleg(mappe, "anhaenger.txt").id, "betrag": 10.0, "begruendung": " "},
+            mappe,
+            regelwerk,
+        )
+
+
+def test_nicht_ansetzen_laesst_den_beleg_in_seiner_kategorie(mappe, regelwerk):
+    """Nach 'nicht_steuerrelevant' umzugliedern waere eine Falschaussage."""
+    dokument = beleg(mappe, "anhaenger.txt")
+    berater.werkzeug_ausfuehren(
+        "nicht_ansetzen",
+        {"dokument_id": dokument.id, "grund": "Ueberholte Fassung der Rechnung."},
+        mappe,
+        regelwerk,
+    )
+    wieder = Arbeitsmappe.laden(mappe.wurzel).dokument(dokument.id)
+    assert wieder.nicht_ansetzen is True
+    assert wieder.wirksame_kategorie == "werbungskosten_sonstige"
+    assert wieder.wirksamer_betrag is None
+
+
+def test_nicht_ansetzen_laesst_sich_zuruecknehmen(mappe, regelwerk):
+    dokument = beleg(mappe, "anhaenger.txt")
+    for eingabe in (
+        {"dokument_id": dokument.id, "grund": "erst mal raus"},
+        {"dokument_id": dokument.id, "grund": "doch ansetzen", "rueckgaengig": True},
+    ):
+        berater.werkzeug_ausfuehren("nicht_ansetzen", eingabe, mappe, regelwerk)
+    assert mappe.dokument(dokument.id).nicht_ansetzen is False
+    assert mappe.dokument(dokument.id).wirksamer_betrag == 26.48
+
+
+def test_nicht_ansetzen_verlangt_einen_grund(mappe, regelwerk):
+    with pytest.raises(berater.BeratungsFehler, match="Ohne Grund"):
+        berater.werkzeug_ausfuehren(
+            "nicht_ansetzen",
+            {"dokument_id": beleg(mappe, "anhaenger.txt").id, "grund": ""},
+            mappe,
+            regelwerk,
+        )
+
+
+def test_lagebild_zeigt_manuelle_eingriffe(mappe, regelwerk):
+    dokument = beleg(mappe, "anhaenger.txt")
+    dokument.manueller_betrag = 99.0
+    lage = berater.lage_text(mappe, regelwerk)
+    assert "Betrag manuell" in lage
+
+    dokument.nicht_ansetzen = True
+    dokument.nicht_ansetzen_grund = "doppelt erfasst"
+    assert "bewusst nicht angesetzt: doppelt erfasst" in berater.lage_text(mappe, regelwerk)

@@ -511,6 +511,7 @@ def _analyse_aus_rohdaten(rohdaten: dict[str, Any]) -> Analyse:
         enthaelt_mehrere_dokumente=bool(rohdaten.get("enthaelt_mehrere_dokumente")),
         segmente=segmente,
         zahlungsart=str(rohdaten.get("zahlungsart") or "unbekannt"),
+        rechnungsnummer=str(rohdaten.get("rechnungsnummer", "")).strip(),
         betragsart=_betragsart(rohdaten.get("betragsart")),
         version=ANALYSE_VERSION,
         geschaeftsvorfall=_geschaeftsvorfall(rohdaten.get("geschaeftsvorfall")),

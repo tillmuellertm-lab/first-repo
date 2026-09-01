@@ -32,7 +32,7 @@ EIGNUNG_REIHENFOLGE = [EIGNUNG_GEEIGNET, EIGNUNG_BEDINGT, EIGNUNG_UNKLAR, EIGNUN
 # Wird erhoeht, wenn die Analyse neue Felder erhebt. So laesst sich erkennen,
 # welche Dokumente von einer aelteren Fassung geprueft wurden und nachgeholt
 # werden muessen, ohne den gesamten Bestand erneut zu bezahlen.
-ANALYSE_VERSION = 3
+ANALYSE_VERSION = 4
 
 STATUS_NEU = "neu"
 STATUS_ANALYSIERT = "analysiert"
@@ -278,6 +278,9 @@ class Analyse:
     enthaelt_mehrere_dokumente: bool = False
     segmente: list[Segment] = field(default_factory=list)
     zahlungsart: str = ""  # unbar, bar, unbekannt
+    # Zwei Fassungen derselben Rechnung mit verschiedenen Betraegen sind der
+    # gefaehrlichste Dublettenfall: Der Betragsvergleich findet sie nicht.
+    rechnungsnummer: str = ""
     # Was der Betrag ueberhaupt bedeutet. Ohne diese Unterscheidung wandert
     # die Summe eines Darlehensvertrags in die Werbungskosten.
     betragsart: str = ""  # aufwand, erstattung, einnahme, vertragswert, saldo
@@ -397,6 +400,16 @@ class Dokument:
     zieldateiname: str = ""
     zielordner: str = ""
     manuelle_kategorie: str = ""  # setzt die Kategorie der Analyse ausser Kraft
+    # Setzt den abzugsfaehigen Betrag der Analyse ausser Kraft. Noetig, wenn
+    # sich die berufliche Veranlassung erst im Gespraech klaert - die Analyse
+    # kannte den Verwendungszweck damals nicht und liess das Feld leer.
+    manueller_betrag: float | None = None
+    manuelle_waehrung: str = ""
+    # Steuerlich bedeutsam, aber nicht anzusetzen: die ueberholte Fassung einer
+    # Rechnung, ein bereits erstatteter Posten. "nicht_steuerrelevant" waere
+    # dafuer falsch - der Beleg gehoert in seine Kategorie und in die Akte.
+    nicht_ansetzen: bool = False
+    nicht_ansetzen_grund: str = ""
     notiz: str = ""
     # Angaben des Nutzers beim Aufnehmen des Stapels, siehe HERKUENFTE.
     herkunft: str = ""
@@ -414,6 +427,35 @@ class Dokument:
         if self.analyse and self.analyse.steuerjahr:
             return self.analyse.steuerjahr
         return None
+
+    @property
+    def wirksamer_betrag(self) -> float | None:
+        """Der Betrag, der in eine Summe eingeht - oder None.
+
+        Vorrang hat die Angabe des Nutzers: Sie entsteht, wenn ein Sachverhalt
+        geklaert ist, den die Analyse noch nicht kannte. Ein bewusst nicht
+        angesetzter Beleg liefert None, ebenso ein Betrag in fremder Waehrung -
+        144 USD sind nicht 144 EUR, und eine ungerechnete Zahl in einer
+        Euro-Summe faellt niemandem auf.
+        """
+        if self.nicht_ansetzen:
+            return None
+        if self.manueller_betrag is not None:
+            return self.manueller_betrag
+        if not self.analyse:
+            return None
+        if (self.analyse.waehrung or "EUR").upper() != "EUR":
+            return None
+        betrag = self.analyse.betrag_abzugsfaehig
+        return betrag if betrag is not None else self.analyse.betrag_gesamt
+
+    @property
+    def fremdwaehrung(self) -> str:
+        """Die Waehrung, solange kein Euro-Betrag nachgetragen wurde."""
+        if self.manueller_betrag is not None or not self.analyse:
+            return ""
+        waehrung = (self.analyse.waehrung or "EUR").upper()
+        return "" if waehrung == "EUR" else waehrung
 
     @property
     def wirksame_kategorie(self) -> str:

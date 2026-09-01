@@ -21,6 +21,8 @@ fehlt** und **wo Geld liegen bleibt**.
 | Eignung prüfen | vier Stufen: geeignet, bedingt geeignet, nicht geeignet, unklar — mit Begründung |
 | Formfehler finden | Barzahlung bei § 35a, fehlender Lohnanteil, falsches Steuerjahr, fehlender Zahlungsnachweis |
 | Erstattungen gegenrechnen | Kassenerstattung, Arbeitgeberzuschuss, Fahrtkostenersatz mindern den Aufwand, statt ihn aufzublähen |
+| Fremdwährung erkennen | 144 USD gehen nicht als 144 EUR in eine Summe ein — der Euro-Betrag wird nachgetragen |
+| Doppelte Rechnungen finden | gleiche Rechnungsnummer beim selben Aussteller, auch bei abweichenden Beträgen |
 | Sinnvoll benennen | `03_2024-03-15_Handwerkerrechnung_Elektro-Mueller_1189-42EUR_PRUEFEN.pdf` |
 | Struktur erzeugen | Ordner in der Reihenfolge der Steuererklärung, von `00_Stammdaten` bis `99_Nicht_steuerrelevant` |
 | Übersicht erstellen | HTML zum Ausdrucken oder als PDF, Markdown und CSV für den Berater |
@@ -129,13 +131,16 @@ Jahre — die holt sich das Modell bei Bedarf selbst. Dafür kann es
 | `web_search` | Recherche zu Rechtsfragen jenseits der hinterlegten Werte |
 | `notiz_speichern` | **schreibt** Ihre Auskunft zum Beleg in die Mappe |
 | `kategorie_setzen` | **korrigiert** eine falsche Zuordnung |
+| `betrag_setzen` | **setzt** den abzugsfähigen Betrag, auch für Fremdwährungsbelege |
+| `nicht_ansetzen` | **nimmt** einen Beleg aus den Summen, ohne ihn zu löschen |
+| `jahr_setzen` | **trägt** das Veranlagungsjahr nach |
 | `stammwert_speichern` | **hält** einen jahresübergreifenden Wert samt Fundstelle fest |
 | `entwurf_lesen` | zeigt einen eigenen Entwurf wieder an, oder listet sie auf |
 | `unterlagen_lesen` | liest dieses Handbuch und die übrigen Projektunterlagen |
 | `schreiben_entwerfen` | **legt** einen Text als Datei ab, etwa die Mail an den Steuerberater |
 | `verbesserung_vorschlagen` | **notiert**, was dem Werkzeug im Gebrauch gefehlt hat |
 
-Die letzten fünf ändern die Mappe. Das ist der eigentliche Zweck: Was Sie im Gespräch
+Die schreibenden Werkzeuge ändern die Mappe. Das ist der eigentliche Zweck: Was Sie im Gespräch
 über einen Beleg sagen, landet als Notiz an diesem Beleg und erscheint im Bericht für
 den Steuerberater direkt unter der Frage, die es beantwortet — statt im Gesprächsverlauf
 zu versanden. Jeder Zugriff steht als eigene Zeile im Verlauf, damit erkennbar bleibt,

@@ -49,6 +49,9 @@ class Posten:
     abschnitte: list[Abschnitt] = field(default_factory=list)
     belege: list[Dokument] = field(default_factory=list)
     erstattungen: list[Dokument] = field(default_factory=list)
+    nicht_angesetzt: list[Dokument] = field(default_factory=list)
+    aufwand: float = 0.0
+    erstattet: float = 0.0
 
     @property
     def standardabschnitt(self) -> Abschnitt | None:
@@ -106,24 +109,28 @@ def aufstellung(dokumente: list[Dokument], regelwerk: Regelwerk) -> list[Posten]
         eintrag = zuordnungen.get(kategorie_id, {})
         kategorie = taxonomy.kategorie(kategorie_id)
 
-        betrag = 0.0
+        aufwand = 0.0
+        erstattet = 0.0
         belege: list[Dokument] = []
         erstattungen: list[Dokument] = []
+        nicht_angesetzt: list[Dokument] = []
         for dokument in liste:
             analyse = dokument.analyse
             if not analyse or analyse.eignung == EIGNUNG_UNGEEIGNET:
                 continue
-            wert = analyse.betrag_abzugsfaehig
-            if wert is None:
-                wert = analyse.betrag_gesamt
+            if dokument.nicht_ansetzen:
+                nicht_angesetzt.append(dokument)
+                continue
+            wert = dokument.wirksamer_betrag
             if ist_erstattung(analyse):
                 erstattungen.append(dokument)
-                betrag -= abs(float(wert or 0.0))
+                erstattet += abs(float(wert or 0.0))
             elif zaehlt_als_aufwand(analyse):
                 belege.append(dokument)
-                betrag += float(wert or 0.0)
+                aufwand += float(wert or 0.0)
 
-        if not belege and not erstattungen:
+        betrag = aufwand - erstattet
+        if not belege and not erstattungen and not nicht_angesetzt:
             continue
         posten.append(
             Posten(
@@ -131,6 +138,9 @@ def aufstellung(dokumente: list[Dokument], regelwerk: Regelwerk) -> list[Posten]
                 label=kategorie.label,
                 anlage=str(eintrag.get("anlage") or kategorie.anlage),
                 betrag=round(betrag, 2),
+                aufwand=round(aufwand, 2),
+                erstattet=round(erstattet, 2),
+                nicht_angesetzt=nicht_angesetzt,
                 abschnitte=_abschnitte(eintrag),
                 belege=sorted(belege, key=lambda d: (d.analyse.datum or "9999", d.dateiname)),
                 erstattungen=erstattungen,
@@ -144,14 +154,17 @@ def aufstellung(dokumente: list[Dokument], regelwerk: Regelwerk) -> list[Posten]
 def _belegzeile(dokument: Dokument) -> str:
     analyse = dokument.analyse
     bezeichnung = " - ".join(t for t in (analyse.dokumenttyp, analyse.aussteller) if t)
-    wert = analyse.betrag_abzugsfaehig
-    if wert is None:
-        wert = analyse.betrag_gesamt
+    wert = dokument.wirksamer_betrag
     teile = [
         analyse.datum or "ohne Datum",
         bezeichnung or dokument.dateiname,
-        euro(wert),
+        euro(wert) if wert is not None else "kein Euro-Betrag",
     ]
+    if dokument.fremdwaehrung:
+        roh = analyse.betrag_abzugsfaehig or analyse.betrag_gesamt
+        teile.append(f"Beleg lautet auf {roh} {dokument.fremdwaehrung}")
+    if dokument.manueller_betrag is not None:
+        teile.append("Betrag manuell gesetzt")
     return " | ".join(teile)
 
 
@@ -182,7 +195,14 @@ def als_markdown(
     for eintrag in posten:
         zeilen.append(f"## {eintrag.label}")
         zeilen.append("")
-        zeilen.append(f"**{eintrag.anlage}** &middot; Summe **{euro(eintrag.betrag)}**")
+        if eintrag.erstattet:
+            zeilen.append(
+                f"**{eintrag.anlage}** &middot; Aufwand {euro(eintrag.aufwand)} "
+                f"&minus; Erstattungen {euro(eintrag.erstattet)} "
+                f"= **{euro(eintrag.betrag)}**"
+            )
+        else:
+            zeilen.append(f"**{eintrag.anlage}** &middot; Summe **{euro(eintrag.betrag)}**")
         zeilen.append("")
 
         if not eintrag.abschnitte:
@@ -213,6 +233,13 @@ def als_markdown(
             zeilen.append("Bereits gegengerechnete Erstattungen:")
             for dokument in eintrag.erstattungen:
                 zeilen.append(f"- {_belegzeile(dokument)}")
+
+        if eintrag.nicht_angesetzt:
+            zeilen.append("")
+            zeilen.append("Bewusst nicht angesetzt:")
+            for dokument in eintrag.nicht_angesetzt:
+                grund = dokument.nicht_ansetzen_grund or "ohne Begruendung"
+                zeilen.append(f"- {_belegzeile(dokument)} — {grund}")
 
         zeilen.append("")
         zeilen.append(f"<details><summary>{len(eintrag.belege)} Belege</summary>")

@@ -590,3 +590,80 @@ def test_erstattung_erscheint_nicht_als_uebergangener_betrag():
     erstattung.analyse.betragsart = "erstattung"
     ergebnis = gaps.auswerten([erstattung], REGELWERK, profil(), heute=dt.date(2025, 1, 15))
     assert not [b for b in ergebnis.befunde if "keine Ausgabe" in b.beschreibung]
+
+
+# --- Manueller Betrag, Fremdwaehrung, bewusst nicht angesetzt ----------------
+
+
+def test_manueller_betrag_hat_vorrang_vor_der_analyse():
+    """Klaert sich die Veranlassung erst im Gespraech, kannte die Analyse sie nicht."""
+    doc = dokument("werbungskosten_arbeitsmittel", None, kennung="a")
+    doc.analyse.betragsart = "aufwand"
+    assert gaps.kennzahlen([doc], REGELWERK, profil())["werbungskosten_gesamt"] == 0.0
+
+    doc.manueller_betrag = 239.88
+    assert gaps.kennzahlen([doc], REGELWERK, profil())["werbungskosten_gesamt"] == 239.88
+
+
+def test_fremdwaehrung_geht_in_keine_summe_ein():
+    """144 USD sind nicht 144 EUR - und der Fehler faellt in einer Summe nicht auf."""
+    doc = dokument("werbungskosten_arbeitsmittel", 144.0, kennung="a")
+    doc.analyse.betragsart = "aufwand"
+    doc.analyse.waehrung = "USD"
+
+    zahlen = gaps.kennzahlen([doc], REGELWERK, profil())
+    assert zahlen["werbungskosten_gesamt"] == 0.0
+
+    ergebnis = gaps.auswerten([doc], REGELWERK, profil(), heute=dt.date(2025, 1, 15))
+    assert "fremdwaehrung" in {b.id for b in ergebnis.warnungen}
+
+
+def test_nachgetragener_eurobetrag_zaehlt_wieder():
+    doc = dokument("werbungskosten_arbeitsmittel", 144.0, kennung="a")
+    doc.analyse.betragsart = "aufwand"
+    doc.analyse.waehrung = "USD"
+    doc.manueller_betrag = 132.40
+
+    assert gaps.kennzahlen([doc], REGELWERK, profil())["werbungskosten_gesamt"] == 132.40
+    assert doc.fremdwaehrung == ""
+
+
+def test_bewusst_nicht_angesetzter_beleg_zaehlt_nicht_und_bleibt_sichtbar():
+    """Die ueberholte Fassung einer Rechnung ist kein 'nicht steuerrelevanter' Beleg."""
+    doc = dokument("werbungskosten_sonstige", 2893.0, kennung="a")
+    doc.analyse.betragsart = "aufwand"
+    doc.nicht_ansetzen = True
+    doc.nicht_ansetzen_grund = "Ueberholte Fassung der Rechnung 325/2024D."
+
+    zahlen = gaps.kennzahlen([doc], REGELWERK, profil())
+    assert zahlen["werbungskosten_gesamt"] == 0.0
+    # Die Kategorie bleibt erhalten - der Beleg gehoert in die Akte.
+    assert doc.wirksame_kategorie == "werbungskosten_sonstige"
+
+    ergebnis = gaps.auswerten([doc], REGELWERK, profil(), heute=dt.date(2025, 1, 15))
+    befund = next(b for b in ergebnis.befunde if b.id == "nicht_angesetzt")
+    assert "Ueberholte Fassung" in befund.beschreibung
+
+
+def test_gleiche_rechnungsnummer_faellt_auch_bei_anderem_betrag_auf():
+    """Der gefaehrlichste Dublettenfall: zwei Fassungen, zwei Betraege, Doppelabzug."""
+    erste = dokument("werbungskosten_sonstige", 2115.35, aussteller="Wuttke",
+                     datum="2024-09-20", kennung="a")
+    zweite = dokument("werbungskosten_sonstige", 3000.0, aussteller="Wuttke",
+                      datum="2024-09-20", kennung="b")
+    erste.analyse.rechnungsnummer = "325/2024D"
+    zweite.analyse.rechnungsnummer = "325/2024D"
+
+    gruppen = gaps.dubletten_gruppen([erste, zweite])
+    assert len(gruppen) == 1
+    assert {d.id for d in gruppen[0]} == {"a", "b"}
+
+
+def test_verschiedene_rechnungsnummern_sind_keine_dublette():
+    erste = dokument("werbungskosten_sonstige", 100.0, aussteller="Wuttke",
+                     datum="2024-09-20", kennung="a")
+    zweite = dokument("werbungskosten_sonstige", 200.0, aussteller="Wuttke",
+                      datum="2024-09-20", kennung="b")
+    erste.analyse.rechnungsnummer = "325/2024D"
+    zweite.analyse.rechnungsnummer = "326/2024D"
+    assert gaps.dubletten_gruppen([erste, zweite]) == []

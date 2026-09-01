@@ -167,6 +167,11 @@ Weitere Regeln:
   nur Lohn-, Fahrt- und Maschinenkosten ohne Material.
 - "zahlungsart": "unbar", wenn Ueberweisung, Lastschrift oder Karte erkennbar
   ist, "bar" bei Barzahlung oder Barquittung, sonst "unbekannt".
+- "waehrung" ist der ISO-Code des Betrags, wie er im Beleg steht. Rechne nicht
+  um: 144,00 USD sind nicht 144,00 EUR, und ein selbst gewaehlter Kurs waere
+  geraten. Vermerke in "fehlende_nachweise", dass der Euro-Betrag der
+  tatsaechlichen Belastung zu ergaenzen ist.
+- "rechnungsnummer" uebernimmst du unveraendert, wenn der Beleg eine ausweist.
 - "vertrauen" ist deine ehrliche Selbsteinschaetzung zwischen 0 und 1. Bei
   schlechtem Scan gehst du herunter, statt zu raten.
 - Enthaelt die Datei mehrere eigenstaendige Dokumente (typisch bei
@@ -271,6 +276,13 @@ WERKZEUG_ANALYSE: dict[str, Any] = {
                 "description": "Konkrete legale Ansaetze, die sich aus diesem Dokument ergeben.",
             },
             "zahlungsart": {"type": "string", "enum": ["unbar", "bar", "unbekannt"]},
+            "rechnungsnummer": {
+                "type": "string",
+                "description": (
+                    "Rechnungs- oder Belegnummer, soweit ausgewiesen. Dient dem "
+                    "Erkennen zweier Fassungen derselben Rechnung."
+                ),
+            },
             "geschaeftsvorfall": {
                 "type": "string",
                 "enum": ["einnahme", "ausgabe", "kein_betrieblicher_vorgang"],
@@ -460,6 +472,19 @@ Was du kannst und tun sollst:
   Ablage fuer den Steuerberater. Faellt dir so einer auf und weiss der Mandant,
   wohin er gehoert, dann setz das Jahr mit "jahr_setzen" - erst fragen, dann
   setzen, und immer sagen, welche Belege du geaendert hast.
+- Klaert sich im Gespraech die Veranlassung eines Belegs, dann setz mit
+  "betrag_setzen" auch den abzugsfaehigen Betrag. Eine Kategorie allein aendert
+  keine Summe: Steht in der Analyse kein Betrag, weil sie den Verwendungszweck
+  nicht kannte, zaehlt der Beleg weiter mit null. Der Mandant sieht sonst einen
+  geklaerten Sachverhalt und unveraenderte Zahlen.
+- Lautet ein Beleg auf eine fremde Waehrung, geht er in keine Summe ein.
+  Massgeblich ist die tatsaechliche Belastung in Euro, meist aus der
+  Kreditkartenabrechnung; frag danach und trag sie mit "betrag_setzen" nach.
+- Soll ein Beleg nicht angesetzt werden, ohne zu verschwinden - die ueberholte
+  Fassung einer Rechnung, ein anderweitig erfasster Posten -, nimm
+  "nicht_ansetzen" mit Grund. Ihn nach "nicht_steuerrelevant" umzugliedern
+  waere falsch: Der Beleg ist steuerlich sehr wohl bedeutsam, nur eben nicht
+  abzuziehen.
 - Faellt dir eine falsche Zuordnung auf, korrigiere sie mit "kategorie_setzen"
   und sag, was du geaendert hast und warum.
 - Nennt der Mandant eine Zahl, die ueber das Jahr hinaus gilt - Gebaeude-AfA,

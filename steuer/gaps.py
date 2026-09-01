@@ -168,9 +168,7 @@ def _summe(dokumente: Iterable[Dokument]) -> float:
         erstattung = ist_erstattung(analyse)
         if not erstattung and not zaehlt_als_aufwand(analyse):
             continue
-        betrag = analyse.betrag_abzugsfaehig
-        if betrag is None:
-            betrag = analyse.betrag_gesamt
+        betrag = dokument.wirksamer_betrag
         if betrag:
             # Eine Erstattung mindert den Aufwand, den sie ersetzt. Abziehbar
             # ist, was der Steuerpflichtige am Ende getragen hat - nicht, was
@@ -291,9 +289,19 @@ def dubletten_gruppen(dokumente: list[Dokument]) -> list[list[Dokument]]:
     zwei Anhaenger. Entscheiden muss ein Mensch.
     """
     gesehen: dict[tuple[str, str, float], list[Dokument]] = defaultdict(list)
+    # Gleiche Rechnungsnummer beim selben Aussteller ist der gefaehrlichere
+    # Fall: Zwei Fassungen derselben Rechnung mit verschiedenen Betraegen
+    # entgehen dem Betragsvergleich und werden beide abgezogen.
+    nach_nummer: dict[tuple[str, str], list[Dokument]] = defaultdict(list)
     for dokument in dokumente:
         analyse = dokument.analyse
-        if not analyse or not analyse.datum:
+        if not analyse:
+            continue
+        nummer = (analyse.rechnungsnummer or "").strip().lower()
+        if nummer:
+            aussteller = (analyse.aussteller or analyse.dokumenttyp or "").strip().lower()
+            nach_nummer[(aussteller, nummer)].append(dokument)
+        if not analyse.datum:
             continue
         betrag = analyse.betrag_gesamt if analyse.betrag_gesamt is not None else analyse.betrag_abzugsfaehig
         kennung = (analyse.aussteller or analyse.dokumenttyp or "").strip().lower()
@@ -301,7 +309,13 @@ def dubletten_gruppen(dokumente: list[Dokument]) -> list[list[Dokument]]:
             continue
         gesehen[(kennung, analyse.datum, round(float(betrag or 0.0), 2))].append(dokument)
 
-    gruppen = [sorted(liste, key=_behaltenswert) for liste in gesehen.values() if len(liste) > 1]
+    gefunden = [liste for liste in gesehen.values() if len(liste) > 1]
+    bereits = {id(d) for liste in gefunden for d in liste}
+    for liste in nach_nummer.values():
+        if len(liste) > 1 and not all(id(d) in bereits for d in liste):
+            gefunden.append(liste)
+
+    gruppen = [sorted(liste, key=_behaltenswert) for liste in gefunden]
     gruppen.sort(
         key=lambda liste: -abs(
             (liste[0].analyse.betrag_gesamt or liste[0].analyse.betrag_abzugsfaehig or 0.0)
@@ -545,6 +559,69 @@ def _belegtext(dokument: Dokument) -> str:
     return _ohne_umlaute(" ".join(t for t in teile if t).lower())
 
 
+def _fremdwaehrung_pruefen(dokumente: list[Dokument]) -> list[Befund]:
+    """Meldet Betraege, die nicht in Euro lauten.
+
+    144,00 USD sehen in einer Euro-Summe aus wie 144,00 EUR. Der Fehler ist
+    klein genug, um nicht aufzufallen, und gross genug, um falsch zu sein.
+    Gezaehlt wird deshalb nur Euro; was uebrig bleibt, gehoert benannt.
+    """
+    betroffen = [
+        (d, d.fremdwaehrung)
+        for d in dokumente
+        if d.fremdwaehrung and d.analyse and d.analyse.eignung != EIGNUNG_UNGEEIGNET
+    ]
+    if not betroffen:
+        return []
+    zeilen = [
+        f"{len(betroffen)} Belege lauten auf eine andere Waehrung als Euro und gehen "
+        "deshalb in keine Summe ein:"
+    ]
+    for dokument, waehrung in betroffen[:10]:
+        analyse = dokument.analyse
+        betrag = analyse.betrag_abzugsfaehig or analyse.betrag_gesamt
+        name = analyse.dokumenttyp or dokument.dateiname
+        zeilen.append(f"- {name[:70]}: {betrag} {waehrung}")
+    if len(betroffen) > 10:
+        zeilen.append(f"- ... {len(betroffen) - 10} weitere")
+    zeilen.append(
+        "Massgeblich ist der Euro-Betrag der tatsaechlichen Belastung, meist aus der "
+        "Kreditkartenabrechnung. Er laesst sich im Beratungsgespraech nachtragen."
+    )
+    return [
+        Befund(
+            art="warnung",
+            id="fremdwaehrung",
+            titel="Betraege in fremder Waehrung",
+            beschreibung="\n".join(zeilen),
+            prioritaet="mittel",
+            betroffene_dokumente=[d.id for d, _ in betroffen],
+        )
+    ]
+
+
+def _bewusst_nicht_angesetzt(dokumente: list[Dokument]) -> list[Befund]:
+    """Fuehrt auf, was absichtlich draussen bleibt - mit dem Grund dafuer."""
+    betroffen = [d for d in dokumente if d.nicht_ansetzen]
+    if not betroffen:
+        return []
+    zeilen = [f"{len(betroffen)} Belege bleiben bewusst ausserhalb der Summen:"]
+    for dokument in betroffen:
+        name = (dokument.analyse.dokumenttyp if dokument.analyse else "") or dokument.dateiname
+        grund = dokument.nicht_ansetzen_grund or "ohne Begruendung"
+        zeilen.append(f"- {name[:70]}: {grund}")
+    return [
+        Befund(
+            art="hinweis",
+            id="nicht_angesetzt",
+            titel="Bewusst nicht angesetzte Belege",
+            beschreibung="\n".join(zeilen),
+            prioritaet="niedrig",
+            betroffene_dokumente=[d.id for d in betroffen],
+        )
+    ]
+
+
 def _nicht_gezaehlte_betraege(dokumente: list[Dokument]) -> list[Befund]:
     """Nennt jeden Betrag, der nicht in die Summen eingegangen ist.
 
@@ -558,6 +635,8 @@ def _nicht_gezaehlte_betraege(dokumente: list[Dokument]) -> list[Befund]:
         if not analyse or analyse.eignung == EIGNUNG_UNGEEIGNET:
             continue
         betrag = analyse.betrag_abzugsfaehig or analyse.betrag_gesamt
+        if dokument.nicht_ansetzen or dokument.fremdwaehrung:
+            continue  # eigene Befunde, siehe unten
         if not betrag or zaehlt_als_aufwand(analyse) or ist_erstattung(analyse):
             continue
         art = analyse.betragsart or "vertragswert oder Saldo"
@@ -1214,6 +1293,8 @@ def auswerten(
     befunde.extend(_kinderbetreuung_pruefen(dokumente, regelwerk, profil))
     befunde.extend(_bestand_abgleichen(dokumente))
     befunde.extend(_nicht_gezaehlte_betraege(dokumente))
+    befunde.extend(_fremdwaehrung_pruefen(dokumente))
+    befunde.extend(_bewusst_nicht_angesetzt(dokumente))
     befunde.extend(_dubletten_pruefen(dokumente))
     befunde.extend(_frist_pruefen(regelwerk, heute))
     befunde.extend(_stammdaten_hinweis(stammdaten))

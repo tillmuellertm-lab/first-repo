@@ -319,6 +319,11 @@ def _vorgangstext(name: str, eingabe: dict[str, Any]) -> str:
         return f"sieht sich den Originalscan von Beleg {eingabe.get('dokument_id', '?')} an{zusatz}"
     if name == "notiz_speichern":
         return f"traegt Ihre Antwort bei Beleg {eingabe.get('dokument_id', '?')} ein"
+    if name == "betrag_setzen":
+        return f"setzt bei Beleg {eingabe.get('dokument_id', '?')} den Betrag {eingabe.get('betrag', '?')}"
+    if name == "nicht_ansetzen":
+        richtung = "zaehlt wieder mit" if eingabe.get("rueckgaengig") else "bleibt aus den Summen"
+        return f"Beleg {eingabe.get('dokument_id', '?')} {richtung}"
     if name == "jahr_setzen":
         anzahl = len(eingabe.get("dokument_ids") or [])
         return f"traegt bei {anzahl} Belegen das Jahr {eingabe.get('jahr', '?')} ein"
@@ -405,6 +410,12 @@ def _dokumentzeile(dokument: Dokument) -> str:
     ]
     if analyse.betragsart and analyse.betragsart != "aufwand":
         teile.append(f"Betragsart {analyse.betragsart}")
+    if dokument.manueller_betrag is not None:
+        teile.append(f"Betrag manuell auf {euro(dokument.manueller_betrag)} gesetzt")
+    if dokument.fremdwaehrung:
+        teile.append(f"Fremdwaehrung {dokument.fremdwaehrung}, zaehlt nicht mit")
+    if dokument.nicht_ansetzen:
+        teile.append(f"bewusst nicht angesetzt: {dokument.nicht_ansetzen_grund}")
     if analyse.fehlende_nachweise:
         anzahl = len(analyse.fehlende_nachweise)
         teile.append(f"{anzahl} offener Punkt" if anzahl == 1 else f"{anzahl} offene Punkte")
@@ -929,6 +940,51 @@ def werkzeuge() -> list[dict[str, Any]]:
             },
         },
         {
+            "name": "betrag_setzen",
+            "description": (
+                "Setzt den abzugsfaehigen Betrag eines Belegs. Noetig, wenn sich die "
+                "steuerliche Zuordnung erst im Gespraech klaert: Die Analyse kannte den "
+                "Verwendungszweck damals nicht und liess das Feld leer, weshalb der "
+                "Beleg trotz geklaerter Veranlassung mit 0 EUR in den Summen steht. "
+                "Auch der Weg, einen Fremdwaehrungsbetrag in Euro nachzutragen - "
+                "massgeblich ist die tatsaechliche Belastung, meist aus der "
+                "Kreditkartenabrechnung. Nur setzen, was belegt oder vom Mandanten "
+                "bestaetigt ist, und ihm sagen, welcher Betrag jetzt zaehlt."
+            ),
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "dokument_id": {"type": "string"},
+                    "betrag": {
+                        "type": "number",
+                        "description": "Abzugsfaehiger Betrag in Euro.",
+                    },
+                    "begruendung": {"type": "string"},
+                },
+                "required": ["dokument_id", "betrag", "begruendung"],
+            },
+        },
+        {
+            "name": "nicht_ansetzen",
+            "description": (
+                "Nimmt einen Beleg aus den Summen, ohne ihn zu loeschen oder als nicht "
+                "steuerrelevant auszugeben. Fuer die ueberholte Fassung einer Rechnung, "
+                "einen bereits anderweitig erfassten Posten, einen Beleg, den der "
+                "Steuerberater nicht ansetzen soll. Der Beleg bleibt in seiner "
+                "Kategorie und erscheint im Bericht in einem eigenen Abschnitt mit dem "
+                "Grund. Mit rueckgaengig=true wieder aufheben."
+            ),
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "dokument_id": {"type": "string"},
+                    "grund": {"type": "string"},
+                    "rueckgaengig": {"type": "boolean"},
+                },
+                "required": ["dokument_id", "grund"],
+            },
+        },
+        {
             "name": "verbesserung_vorschlagen",
             "description": (
                 "Haelt fest, was diesem Werkzeug fehlt. Stoesst du an eine Grenze - ein "
@@ -1205,6 +1261,55 @@ def _jahr_setzen(mappe: Arbeitsmappe, eingabe: dict[str, Any]) -> str:
     return "\n".join(zeilen)
 
 
+def _betrag_setzen(mappe: Arbeitsmappe, eingabe: dict[str, Any]) -> str:
+    dokument = _dokument_holen(mappe, eingabe)
+    try:
+        betrag = round(float(eingabe.get("betrag")), 2)
+    except (TypeError, ValueError):
+        raise BeratungsFehler(f"'{eingabe.get('betrag')}' ist kein Betrag.") from None
+    if not str(eingabe.get("begruendung") or "").strip():
+        raise BeratungsFehler("Ohne Begruendung wird kein Betrag gesetzt.")
+
+    vorher = dokument.wirksamer_betrag
+    fremd = dokument.fremdwaehrung
+    dokument.manueller_betrag = betrag
+    mappe.speichern()
+
+    meldung = f"Beleg {dokument.id}: abzugsfaehiger Betrag jetzt {euro(betrag)}."
+    if fremd:
+        alt = dokument.analyse.betrag_abzugsfaehig or dokument.analyse.betrag_gesamt
+        meldung += f" Er lautete auf {alt} {fremd} und ging bisher in keine Summe ein."
+    elif vorher is None:
+        meldung += " Bisher stand kein Betrag darin; der Beleg zaehlte mit 0 EUR."
+    elif vorher != betrag:
+        meldung += f" Die Analyse hatte {euro(vorher)} ermittelt."
+    return meldung + " Sag dem Mandanten, was sich dadurch in den Summen aendert."
+
+
+def _nicht_ansetzen(mappe: Arbeitsmappe, eingabe: dict[str, Any]) -> str:
+    dokument = _dokument_holen(mappe, eingabe)
+    grund = str(eingabe.get("grund") or "").strip()
+    if not grund:
+        raise BeratungsFehler(
+            "Ohne Grund nicht. Ein Beleg, der ohne Begruendung aus den Summen "
+            "verschwindet, ist spaeter nicht mehr nachvollziehbar."
+        )
+    if eingabe.get("rueckgaengig"):
+        dokument.nicht_ansetzen = False
+        dokument.nicht_ansetzen_grund = ""
+        mappe.speichern()
+        return f"Beleg {dokument.id} zaehlt wieder in den Summen mit."
+
+    dokument.nicht_ansetzen = True
+    dokument.nicht_ansetzen_grund = grund
+    mappe.speichern()
+    return (
+        f"Beleg {dokument.id} bleibt in der Kategorie {dokument.wirksame_kategorie}, "
+        f"geht aber mit 0,00 EUR in die Summen ein. Grund: {grund}. Er erscheint im "
+        "Bericht unter 'Bewusst nicht angesetzte Belege'."
+    )
+
+
 def _kategorie_setzen(mappe: Arbeitsmappe, eingabe: dict[str, Any]) -> str:
     dokument = _dokument_holen(mappe, eingabe)
     neu = str(eingabe.get("kategorie_id") or "").strip()
@@ -1439,6 +1544,10 @@ def werkzeug_ausfuehren(
         return _notiz_speichern(mappe, eingabe), []
     if name == "jahr_setzen":
         return _jahr_setzen(mappe, eingabe), []
+    if name == "betrag_setzen":
+        return _betrag_setzen(mappe, eingabe), []
+    if name == "nicht_ansetzen":
+        return _nicht_ansetzen(mappe, eingabe), []
     if name == "kategorie_setzen":
         return _kategorie_setzen(mappe, eingabe), []
     raise BeratungsFehler(f"Unbekanntes Werkzeug: {name}")
