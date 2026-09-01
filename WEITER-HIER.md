@@ -1,6 +1,6 @@
 # Hier geht es weiter
 
-Stand: 31. August 2026, nachmittags.
+Stand: 1. September 2026. Die Neuanalyse aller Dokumente lief zuletzt.
 
 ## Als Erstes
 
@@ -8,30 +8,77 @@ Stand: 31. August 2026, nachmittags.
 cd ~/first-repo-claude-tax-return-document-tool-jesqdh && source .venv/bin/activate && git pull origin claude/tax-return-document-tool-jesqdh && cd steuer-2024 && steuer web
 ```
 
-Dann <http://127.0.0.1:5173>, oben auf **Beratung**. Im Browser einmal
-Strg+Umschalt+R, sonst nimmt Chrome die alte Oberflaeche.
+Dann <http://127.0.0.1:5173>. Im Browser einmal Strg+Umschalt+R.
+Laeuft der Server schon im Fenster, blockiert er es: erst Strg+C.
 
-## Die drei offenen Faeden im Gespraech
+## Wo wir stehen
 
-Diesen Text abschicken, er raeumt alle drei gleichzeitig ab:
+Die Neuanalyse mit Analyseversion 4 wurde gestartet. **Als Erstes nachsehen,
+ob sie durchgelaufen ist** - Seite Uebersicht, Hinweis "Dokumente wurden mit
+einem aelteren Stand geprueft". Steht dort keine Zahl mehr, ist sie fertig.
 
-> Der Server laeuft jetzt mit der neuen Fassung. Drei Dinge:
+Danach in dieser Reihenfolge:
+
+| # | Schritt | Wo |
+| --- | --- | --- |
+| 1 | Ergebnis der Neuanalyse durchsehen, besonders die Waehrungswarnung | Seite **Luecken & Chancen** |
+| 2 | Offene Faeden im Gespraech klaeren (siehe unten) | Seite **Beratung** |
+| 3 | **Ordnen & Auswerten** mit Gesamtauswertung und ZIP | Seite **Uebersicht**, unten |
+| 4 | Formularzuordnung durchsehen | Seite **Formular** |
+
+## Die beiden Eigenaufstellungen
+
+Beide sind fertig geschrieben und liegen als HTML vor; sie wurden im Chat
+uebergeben und muessen als PDF in die Mappe.
+
+| Aufstellung | Ergebnis | Stand |
+| --- | ---: | --- |
+| Verpflegungsmehraufwand, 11 Auswaertsspiele, alle Tagesreisen | 140,00 EUR | ersetzt die alte 280-EUR-Fassung, die aus der Mappe muss |
+| Doppelte Haushaltsfuehrung 15.08.-30.09.2024 | 2.910,00 EUR | am 26.08. erstellt, war nie hochgeladen |
+
+Geprueft: Die beiden ueberschneiden sich nicht. In den Zeitraum der doppelten
+Haushaltsfuehrung faellt genau ein Auswaertsspiel - Duesseldorf am 21.09.2024 -
+und dort stehen 0,00 EUR, weil die Abwesenheit unter acht Stunden lag.
+
+## Offene Faeden im Gespraech
+
+Diesen Text abschicken, er raeumt mehreres gleichzeitig ab:
+
+> Die Neuanalyse ist durch. Drei Dinge:
 >
-> **1.** Trag bitte die Jahre ein: Wuttke Umzug (`e61fb77dfc28`) 2024, Wuttke
-> Renovierung Leipzig (`50f695a6c90e`) 2025 - im Januar 2025 bezahlt, gehoert
-> nach § 11 EStG dorthin. Und dann die restlichen Belege ohne Jahr aus deiner
-> Liste, mit `ohne_jahreszuordnung` kannst du gezielt danach suchen.
+> **1.** Sieh die Waehrungswarnungen durch und trag bei jedem Beleg in
+> Fremdwaehrung den Euro-Betrag mit `betrag_setzen` nach.
 >
-> **2.** Pruef vorrangig die 3.000 Euro: Die Umzugsrechnung Wuttke lautet ueber
-> 3.000 Euro, der Umzugskostenzuschuss des 1. FC Koeln ebenfalls. Sieh in den
-> vier Koelner Gehaltsabrechnungen nach, ob der Zuschuss steuerpflichtig als
+> **2.** Pruef die 3.000 Euro: Die Umzugsrechnung Wuttke lautet ueber 3.000
+> Euro, der Umzugskostenzuschuss des 1. FC Koeln ebenfalls. Sieh in den vier
+> Koelner Gehaltsabrechnungen nach, ob der Zuschuss steuerpflichtig als
 > Arbeitslohn lief oder steuerfrei als Auslagenersatz. Falls steuerfrei,
 > erfasse ihn als Erstattung gegen die Umzugsrechnung.
 >
-> **3.** Bei den sonstigen Werbungskosten gibt es jetzt eine Formularzuordnung
-> mit vier Abschnitten: doppelte Haushaltsfuehrung, Umzugskosten, Reisekosten,
-> weitere Werbungskosten. Sie teilt Summen nicht selbst auf. Schreib deshalb bei
-> jedem Beleg dieser Kategorie als Notiz dazu, in welchen Abschnitt er gehoert.
+> **3.** Bei den sonstigen Werbungskosten gibt es eine Formularzuordnung mit
+> vier Abschnitten: doppelte Haushaltsfuehrung, Umzugskosten, Reisekosten,
+> weitere Werbungskosten. Sie teilt Summen nicht selbst auf. Schreib deshalb
+> bei jedem Beleg dieser Kategorie als Notiz dazu, in welchen Abschnitt er
+> gehoert.
+
+## Neu im Werkzeug, zuletzt
+
+| Neu | Wofuer |
+| --- | --- |
+| **Denktiefe** im Gespraech | Schnell / Zuegig / Gruendlich. Das Gespraech lief vorher auf der langsamsten Stufe. |
+| **Messzeile** unter dem Eingabefeld | Sekunden, Runden, Token aus dem Zwischenspeicher - zeigt, woran eine lange Wartezeit lag |
+| Modellwahl richtig beschriftet | Fable 5 ist das leistungsfaehigste Modell und kostet das Doppelte von Opus 5 |
+| `betrag_setzen`, `nicht_ansetzen` | Betrag im Gespraech setzen; Beleg aussortieren, ohne ihn zu loeschen |
+| Fremdwaehrung | Nicht-Euro-Betraege zaehlen nicht mehr stillschweigend als Euro mit |
+| Dubletten nach Rechnungsnummer | findet zwei Fassungen derselben Rechnung mit verschiedenen Betraegen |
+
+## Noch nicht gebaut
+
+Aus der Zwoelf-Punkte-Durchsicht offen: Aufteilung eines Belegs auf mehrere
+Anlagen, eigene Pruefung der Formerfordernisse, Paragraf 13b Reverse Charge,
+Neuanalyse als Folge einer geaenderten Notiz. Dazu: die Antwort im Gespraech
+erscheint erst vollstaendig statt Satz fuer Satz - eine Umstellung darauf
+wuerde die Wartezeit gefuehlt deutlich verkuerzen.
 
 ## Die 3.000 Euro sind der teuerste offene Punkt
 
