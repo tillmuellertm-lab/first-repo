@@ -27,6 +27,11 @@ MODELL_BERATUNG = os.environ.get("STEUER_MODELL_BERATUNG", "claude-opus-5")
 
 # Zur Auswahl angebotene Modelle je Arbeitsschritt: (Kennung, Bezeichnung, Erlaeuterung).
 # Die Reihenfolge ist die Reihenfolge im Auswahlfeld.
+#
+# Fuer die Einzelanalyse steht Fable 5 bewusst nicht zur Wahl: Hier laeuft ein
+# Aufruf je Beleg, bei ueber hundert Belegen also ueber hundert Aufrufe. Das
+# staerkste Modell zahlt sich beim Lesen eines einzelnen Belegs kaum aus, beim
+# Abwaegen ueber alle Belege hinweg dagegen sehr - deshalb steht es dort.
 AUSWAHL_DOKUMENT: tuple[tuple[str, str, str], ...] = (
     (
         "claude-sonnet-5",
@@ -36,22 +41,26 @@ AUSWAHL_DOKUMENT: tuple[tuple[str, str, str], ...] = (
     (
         "claude-opus-5",
         "Opus 5",
-        "Gruendlichste Einordnung, spuerbar teurer. Lohnt bei schlechten Scans "
-        "und ungewoehnlichen Belegen.",
+        "Von beiden hier die gruendlichere Einordnung, spuerbar teurer. Lohnt bei "
+        "schlechten Scans und ungewoehnlichen Belegen.",
     ),
 )
 
 AUSWAHL_STRATEGIE: tuple[tuple[str, str, str], ...] = (
     (
-        "claude-opus-5",
-        "Opus 5",
-        "Auf anspruchsvolles, mehrstufiges Schlussfolgern ausgelegt.",
+        "claude-fable-5",
+        "Fable 5 - das leistungsfaehigste Modell",
+        "Anthropics staerkstes allgemein verfuegbares Modell, ausgelegt auf lange, "
+        "mehrstufige Gedankengaenge. Kostet rund das Doppelte von Opus 5 "
+        "(10 statt 5 USD je Million gelesener, 50 statt 25 USD je Million "
+        "geschriebener Zeichenketten). Die erste Wahl, wenn eine Frage wirklich "
+        "schwierig ist.",
     ),
     (
-        "claude-fable-5",
-        "Fable 5",
-        "Alternative aus derselben Modellfamilie. Im Zweifel beide ausprobieren "
-        "und die Ergebnisse vergleichen.",
+        "claude-opus-5",
+        "Opus 5 - guenstiger, sehr stark",
+        "Eine Stufe unter Fable 5 und halb so teuer. Fuer Routinearbeit - Jahre "
+        "nachtragen, Belege ordnen, Betraege setzen - reicht es aus.",
     ),
 )
 

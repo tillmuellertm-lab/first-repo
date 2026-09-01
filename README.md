@@ -488,9 +488,23 @@ Die Auswahl wird in der Arbeitsmappe gemerkt und beim nächsten Start wieder ang
 | Arbeitsschritt | Zur Wahl | Voreinstellung | Umgebungsvariable |
 | --- | --- | --- | --- |
 | Analyse jedes einzelnen Dokuments | Sonnet 5, Opus 5 | `claude-opus-5` | `STEUER_MODELL_DOKUMENT` |
-| Abschließende Gesamtauswertung | Opus 5, Fable 5 | `claude-fable-5` | `STEUER_MODELL_STRATEGIE` |
+| Abschließende Gesamtauswertung | Fable 5, Opus 5 | `claude-fable-5` | `STEUER_MODELL_STRATEGIE` |
 | Rechtsstandsrecherche | — | `claude-opus-5` | `STEUER_MODELL_RECHT` |
-| Beratungsgespräch | Opus 5, Fable 5 | `claude-opus-5` | `STEUER_MODELL_BERATUNG` |
+| Beratungsgespräch | Fable 5, Opus 5 | `claude-opus-5` | `STEUER_MODELL_BERATUNG` |
+
+**Die Rangfolge der Modelle**, damit die Wahl im Auswahlfeld eine bewusste ist:
+
+| Modell | Stellung | Preis je Million Token (Ein-/Ausgabe) |
+| --- | --- | ---: |
+| **Fable 5** (`claude-fable-5`) | Anthropics leistungsfähigstes allgemein verfügbares Modell | 10 / 50 USD |
+| **Opus 5** (`claude-opus-5`) | eine Stufe darunter, halb so teuer | 5 / 25 USD |
+| **Sonnet 5** (`claude-sonnet-5`) | schnell und günstig, für Standardbelege ausreichend | 2 / 10 USD |
+
+Fable 5 steht dort zur Wahl, wo über viele Belege hinweg abgewogen wird — in der
+Gesamtauswertung und im Gespräch. Für die Einzelanalyse wird es bewusst nicht
+angeboten: Dort läuft ein Aufruf **je Beleg**, bei über hundert Belegen also über
+hundert Aufrufe, und das stärkste Modell zahlt sich beim Lesen einer einzelnen
+Rechnung kaum aus.
 
 An der Kommandozeile geht dasselbe über Optionen:
 
