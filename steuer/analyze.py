@@ -1,0 +1,588 @@
+"""Anbindung an die Claude-API fuer Dokumentanalyse, Gesamtauswertung und Rechtsupdate."""
+
+from __future__ import annotations
+
+import logging
+import os
+import random
+import time
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Callable
+
+from . import euer, prompts
+from .extract import ExtraktionsFehler, inhalt_aufbereiten, inhalt_neu_aufbauen, notinhalt
+from .models import ANALYSE_VERSION, Analyse, Position, Profil, Segment, textliste
+from .rules import Regelwerk
+
+LOG = logging.getLogger(__name__)
+
+# Modellwahl je Arbeitsschritt. Ueber die Umgebungsvariablen STEUER_MODELL_DOKUMENT,
+# STEUER_MODELL_STRATEGIE und STEUER_MODELL_RECHT laesst sich der Standard je Stufe
+# umstellen; in der Oberflaeche waehlt der Nutzer vor jedem Lauf einzeln aus.
+MODELL_DOKUMENT = os.environ.get("STEUER_MODELL_DOKUMENT", "claude-opus-5")
+MODELL_STRATEGIE = os.environ.get("STEUER_MODELL_STRATEGIE", "claude-fable-5")
+MODELL_RECHT = os.environ.get("STEUER_MODELL_RECHT", "claude-opus-5")
+MODELL_BERATUNG = os.environ.get("STEUER_MODELL_BERATUNG", "claude-opus-5")
+
+# Zur Auswahl angebotene Modelle je Arbeitsschritt: (Kennung, Bezeichnung, Erlaeuterung).
+# Die Reihenfolge ist die Reihenfolge im Auswahlfeld.
+#
+# Fuer die Einzelanalyse steht Fable 5 bewusst nicht zur Wahl: Hier laeuft ein
+# Aufruf je Beleg, bei ueber hundert Belegen also ueber hundert Aufrufe. Das
+# staerkste Modell zahlt sich beim Lesen eines einzelnen Belegs kaum aus, beim
+# Abwaegen ueber alle Belege hinweg dagegen sehr - deshalb steht es dort.
+AUSWAHL_DOKUMENT: tuple[tuple[str, str, str], ...] = (
+    (
+        "claude-sonnet-5",
+        "Sonnet 5",
+        "Schnell und guenstig. Fuer klar lesbare Standardbelege meist ausreichend.",
+    ),
+    (
+        "claude-opus-5",
+        "Opus 5",
+        "Von beiden hier die gruendlichere Einordnung, spuerbar teurer. Lohnt bei "
+        "schlechten Scans und ungewoehnlichen Belegen.",
+    ),
+)
+
+AUSWAHL_STRATEGIE: tuple[tuple[str, str, str], ...] = (
+    (
+        "claude-fable-5",
+        "Fable 5 - das leistungsfaehigste Modell",
+        "Anthropics staerkstes allgemein verfuegbares Modell, ausgelegt auf lange, "
+        "mehrstufige Gedankengaenge. Kostet rund das Doppelte von Opus 5 "
+        "(10 statt 5 USD je Million gelesener, 50 statt 25 USD je Million "
+        "geschriebener Zeichenketten). Die erste Wahl, wenn eine Frage wirklich "
+        "schwierig ist.",
+    ),
+    (
+        "claude-opus-5",
+        "Opus 5 - guenstiger, sehr stark",
+        "Eine Stufe unter Fable 5 und halb so teuer. Fuer Routinearbeit - Jahre "
+        "nachtragen, Belege ordnen, Betraege setzen - reicht es aus.",
+    ),
+)
+
+
+def _pruefen(modell: str | None, auswahl: tuple[tuple[str, str, str], ...], standard: str) -> str:
+    """Laesst nur Modelle aus der Auswahlliste zu.
+
+    Die Kennung kommt aus der Weboberflaeche und damit von aussen; ein
+    unbekannter Wert wird stillschweigend auf den Standard zurueckgesetzt,
+    statt ihn an die API durchzureichen.
+    """
+    erlaubt = {kennung for kennung, _, _ in auswahl}
+    return modell if modell in erlaubt else standard
+
+
+def modell_dokument_pruefen(modell: str | None) -> str:
+    return _pruefen(modell, AUSWAHL_DOKUMENT, MODELL_DOKUMENT)
+
+
+def modell_strategie_pruefen(modell: str | None) -> str:
+    return _pruefen(modell, AUSWAHL_STRATEGIE, MODELL_STRATEGIE)
+
+
+# Im Gespraech zaehlt dasselbe wie in der Gesamtauswertung: mehrstufiges
+# Schlussfolgern ueber viele Belege. Deshalb dieselbe Auswahl.
+AUSWAHL_BERATUNG = AUSWAHL_STRATEGIE
+
+
+def modell_beratung_pruefen(modell: str | None) -> str:
+    return _pruefen(modell, AUSWAHL_BERATUNG, MODELL_BERATUNG)
+
+
+# Denktiefe des Gespraechs. Sie steuert, wie lange das Modell nachdenkt, bevor
+# es antwortet - und damit ganz unmittelbar, wie lange man wartet. Voreingestellt
+# ist die mittlere Stufe: spuerbar schneller als die Voreinstellung der API
+# ("high"), ohne dass es bei den Fragen dieses Werkzeugs auffiele.
+DENKTIEFE_BERATUNG = os.environ.get("STEUER_DENKTIEFE_BERATUNG", "medium")
+
+AUSWAHL_DENKTIEFE: tuple[tuple[str, str, str], ...] = (
+    (
+        "low",
+        "Schnell",
+        "Kurze Antwortzeit. Fuer Routine - Jahr nachtragen, Beleg suchen, "
+        "Betrag setzen. Das Modell schlaegt dabei weniger nach.",
+    ),
+    (
+        "medium",
+        "Zuegig",
+        "Die Voreinstellung. Fuer die allermeisten Fragen der richtige "
+        "Kompromiss aus Wartezeit und Gruendlichkeit.",
+    ),
+    (
+        "high",
+        "Gruendlich",
+        "Laengeres Nachdenken, entsprechend laengere Wartezeit. Fuer "
+        "Rechtsfragen, bei denen es auf die Abwaegung ankommt.",
+    ),
+)
+
+
+def denktiefe_pruefen(stufe: str | None) -> str:
+    erlaubt = {kennung for kennung, _, _ in AUSWAHL_DENKTIEFE}
+    return stufe if stufe in erlaubt else DENKTIEFE_BERATUNG
+
+
+MAX_VERSUCHE = 4
+WEB_SUCHE_WERKZEUG = {"type": "web_search_20250305", "name": "web_search", "max_uses": 12}
+
+
+class AnalyseFehler(RuntimeError):
+    pass
+
+
+class KeinSchluessel(AnalyseFehler):
+    pass
+
+
+def schluessel_vorhanden() -> bool:
+    return bool(os.environ.get("ANTHROPIC_API_KEY"))
+
+
+@dataclass
+class Analysedienst:
+    """Duenne Huelle um den Anthropic-Client mit Wiederholungslogik."""
+
+    api_key: str | None = None
+    modell_dokument: str = MODELL_DOKUMENT
+    modell_strategie: str = MODELL_STRATEGIE
+    modell_recht: str = MODELL_RECHT
+    modell_beratung: str = MODELL_BERATUNG
+    _client: Any = None
+
+    def __post_init__(self) -> None:
+        self.api_key = self.api_key or os.environ.get("ANTHROPIC_API_KEY")
+
+    @property
+    def client(self) -> Any:
+        if self._client is not None:
+            return self._client
+        if not self.api_key:
+            raise KeinSchluessel(
+                "Es ist kein ANTHROPIC_API_KEY gesetzt. Den Schluessel unter "
+                "https://console.anthropic.com/settings/keys erzeugen und als Umgebungsvariable "
+                "hinterlegen: export ANTHROPIC_API_KEY=sk-ant-..."
+            )
+        try:
+            from anthropic import Anthropic  # noqa: PLC0415
+        except ImportError as fehler:  # pragma: no cover
+            raise AnalyseFehler(
+                "Das Paket 'anthropic' fehlt. Installation: pip install anthropic"
+            ) from fehler
+        self._client = Anthropic(api_key=self.api_key)
+        return self._client
+
+    # -- interne Hilfen ------------------------------------------------------
+
+    def _mit_wiederholung(self, aufruf: Callable[[], Any]) -> Any:
+        letzter_fehler: Exception | None = None
+        for versuch in range(1, MAX_VERSUCHE + 1):
+            try:
+                return aufruf()
+            except Exception as fehler:  # noqa: BLE001 - SDK-Fehlertypen bewusst breit
+                name = type(fehler).__name__
+                voruebergehend = name in {
+                    "RateLimitError",
+                    "APIConnectionError",
+                    "APITimeoutError",
+                    "InternalServerError",
+                    "OverloadedError",
+                }
+                if not voruebergehend or versuch == MAX_VERSUCHE:
+                    raise
+                letzter_fehler = fehler
+                wartezeit = min(30.0, 2 ** versuch) + random.uniform(0, 1)
+                LOG.warning(
+                    "API-Aufruf fehlgeschlagen (%s), Versuch %s von %s, warte %.1fs",
+                    name, versuch, MAX_VERSUCHE, wartezeit,
+                )
+                time.sleep(wartezeit)
+        raise AnalyseFehler(str(letzter_fehler))
+
+    @staticmethod
+    def _werkzeugergebnis(antwort: Any, werkzeugname: str) -> dict[str, Any]:
+        for block in getattr(antwort, "content", []) or []:
+            if getattr(block, "type", "") == "tool_use" and getattr(block, "name", "") == werkzeugname:
+                return dict(getattr(block, "input", {}) or {})
+        text = " ".join(
+            getattr(b, "text", "") for b in getattr(antwort, "content", []) or []
+            if getattr(b, "type", "") == "text"
+        ).strip()
+        raise AnalyseFehler(
+            f"Das Modell hat das Werkzeug '{werkzeugname}' nicht aufgerufen."
+            + (f" Antwort: {text[:400]}" if text else "")
+        )
+
+    # -- Dokumentanalyse -----------------------------------------------------
+
+    def dokument_analysieren(
+        self,
+        pfad: Path,
+        medientyp: str,
+        regelwerk: Regelwerk,
+        profil: Profil,
+        zusatzhinweis: str = "",
+        ab_seite: int | None = None,
+        herkunft: str = "",
+        stammdaten=None,
+    ) -> Analyse:
+        inhalt = inhalt_aufbereiten(pfad, medientyp, ab_seite)
+
+        aufforderung = [
+            f"Dateiname des Scans: {pfad.name}",
+            f"Veranlagungszeitraum der Arbeitsmappe: {regelwerk.jahr}",
+        ]
+        if inhalt.seiten:
+            aufforderung.append(f"Seitenzahl: {inhalt.seiten}")
+        for hinweis in inhalt.hinweise:
+            aufforderung.append(f"Verarbeitungshinweis: {hinweis}")
+        if herkunft:
+            # Die Angabe stammt vom Mandanten und ist verlaesslicher als jede
+            # Ableitung aus dem Dokument selbst.
+            aufforderung.append(
+                f"Herkunft des Stapels laut Mandant: {herkunft}. Diese Angabe hat "
+                "Vorrang vor deinem Eindruck aus dem Dokument; weiche nur davon ab, "
+                "wenn das Dokument ihr eindeutig widerspricht, und sage dann warum."
+            )
+        if zusatzhinweis:
+            aufforderung.append(f"Zusatzinformation des Mandanten: {zusatzhinweis}")
+        aufforderung.append(
+            "Analysiere dieses Dokument und rufe genau einmal das Werkzeug "
+            "'dokument_analyse' auf."
+        )
+
+        def _senden(inhalt_bloecke: list[dict]) -> Any:
+            bloecke = list(inhalt_bloecke) + [{"type": "text", "text": "\n".join(aufforderung)}]
+            return self._mit_wiederholung(
+                lambda: self.client.messages.create(
+                    model=self.modell_dokument,
+                    max_tokens=4096,
+                    system=prompts.system_analyse(regelwerk, profil, stammdaten),
+                    tools=[prompts.WERKZEUG_ANALYSE],
+                    tool_choice={"type": "tool", "name": "dokument_analyse"},
+                    messages=[{"role": "user", "content": bloecke}],
+                )
+            )
+
+        try:
+            antwort = _senden(inhalt.bloecke)
+        except Exception as fehler:
+            # Ein von der API abgelehntes PDF ist meist nur strukturell
+            # fehlerhaft, nicht inhaltlich wertlos. Bevor der Beleg als Fehler
+            # liegenbleibt, wird die Datei neu aufgebaut und, wenn auch das
+            # scheitert, wenigstens ihr Text geschickt.
+            if "pdf" in str(fehler).lower() and "not valid" in str(fehler).lower():
+                antwort = None
+                repariert = inhalt_neu_aufbauen(pfad)
+                if repariert is not None:
+                    try:
+                        antwort = _senden(repariert.bloecke)
+                        inhalt.hinweise.append(
+                            "Die Datei war strukturell fehlerhaft und wurde vor der "
+                            "Analyse neu aufgebaut."
+                        )
+                    except Exception:  # noqa: BLE001
+                        antwort = None
+                if antwort is None:
+                    ersatz = notinhalt(pfad, "von der API als ungueltiges PDF abgelehnt")
+                    if ersatz is None:
+                        raise AnalyseFehler(
+                            f"{pfad.name} ist als PDF beschaedigt und enthaelt keine "
+                            "lesbare Textebene. Bitte den Beleg erneut einscannen oder "
+                            "als Bilddatei speichern."
+                        ) from fehler
+                    antwort = _senden(ersatz.bloecke)
+                    inhalt.hinweise.extend(ersatz.hinweise)
+            else:
+                raise _uebersetzt(fehler, pfad)
+
+
+        rohdaten = self._werkzeugergebnis(antwort, "dokument_analyse")
+        analyse = _analyse_aus_rohdaten(rohdaten)
+        analyse.modell = self.modell_dokument
+        if inhalt.gekuerzt:
+            analyse.hinweise.append(
+                "Das Dokument wurde fuer die Analyse gekuerzt; die hinteren Seiten wurden nicht geprueft."
+            )
+        for hinweis in inhalt.hinweise:
+            if hinweis not in analyse.hinweise:
+                analyse.hinweise.append(hinweis)
+        return analyse
+
+    # -- Gesamtauswertung ----------------------------------------------------
+
+    def gesamtauswertung(
+        self,
+        regelwerk: Regelwerk,
+        profil: Profil,
+        bestand: list[dict[str, Any]],
+        regelbefunde: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        bestand, weggelassen = _bestand_begrenzen(bestand)
+        vorwort = ""
+        if weggelassen:
+            vorwort = (
+                f"Hinweis: Die Mappe enthaelt {len(bestand) + weggelassen} Dokumente. "
+                f"Aufgefuehrt sind die {len(bestand)} steuerlich bedeutsamsten; "
+                f"{weggelassen} als nicht steuerrelevant oder nicht verwertbar eingestufte "
+                "Belege sind weggelassen. Beziehe dich in der Einschaetzung auf diesen Umstand.\n\n"
+            )
+        text = (
+            vorwort
+            + "Dokumentenbestand der Arbeitsmappe:\n"
+            + prompts.bestandsuebersicht(bestand)
+            + "\n\nBereits regelbasiert erkannte Luecken und Chancen:\n"
+            + prompts.bestandsuebersicht(regelbefunde)
+            + "\n\nWerte die Mappe aus und rufe genau einmal das Werkzeug 'gesamtauswertung' auf."
+        )
+        antwort = self._mit_wiederholung(
+            lambda: self.client.messages.create(
+                model=self.modell_strategie,
+                max_tokens=8192,
+                system=prompts.system_strategie(regelwerk, profil),
+                tools=[prompts.WERKZEUG_STRATEGIE],
+                tool_choice={"type": "tool", "name": "gesamtauswertung"},
+                messages=[{"role": "user", "content": text}],
+            )
+        )
+        return self._werkzeugergebnis(antwort, "gesamtauswertung")
+
+    # -- Beratungsgespraech --------------------------------------------------
+
+    def beratung(
+        self,
+        system: str,
+        werkzeuge: list[dict[str, Any]],
+        nachrichten: list[dict[str, Any]],
+        modell: str = "",
+        max_tokens: int = 16000,
+        denktiefe: str = "",
+    ) -> Any:
+        """Ein Zug im Gespraech mit dem Mandanten.
+
+        Bewusst ohne ``tool_choice``: das Modell soll selbst entscheiden, ob es
+        nachschlaegt oder einfach antwortet. Eine leere Werkzeugliste wird
+        weggelassen statt uebergeben - so laesst sich die letzte Runde erzwingen,
+        in der es zusammenfassen und nicht weitersuchen soll.
+
+        ``denktiefe`` ist die groesste Stellschraube fuer die Wartezeit. Ohne
+        Angabe denkt das Modell so lange nach, wie die API voreingestellt hat -
+        das ist die gruendlichste und langsamste Stufe.
+        """
+        # Der Systemprompt traegt den gesamten Bestand der Mappe und geht in
+        # jeder Werkzeugrunde erneut mit. Zwischengespeichert kostet er nur
+        # beim ersten Mal voll - bei acht Runden je Frage ist das der
+        # Unterschied zwischen brauchbar und unbezahlbar.
+        argumente: dict[str, Any] = {
+            "model": modell or self.modell_beratung,
+            "max_tokens": max_tokens,
+            "system": [
+                {"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}
+            ],
+            "messages": nachrichten,
+        }
+        if werkzeuge:
+            argumente["tools"] = werkzeuge
+        stufe = denktiefe_pruefen(denktiefe)
+        if stufe:
+            argumente["output_config"] = {"effort": stufe}
+        return self._mit_wiederholung(lambda: self.client.messages.create(**argumente))
+
+    # -- Rechtsupdate --------------------------------------------------------
+
+    def rechtsstand_recherchieren(self, jahr: int, bisherige_werte: dict[str, Any]) -> dict[str, Any]:
+        text = (
+            f"Ermittle den Rechtsstand fuer den Veranlagungszeitraum {jahr}.\n\n"
+            "Bisher hinterlegte Werte (Schluessel, Bezeichnung, Wert, Einheit):\n"
+            + prompts.bestandsuebersicht(
+                [
+                    {
+                        "schluessel": schluessel,
+                        "label": eintrag.get("label"),
+                        "wert": eintrag.get("wert"),
+                        "einheit": eintrag.get("einheit"),
+                    }
+                    for schluessel, eintrag in bisherige_werte.items()
+                    if isinstance(eintrag, dict)
+                ]
+            )
+            + "\n\nRecherchiere die amtlichen Werte und rufe danach genau einmal das Werkzeug "
+            "'rechtsstand' auf."
+        )
+        antwort = self._mit_wiederholung(
+            lambda: self.client.messages.create(
+                model=self.modell_recht,
+                max_tokens=8192,
+                system=prompts.system_rechtsupdate(jahr),
+                tools=[WEB_SUCHE_WERKZEUG, prompts.WERKZEUG_RECHTSUPDATE],
+                messages=[{"role": "user", "content": text}],
+            )
+        )
+        return self._werkzeugergebnis(antwort, "rechtsstand")
+
+
+# Hoechstens so viele Dokumente in die Gesamtauswertung geben. Bei sehr grossen
+# Mappen sprengt die vollstaendige Liste sonst die Kontextgrenze des Modells.
+MAX_BESTAND_GESAMTAUSWERTUNG = 300
+
+# Reihenfolge, in der Dokumente bei Platzmangel behalten werden.
+_EIGNUNG_GEWICHT = {"geeignet": 0, "bedingt_geeignet": 1, "unklar": 2, "ungeeignet": 3}
+
+
+def _bestand_begrenzen(bestand: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], int]:
+    """Kuerzt sehr grosse Bestaende auf die steuerlich bedeutsamsten Dokumente.
+
+    Behalten werden zuerst die verwertbaren Belege, danach die unklaren; als
+    nicht steuerrelevant eingestufte fallen zuerst heraus. Rueckgabe ist die
+    gekuerzte Liste und die Zahl der weggelassenen Eintraege.
+    """
+    if len(bestand) <= MAX_BESTAND_GESAMTAUSWERTUNG:
+        return bestand, 0
+
+    def gewicht(eintrag: dict[str, Any]) -> tuple[int, int, float]:
+        eignung = str(eintrag.get("eignung", "unklar"))
+        nicht_relevant = 1 if eintrag.get("kategorie") == "nicht_steuerrelevant" else 0
+        betrag = eintrag.get("betrag_abzugsfaehig") or eintrag.get("betrag_gesamt") or 0
+        try:
+            betrag = float(betrag)
+        except (TypeError, ValueError):
+            betrag = 0.0
+        # grosse Betraege zuerst, damit die wesentlichen Belege sicher dabei sind
+        return (nicht_relevant, _EIGNUNG_GEWICHT.get(eignung, 2), -betrag)
+
+    sortiert = sorted(bestand, key=gewicht)
+    behalten = sortiert[:MAX_BESTAND_GESAMTAUSWERTUNG]
+    return behalten, len(bestand) - len(behalten)
+
+
+def _uebersetzt(fehler: Exception, pfad: Path) -> Exception:
+    """Uebersetzt die haeufigsten API-Fehler in verstaendliche Meldungen.
+
+    Ein englischer Traceback bis zum Nutzer durchzureichen hilft niemandem,
+    der wissen will, was mit seinem Beleg zu tun ist.
+    """
+    meldung = str(fehler)
+    if "prompt is too long" in meldung:
+        return AnalyseFehler(
+            f"{pfad.name} ist zu umfangreich fuer eine einzelne Analyse. "
+            "Bitte die Datei in kleinere Teile aufteilen, am besten je Beleg "
+            "eine Datei, und erneut hochladen."
+        )
+    if "credit balance is too low" in meldung:
+        return AnalyseFehler(
+            "Das Guthaben des API-Kontos ist aufgebraucht. Unter "
+            "console.anthropic.com/settings/billing aufladen und erneut versuchen."
+        )
+    return fehler
+
+
+def _zahl(wert: Any) -> float | None:
+    if wert is None or wert == "":
+        return None
+    try:
+        return float(wert)
+    except (TypeError, ValueError):
+        return None
+
+
+def _betragsart(wert: Any) -> str:
+    text = str(wert or "").strip().lower()
+    return text if text in ("aufwand", "erstattung", "einnahme", "vertragswert", "saldo") else ""
+
+
+def _geschaeftsvorfall(wert: Any) -> str:
+    text = str(wert or "").strip().lower()
+    return text if text in (euer.EINNAHME, euer.AUSGABE, "kein_betrieblicher_vorgang") else ""
+
+
+def _analyse_aus_rohdaten(rohdaten: dict[str, Any]) -> Analyse:
+    """Uebersetzt die Werkzeugausgabe in das interne Modell, tolerant gegen Luecken."""
+    from . import taxonomy  # lokal, um Zirkelbezuege zu vermeiden
+
+    kategorie_id = str(rohdaten.get("kategorie_id") or "unklar")
+    if kategorie_id not in taxonomy.NACH_ID:
+        kategorie_id = "unklar"
+
+    positionen = []
+    for eintrag in rohdaten.get("positionen") or []:
+        if not isinstance(eintrag, dict):
+            continue
+        positionen.append(
+            Position(
+                bezeichnung=str(eintrag.get("bezeichnung", "")),
+                betrag=_zahl(eintrag.get("betrag")),
+                abzugsfaehig=eintrag.get("abzugsfaehig"),
+                hinweis=str(eintrag.get("hinweis", "")),
+            )
+        )
+
+    segmente: list[Segment] = []
+    for eintrag in rohdaten.get("segmente") or []:
+        if not isinstance(eintrag, dict):
+            continue
+        segmente.append(
+            Segment(
+                von_seite=int(eintrag.get("von_seite") or 1),
+                bis_seite=int(eintrag.get("bis_seite") or eintrag.get("von_seite") or 1),
+                beschreibung=str(eintrag.get("beschreibung", "")),
+                kategorie_id=str(eintrag.get("kategorie_id") or "unklar"),
+            )
+        )
+
+    steuerjahr = rohdaten.get("steuerjahr")
+    try:
+        steuerjahr = int(steuerjahr) if steuerjahr else None
+    except (TypeError, ValueError):
+        steuerjahr = None
+
+    vertrauen = _zahl(rohdaten.get("vertrauen")) or 0.0
+    vertrauen = min(1.0, max(0.0, vertrauen))
+
+    return Analyse(
+        kategorie_id=kategorie_id,
+        dokumenttyp=str(rohdaten.get("dokumenttyp", "")).strip(),
+        aussteller=str(rohdaten.get("aussteller", "")).strip(),
+        datum=(str(rohdaten.get("datum")).strip() or None) if rohdaten.get("datum") else None,
+        steuerjahr=steuerjahr,
+        betrag_gesamt=_zahl(rohdaten.get("betrag_gesamt")),
+        betrag_abzugsfaehig=_zahl(rohdaten.get("betrag_abzugsfaehig")),
+        waehrung=str(rohdaten.get("waehrung") or "EUR"),
+        eignung=str(rohdaten.get("eignung") or "unklar"),
+        eignung_begruendung=str(rohdaten.get("eignung_begruendung", "")).strip(),
+        vertrauen=vertrauen,
+        zusammenfassung=str(rohdaten.get("zusammenfassung", "")).strip(),
+        hinweise=textliste(rohdaten.get("hinweise")),
+        fehlende_nachweise=textliste(rohdaten.get("fehlende_nachweise")),
+        optimierungshinweise=textliste(rohdaten.get("optimierungshinweise")),
+        positionen=positionen,
+        enthaelt_mehrere_dokumente=bool(rohdaten.get("enthaelt_mehrere_dokumente")),
+        segmente=segmente,
+        zahlungsart=str(rohdaten.get("zahlungsart") or "unbekannt"),
+        rechnungsnummer=str(rohdaten.get("rechnungsnummer", "")).strip(),
+        betragsart=_betragsart(rohdaten.get("betragsart")),
+        version=ANALYSE_VERSION,
+        geschaeftsvorfall=_geschaeftsvorfall(rohdaten.get("geschaeftsvorfall")),
+        euer_posten=str(rohdaten.get("euer_posten") or "").strip()
+        if str(rohdaten.get("euer_posten") or "").strip() in euer.NACH_ID
+        else "",
+    )
+
+
+__all__ = [
+    "AUSWAHL_BERATUNG",
+    "AUSWAHL_DENKTIEFE",
+    "AUSWAHL_DOKUMENT",
+    "AUSWAHL_STRATEGIE",
+    "AnalyseFehler",
+    "Analysedienst",
+    "ExtraktionsFehler",
+    "KeinSchluessel",
+    "denktiefe_pruefen",
+    "modell_beratung_pruefen",
+    "modell_dokument_pruefen",
+    "modell_strategie_pruefen",
+    "schluessel_vorhanden",
+]

@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block titel %}Stammdaten{% endblock %}
+
+{% block inhalt %}
+<h1>Jahresuebergreifende Werte</h1>
+<p class="einleitung">
+  Manche Zahlen stehen in keinem einzelnen Beleg. Die Gebaeude-AfA etwa wird aus den
+  Vorjahren fortgeschrieben und steht nur in der eingereichten Anlage V, nicht im
+  Steuerbescheid. Was hier bestaetigt ist, gilt als bekannt und wird nicht mehr als
+  Luecke gemeldet.
+</p>
+
+{% if gespeichert %}<div class="banner erfolg">Stammdaten gespeichert.</div>{% endif %}
+{% if fehler %}<div class="banner fehler">
+  <strong>Nicht gespeichert.</strong>
+  <ul>{% for meldung in fehler %}<li>{{ meldung }}</li>{% endfor %}</ul>
+</div>{% endif %}
+
+<form method="post" class="formular">
+  <fieldset>
+    <legend>Werte und ihre Fundstelle</legend>
+    <p class="klein">
+      Leer lassen entfernt einen Wert. Die Fundstelle ist wichtig: Sie sagt dem
+      Steuerberater, worauf sich die Zahl stuetzt.
+    </p>
+    {% for vorlage in vorlagen %}
+    {% set eintrag = stammdaten.eintrag(vorlage.id) %}
+    <div class="stammwert">
+      <label>{{ vorlage.label }}{% if vorlage.einheit %} <span class="klein">in {{ vorlage.einheit }}</span>{% endif %}
+        <input type="text" name="wert_{{ vorlage.id }}"
+               value="{{ eintrag.wert if eintrag and eintrag.ist_gesetzt else '' }}">
+      </label>
+      <label>Fundstelle
+        <input type="text" name="quelle_{{ vorlage.id }}"
+               placeholder="z. B. ESt-Erklaerung 2023, Anlage V, Zeile 33"
+               value="{{ eintrag.quelle if eintrag else '' }}">
+      </label>
+      {% if vorlage.hinweis %}<small>{{ vorlage.hinweis }}</small>{% endif %}
+      {% if eintrag and eintrag.bestaetigt_am %}
+      <small class="bestaetigt">bestaetigt am {{ eintrag.bestaetigt_am }}</small>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </fieldset>
+
+  <button type="submit" class="knopf haupt">Stammdaten speichern</button>
+</form>
+
+<p class="klein">Datei: <code>{{ mappe.stammdaten_pfad }}</code></p>
+{% endblock %}

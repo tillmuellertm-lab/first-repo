@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block titel %}Rueckfragen{% endblock %}
+
+{% block inhalt %}
+<h1>Rueckfragen</h1>
+
+<p class="klein">
+  Diese Punkte brauchen kein Dokument, sondern eine Auskunft von Ihnen. Der
+  teuerste Beleg steht oben. Sie koennen in beliebiger Reihenfolge antworten,
+  einzelne auslassen und spaeter zurueckkommen &mdash; Ihre Antworten gehen in den
+  Bericht fuer den Steuerberater ein, direkt unter die Frage, die sie beantworten.
+</p>
+
+{% if gespeichert %}
+<div class="banner gut">{{ gespeichert }} Antworten gespeichert.</div>
+{% elif gespeichert == 0 %}
+<div class="banner">Nichts geaendert.</div>
+{% endif %}
+
+{% if not offen and not erledigt %}
+<section class="leer">
+  <h2>Keine offenen Rueckfragen</h2>
+  <p>
+    Entweder ist noch nichts analysiert, oder alle Fragen sind beantwortet.
+    Was sonst noch fehlt, steht unter <a href="{{ url_for('befunde') }}">Luecken &amp; Chancen</a>.
+  </p>
+</section>
+{% else %}
+
+<form method="post">
+  {% if offen %}
+  <h2>Offen &mdash; {{ offen | length }}</h2>
+  {% for eintrag in offen %}
+  <div class="frage">
+    <div class="frage-kopf">
+      <a href="{{ url_for('dokument', dokument_id=eintrag.dokument.id) }}">
+        {{ eintrag.dokument.analyse.dokumenttyp or eintrag.dokument.dateiname }}
+      </a>
+      {% if eintrag.dokument.analyse.aussteller %}
+      <span class="klein">{{ eintrag.dokument.analyse.aussteller }}</span>
+      {% endif %}
+      <span class="betrag">{{ eintrag.betrag | euro }}</span>
+    </div>
+    {% if eintrag.dokument.analyse.zusammenfassung %}
+    <p class="klein">{{ eintrag.dokument.analyse.zusammenfassung }}</p>
+    {% endif %}
+    <ul class="fragenliste">
+      {% for frage in eintrag.fragen %}<li>{{ frage }}</li>{% endfor %}
+    </ul>
+    <textarea name="notiz-{{ eintrag.dokument.id }}" rows="3"
+              placeholder="Ihre Antwort. Leer lassen, wenn Sie es noch nicht wissen."></textarea>
+  </div>
+  {% endfor %}
+  {% endif %}
+
+  {% if erledigt %}
+  <details class="gruppe"{% if not offen %} open{% endif %}>
+    <summary>
+      <span class="label">Bereits beantwortet</span>
+      <span class="anzahl">{{ erledigt | length }}</span>
+    </summary>
+    {% for eintrag in erledigt %}
+    <div class="frage beantwortet">
+      <div class="frage-kopf">
+        <a href="{{ url_for('dokument', dokument_id=eintrag.dokument.id) }}">
+          {{ eintrag.dokument.analyse.dokumenttyp or eintrag.dokument.dateiname }}
+        </a>
+        <span class="betrag">{{ eintrag.betrag | euro }}</span>
+      </div>
+      <ul class="fragenliste">
+        {% for frage in eintrag.fragen %}<li>{{ frage }}</li>{% endfor %}
+      </ul>
+      <textarea name="notiz-{{ eintrag.dokument.id }}" rows="3">{{ eintrag.dokument.notiz }}</textarea>
+      <p class="klein">Feld leeren und speichern loescht die Antwort.</p>
+    </div>
+    {% endfor %}
+  </details>
+  {% endif %}
+
+  <div class="knopfreihe haftend">
+    <button type="submit" class="knopf haupt">Antworten speichern</button>
+  </div>
+</form>
+{% endif %}
+{% endblock %}
