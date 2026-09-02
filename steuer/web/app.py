@@ -21,6 +21,7 @@ from typing import Any
 from .. import (
     berater,
     formular as formular_modul,
+    markdown,
     gaps,
     offen as offen_modul,
     organize,
@@ -308,8 +309,13 @@ def anwendung_bauen(mappe: Arbeitsmappe) -> Any:
         datei = berater.entwurf_pfad(mappe, name)
         if datei is None:
             abort(404)
+        text = datei.read_text(encoding="utf-8")
         return render_template(
-            "entwurf.html", **grunddaten(), name=datei.name, text=datei.read_text(encoding="utf-8")
+            "entwurf.html",
+            **grunddaten(),
+            name=datei.name,
+            text=text,
+            html=markdown.als_html(text),
         )
 
     @app.get("/gespraechsbild/<name>")
