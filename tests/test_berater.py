@@ -1132,3 +1132,57 @@ def test_pause_turn_beendet_den_zug_nicht(mappe, regelwerk):
     letzter = gespraech.nachrichten[-1]
     assert letzter["rolle"] == "assistant"
     assert letzter["inhalt"][0]["text"] == "Der Kurs lag bei 0,92."
+
+
+# ------------------------------------------------- Blaettern in Treffern ----
+#
+# "Bitte enger suchen" war eine Sackgasse: Wer den Bestand vollstaendig sichten
+# will, kann das nicht enger - und wer die gekuerzte Liste fuer vollstaendig
+# haelt, sagt dem Mandanten, ein vorhandener Beleg fehle. Genau das ist
+# passiert.
+
+def _viele_belege(tmp_path, anzahl):
+    from steuer.models import Analyse, Dokument
+    from steuer.workspace import Arbeitsmappe
+
+    mappe = Arbeitsmappe.anlegen(tmp_path / "viele", 2024)
+    mappe.dokumente = [
+        Dokument(
+            id=f"id{n:03d}",
+            dateiname=f"beleg{n:03d}.pdf",
+            sha256=str(n),
+            analyse=Analyse(
+                dokumenttyp="Kontoauszug",
+                aussteller="comdirect",
+                datum=f"2024-01-{(n % 28) + 1:02d}",
+                steuerjahr=2024,
+            ),
+        )
+        for n in range(anzahl)
+    ]
+    return mappe
+
+
+def test_grosse_treffermenge_nennt_den_weg_zum_rest(tmp_path):
+    mappe = _viele_belege(tmp_path, berater.MAX_TREFFER + 5)
+    text, _ = berater.werkzeug_ausfuehren("dokumente_suchen", {}, mappe, None)
+    assert "ab_treffer=" in text
+    assert "Bitte enger suchen" not in text
+
+
+def test_zweite_seite_zeigt_die_uebrigen(tmp_path):
+    anzahl = berater.MAX_TREFFER + 5
+    mappe = _viele_belege(tmp_path, anzahl)
+    text, _ = berater.werkzeug_ausfuehren(
+        "dokumente_suchen", {"ab_treffer": berater.MAX_TREFFER}, mappe, None
+    )
+    assert f"Nummer {berater.MAX_TREFFER + 1} bis {anzahl}" in text
+    assert "ab_treffer=" not in text  # es kommt nichts mehr
+
+
+def test_hinter_dem_ende_wird_die_vollstaendigkeit_gemeldet(tmp_path):
+    mappe = _viele_belege(tmp_path, 3)
+    text, _ = berater.werkzeug_ausfuehren(
+        "dokumente_suchen", {"ab_treffer": 99}, mappe, None
+    )
+    assert "vollstaendig gesichtet" in text

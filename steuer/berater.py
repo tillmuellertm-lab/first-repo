@@ -804,6 +804,17 @@ def werkzeuge() -> list[dict[str, Any]]:
                         "type": "boolean",
                         "description": "Nur Belege, zu denen der Mandant noch nichts gesagt hat.",
                     },
+                    "ab_treffer": {
+                        "type": "integer",
+                        "description": (
+                            "Zum Blaettern in grossen Treffermengen: Die Ausgabe "
+                            "beginnt bei diesem Treffer (0 = von vorn). Wird die "
+                            "Liste abgeschnitten, nennt das Ergebnis den Wert fuer "
+                            "den naechsten Aufruf. So laesst sich der Bestand "
+                            "vollstaendig sichten, statt die Suche enger zu machen "
+                            "und dabei etwas zu uebersehen."
+                        ),
+                    },
                 },
             },
         },
@@ -1175,11 +1186,34 @@ def _suchen(mappe: Arbeitsmappe, eingabe: dict[str, Any]) -> str:
     )
     if not treffer:
         return "Kein Beleg passt zu dieser Suche."
-    zeilen = [f"{len(treffer)} Treffer:"]
-    for dokument in treffer[:MAX_TREFFER]:
+
+    # Blaettern statt abschneiden: "Bitte enger suchen" war eine Sackgasse.
+    # Wer den Bestand vollstaendig sichten will, kann das nicht enger, und wer
+    # die Liste fuer vollstaendig haelt, sagt dem Mandanten, ein vorhandener
+    # Beleg fehle.
+    try:
+        ab = max(0, int(eingabe.get("ab_treffer") or 0))
+    except (TypeError, ValueError):
+        ab = 0
+    ausschnitt = treffer[ab : ab + MAX_TREFFER]
+    if not ausschnitt:
+        return (
+            f"Es gibt {len(treffer)} Treffer; ab Nummer {ab + 1} kommt nichts mehr. "
+            "Die Liste ist damit vollstaendig gesichtet."
+        )
+
+    kopf = f"{len(treffer)} Treffer"
+    if ab:
+        kopf += f", hier Nummer {ab + 1} bis {ab + len(ausschnitt)}"
+    zeilen = [kopf + ":"]
+    for dokument in ausschnitt:
         zeilen.append(_dokumentzeile(dokument))
-    if len(treffer) > MAX_TREFFER:
-        zeilen.append(f"... {len(treffer) - MAX_TREFFER} weitere. Bitte enger suchen.")
+    rest = len(treffer) - (ab + len(ausschnitt))
+    if rest > 0:
+        zeilen.append(
+            f"... {rest} weitere. Fuer die naechsten rufe dieselbe Suche erneut "
+            f"auf mit ab_treffer={ab + len(ausschnitt)}."
+        )
     return "\n".join(zeilen)
 
 
