@@ -554,3 +554,46 @@ def test_formularseite_haelt_auch_leere_mappe_aus(tmp_path):
         antwort = klient.get("/formular")
     assert antwort.status_code == 200
     assert "Noch nichts zuzuordnen" in antwort.get_data(as_text=True)
+
+
+# ------------------------------------------------- Port schon belegt --------
+#
+# Der haeufigste Fall nach einem Update: Der alte Server laeuft noch in einem
+# anderen Fenster, der neue kann den Port nicht belegen. Ein Traceback sieht
+# dann aus, als sei das Werkzeug kaputt - dabei fehlt nur ein Strg+C.
+
+def test_belegter_port_ergibt_eine_anleitung(tmp_path, monkeypatch):
+    import pytest as _pytest
+
+    from steuer.web import app as webapp
+    from steuer.workspace import Arbeitsmappe, ArbeitsmappenFehler
+
+    mappe = Arbeitsmappe.anlegen(tmp_path / "m", 2024)
+
+    class Flask:
+        def run(self, **_):
+            raise OSError(98, "Address already in use")
+
+    monkeypatch.setattr(webapp, "anwendung_bauen", lambda _: Flask())
+    with _pytest.raises(ArbeitsmappenFehler) as fehler:
+        webapp.starten(mappe, port=5173)
+    text = str(fehler.value)
+    assert "Strg+C" in text
+    assert "--port 5174" in text
+
+
+def test_andere_betriebssystemfehler_bleiben_unveraendert(tmp_path, monkeypatch):
+    import pytest as _pytest
+
+    from steuer.web import app as webapp
+    from steuer.workspace import Arbeitsmappe
+
+    mappe = Arbeitsmappe.anlegen(tmp_path / "m2", 2024)
+
+    class Flask:
+        def run(self, **_):
+            raise OSError(13, "Permission denied")
+
+    monkeypatch.setattr(webapp, "anwendung_bauen", lambda _: Flask())
+    with _pytest.raises(OSError, match="Permission denied"):
+        webapp.starten(mappe)

@@ -806,7 +806,26 @@ def starten(mappe: Arbeitsmappe, host: str = "127.0.0.1", port: int = 5173, debu
     print(f"Arbeitsmappe: {mappe.wurzel}  ·  Veranlagungszeitraum {mappe.jahr}")
     if not schluessel_vorhanden():
         print("Hinweis: ohne ANTHROPIC_API_KEY ist die Dokumentanalyse deaktiviert.")
-    app.run(host=host, port=port, debug=debug, use_reloader=False)
+    try:
+        app.run(host=host, port=port, debug=debug, use_reloader=False)
+    except OSError as fehler:
+        # Der haeufigste Fall nach einem Update: Der alte Server laeuft noch in
+        # einem anderen Fenster. Ein Programmabbruch mit Fehlermeldung sieht
+        # dann aus, als sei das Werkzeug kaputt - dabei fehlt nur ein Strg+C.
+        if getattr(fehler, "errno", None) not in (48, 98):
+            raise
+        raise ArbeitsmappenFehler(
+            f"Auf Port {port} laeuft bereits ein Server - vermutlich dieses "
+            "Werkzeug in einem anderen Konsolenfenster.\n\n"
+            "So geht es weiter:\n"
+            "  1. In das andere Fenster wechseln (dort stehen Zeilen mit "
+            "'INFO werkzeug') und Strg+C druecken.\n"
+            "  2. Hier noch einmal 'steuer web' aufrufen.\n"
+            "  3. Im Browser Strg+Umschalt+R.\n\n"
+            "Ein laufender Gespraechszug geht dabei nicht verloren; der "
+            "Verlauf wird nach jeder Runde gespeichert. Soll der alte Server "
+            f"weiterlaufen, hilft ein anderer Port: steuer web --port {port + 1}"
+        ) from fehler
 
 
 __all__ = [
