@@ -967,3 +967,84 @@ def test_lagebild_zeigt_manuelle_eingriffe(mappe, regelwerk):
     dokument.nicht_ansetzen = True
     dokument.nicht_ansetzen_grund = "doppelt erfasst"
     assert "bewusst nicht angesetzt: doppelt erfasst" in berater.lage_text(mappe, regelwerk)
+
+
+# ----------------------------------------------------- Betrag und Betragsart --
+#
+# Ein gesetzter Betrag allein bewegt keine Summe: Ob er zaehlt, entscheidet die
+# Betragsart. Bei den Zinsbescheinigungen zur Vermietung fiel das auf - rund
+# 7.900 EUR standen am Beleg und in keiner Summe. Seither sagt das Werkzeug es
+# selbst, statt es den Nutzer an einer zu niedrigen Summe erraten zu lassen.
+
+def _mappe_mit_beleg(tmp_path, betragsart):
+    from steuer.models import Analyse, Dokument
+    from steuer.workspace import Arbeitsmappe
+
+    mappe = Arbeitsmappe.anlegen(tmp_path / "m", 2024)
+    dokument = Dokument(
+        id="abc123",
+        dateiname="zinsen.pdf",
+        sha256="1",
+        analyse=Analyse(
+            dokumenttyp="Zinsbescheinigung",
+            zusammenfassung="Zinsbescheinigung 2024",
+            betragsart=betragsart,
+        ),
+    )
+    mappe.dokumente = [dokument]
+    return mappe, dokument
+
+
+def test_betrag_ohne_passende_betragsart_wird_als_wirkungslos_gemeldet(tmp_path):
+    from steuer import berater
+
+    mappe, _ = _mappe_mit_beleg(tmp_path, "saldo")
+    meldung = berater.werkzeug_ausfuehren(
+        "betrag_setzen",
+        {"dokument_id": "abc123", "betrag": 6483.31, "begruendung": "laut Bescheinigung"},
+        mappe,
+        None,
+    )[0]
+    assert "KEINE Summe" in meldung
+    assert "saldo" in meldung
+
+
+def test_betragsart_laesst_sich_mitsetzen(tmp_path):
+    from steuer import berater
+    from steuer.models import zaehlt_als_aufwand
+
+    mappe, dokument = _mappe_mit_beleg(tmp_path, "saldo")
+    meldung = berater.werkzeug_ausfuehren(
+        "betrag_setzen",
+        {
+            "dokument_id": "abc123",
+            "betrag": 6483.31,
+            "betragsart": "aufwand",
+            "begruendung": "Schuldzinsen Vermietung",
+        },
+        mappe,
+        None,
+    )[0]
+    assert zaehlt_als_aufwand(dokument.analyse)
+    assert dokument.wirksamer_betrag == 6483.31
+    assert "Aufwand" in meldung
+
+
+def test_unbekannte_betragsart_wird_abgewiesen(tmp_path):
+    import pytest as _pytest
+
+    from steuer import berater
+
+    mappe, _ = _mappe_mit_beleg(tmp_path, "saldo")
+    with _pytest.raises(berater.BeratungsFehler):
+        berater.werkzeug_ausfuehren(
+            "betrag_setzen",
+            {
+                "dokument_id": "abc123",
+                "betrag": 1.0,
+                "betragsart": "werbungskosten",
+                "begruendung": "x",
+            },
+            mappe,
+            None,
+        )

@@ -28,7 +28,7 @@ from typing import Any, Callable
 from . import gaps, offen as offen_modul, stammdaten as stammdaten_modul, taxonomy
 from .extract import inhalt_aufbereiten
 from .formatierung import euro
-from .models import EIGNUNG_LABEL, Dokument
+from .models import EIGNUNG_LABEL, Dokument, ist_erstattung, zaehlt_als_aufwand
 from .rules import Regelwerk
 from .workspace import Arbeitsmappe, atomar_schreiben, sichere_bezeichnung
 
@@ -61,6 +61,12 @@ MAX_UEBRIGE_ZEILEN = 400
 # brach das Modell mitten im Werkzeugaufruf ab: der Entwurf kam leer an und die
 # angebrochene Antwort hinterliess einen leeren Textblock im Verlauf.
 MAX_ANTWORT_TOKEN = 16000
+# Vergleiche models.Analyse.betragsart. Nur "aufwand" und "erstattung" bewegen
+# eine Summe; die uebrigen Arten bezeichnen Zahlen, die auf einem Beleg stehen,
+# ohne Aufwand zu sein - eine Darlehenssumme, ein Kontostand.
+BETRAGSARTEN = frozenset(
+    {"aufwand", "erstattung", "einnahme", "vertragswert", "saldo"}
+)
 
 
 class BeratungsFehler(RuntimeError):
@@ -969,6 +975,18 @@ def werkzeuge() -> list[dict[str, Any]]:
                         "type": "number",
                         "description": "Abzugsfaehiger Betrag in Euro.",
                     },
+                    "betragsart": {
+                        "type": "string",
+                        "enum": ["aufwand", "erstattung", "einnahme", "vertragswert", "saldo"],
+                        "description": (
+                            "Was der Betrag bedeutet. Nur 'aufwand' geht in eine "
+                            "Werbungskosten- oder Sonderausgabensumme ein, 'erstattung' "
+                            "mindert sie. Traegt der Beleg eine andere Art - etwa "
+                            "'saldo' bei einer Bescheinigung -, bleibt auch ein gesetzter "
+                            "Betrag ohne Wirkung auf die Summe. Hier angeben, wenn die "
+                            "bisherige Art nicht stimmt."
+                        ),
+                    },
                     "begruendung": {"type": "string"},
                 },
                 "required": ["dokument_id", "betrag", "begruendung"],
@@ -1280,19 +1298,45 @@ def _betrag_setzen(mappe: Arbeitsmappe, eingabe: dict[str, Any]) -> str:
     if not str(eingabe.get("begruendung") or "").strip():
         raise BeratungsFehler("Ohne Begruendung wird kein Betrag gesetzt.")
 
+    art = str(eingabe.get("betragsart") or "").strip().lower()
+    if art and art not in BETRAGSARTEN:
+        raise BeratungsFehler(
+            f"'{art}' ist keine Betragsart. Erlaubt: {', '.join(sorted(BETRAGSARTEN))}."
+        )
+
     vorher = dokument.wirksamer_betrag
     fremd = dokument.fremdwaehrung
     dokument.manueller_betrag = betrag
+    if art and dokument.analyse:
+        dokument.analyse.betragsart = art
     mappe.speichern()
 
     meldung = f"Beleg {dokument.id}: abzugsfaehiger Betrag jetzt {euro(betrag)}."
     if fremd:
-        alt = dokument.analyse.betrag_abzugsfaehig or dokument.analyse.betrag_gesamt
-        meldung += f" Er lautete auf {alt} {fremd} und ging bisher in keine Summe ein."
+        roh = dokument.analyse.betrag_abzugsfaehig or dokument.analyse.betrag_gesamt
+        meldung += f" Er lautete auf {roh} {fremd} und ging bisher in keine Summe ein."
     elif vorher is None:
         meldung += " Bisher stand kein Betrag darin; der Beleg zaehlte mit 0 EUR."
     elif vorher != betrag:
         meldung += f" Die Analyse hatte {euro(vorher)} ermittelt."
+
+    # Der Betrag allein bewegt keine Summe. Ob er zaehlt, entscheidet die
+    # Betragsart - und wenn sie es nicht tut, muss das hier stehen und nicht
+    # erst auffallen, wenn die Summe unerklaerlich zu niedrig bleibt.
+    if zaehlt_als_aufwand(dokument.analyse):
+        meldung += " Er geht als Aufwand in die Summen ein."
+    elif ist_erstattung(dokument.analyse):
+        meldung += " Er mindert als Erstattung die Summe seiner Kategorie."
+    else:
+        gegenwaertig = (
+            dokument.analyse.betragsart if dokument.analyse else ""
+        ) or "nicht gesetzt"
+        meldung += (
+            f" ACHTUNG: Er geht in KEINE Summe ein, weil die Betragsart "
+            f"'{gegenwaertig}' lautet. Soll er zaehlen, rufe betrag_setzen noch "
+            "einmal mit betragsart='aufwand' auf - und sag dem Mandanten, dass "
+            "der Betrag bis dahin nirgends mitgerechnet wird."
+        )
     return meldung + " Sag dem Mandanten, was sich dadurch in den Summen aendert."
 
 
