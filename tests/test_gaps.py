@@ -667,3 +667,67 @@ def test_verschiedene_rechnungsnummern_sind_keine_dublette():
     erste.analyse.rechnungsnummer = "325/2024D"
     zweite.analyse.rechnungsnummer = "326/2024D"
     assert gaps.dubletten_gruppen([erste, zweite]) == []
+
+
+# ------------------------------- Fahrtkosten und Auswaertstaetigkeit ---------
+#
+# Die Kategorie "Fahrten und Reisekosten" fasst den Arbeitsweg und die
+# Auswaertstaetigkeit zusammen - so ist sie definiert. Die Warnung vor einem
+# doppelten Ansatz neben der Entfernungspauschale traf aber jeden Beleg darin,
+# auch den Eigenbeleg ueber Verpflegungspauschalen. Der konkurriert mit der
+# Entfernungspauschale nicht: § 9 Abs. 4a EStG ist eine eigene Vorschrift.
+# Eine Warnung, die bei jedem Durchgang unberechtigt erscheint, wird
+# irgendwann uebersehen - auch dann, wenn sie einmal zutrifft.
+
+def _fahrtenbeleg(dokumenttyp, zusammenfassung, betrag=201.60):
+    from steuer.models import Analyse, Dokument
+
+    return Dokument(
+        id="beleg1",
+        dateiname="beleg.pdf",
+        sha256="1",
+        analyse=Analyse(
+            kategorie_id="werbungskosten_fahrten",
+            dokumenttyp=dokumenttyp,
+            zusammenfassung=zusammenfassung,
+            datum="2024-06-01",
+            steuerjahr=2024,
+            betrag_gesamt=betrag,
+            betragsart="aufwand",
+        ),
+    )
+
+
+def _warnungen(dokumente):
+    from steuer import gaps
+    from steuer.models import Profil
+
+    profil = Profil(veranlagungsjahr=2024, merkmale=["angestellt", "pendler"])
+    return [
+        b
+        for b in gaps._fahrzeugkosten_pruefen(dokumente, profil)
+        if b.id == "fahrzeugkosten_neben_entfernungspauschale"
+    ]
+
+
+def test_verpflegungsbeleg_loest_die_warnung_nicht_aus():
+    beleg = _fahrtenbeleg(
+        "Eigenbeleg", "Verpflegungsmehraufwand bei beruflicher Auswaertstaetigkeit 2024"
+    )
+    assert _warnungen([beleg]) == []
+
+
+def test_echte_fahrzeugkosten_warnen_weiterhin():
+    beleg = _fahrtenbeleg("Kfz-Versicherung", "Jahresbeitrag fuer den privaten Pkw", 269.19)
+    warnungen = _warnungen([beleg])
+    assert len(warnungen) == 1
+    assert "beleg1" in warnungen[0].betroffene_dokumente
+
+
+def test_gemischter_bestand_meldet_nur_die_fahrzeugkosten():
+    verpflegung = _fahrtenbeleg("Eigenbeleg", "Verpflegungspauschalen Dienstreisen")
+    fahrzeug = _fahrtenbeleg("Kfz-Versicherung", "Jahresbeitrag privater Pkw", 269.19)
+    fahrzeug.id = "beleg2"
+    warnungen = _warnungen([verpflegung, fahrzeug])
+    assert len(warnungen) == 1
+    assert warnungen[0].betroffene_dokumente == ["beleg2"]

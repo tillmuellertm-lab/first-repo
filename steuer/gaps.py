@@ -9,6 +9,7 @@ findet.
 from __future__ import annotations
 
 import datetime as _dt
+import re
 from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Any, Iterable
@@ -817,6 +818,38 @@ def _kinderbetreuung_pruefen(
     ]
 
 
+# Was in der Kategorie "Fahrten und Reisekosten" liegt, aber mit dem Weg zur
+# ersten Taetigkeitsstaette nichts zu tun hat. Die Entfernungspauschale gilt
+# nur diesen Weg ab (§ 9 Abs. 2 Satz 1 EStG); Verpflegungspauschalen bei
+# Auswaertstaetigkeit folgen einer eigenen Vorschrift (§ 9 Abs. 4a EStG) und
+# koennen daher nie doppelt sein.
+_AUSWAERTSTAETIGKEIT = re.compile(
+    r"verpflegungsmehraufwand|verpflegungspauschal|auswaertstaetigkeit|"
+    r"auswaertigen taetigkeit|dienstreise|auswaertsspiel|uebernachtungskosten",
+    re.IGNORECASE,
+)
+
+
+def _gehoert_zur_auswaertstaetigkeit(dokument: Dokument) -> bool:
+    """Ob ein Beleg der Kategorie 'Fahrten' gar keine Fahrtkosten betrifft.
+
+    Die Kategorie fasst den Arbeitsweg und die Auswaertstaetigkeit zusammen -
+    so ist sie definiert, und das ist richtig. Die Warnung vor doppeltem Ansatz
+    darf deshalb nicht jeden Beleg darin treffen: Ein Eigenbeleg ueber
+    Verpflegungspauschalen konkurriert mit der Entfernungspauschale nicht,
+    und eine Warnung, die bei jedem Durchgang unberechtigt erscheint, wird
+    irgendwann uebersehen - auch dann, wenn sie einmal zutrifft.
+    """
+    analyse = dokument.analyse
+    if analyse is None:
+        return False
+    text = " ".join(
+        str(t or "")
+        for t in (analyse.dokumenttyp, analyse.zusammenfassung, dokument.dateiname)
+    )
+    return bool(_AUSWAERTSTAETIGKEIT.search(text))
+
+
 def _fahrzeugkosten_pruefen(dokumente: list[Dokument], profil: Profil) -> list[Befund]:
     """Warnt, wenn Fahrzeugkosten neben der Entfernungspauschale stehen.
 
@@ -835,6 +868,7 @@ def _fahrzeugkosten_pruefen(dokumente: list[Dokument], profil: Profil) -> list[B
         if d.wirksame_kategorie == "werbungskosten_fahrten"
         and zaehlt_als_aufwand(d.analyse)
         and (d.analyse.betrag_abzugsfaehig or d.analyse.betrag_gesamt)
+        and not _gehoert_zur_auswaertstaetigkeit(d)
     ]
     if not betroffen:
         return []
