@@ -1048,3 +1048,87 @@ def test_unbekannte_betragsart_wird_abgewiesen(tmp_path):
             mappe,
             None,
         )
+
+
+# ------------------------------------------- Abgebrochene Internetsuche ------
+#
+# Der Fall aus der Praxis: Das Modell startete eine Websuche, der Zug endete
+# mit stop_reason "pause_turn", und der Aufruf blieb ohne Ergebnis im Verlauf
+# stehen. Danach scheiterte JEDE weitere Frage an
+# "`web_search` tool use ... without a corresponding `web_search_tool_result`".
+# Das Gespraech war dauerhaft unbrauchbar, obwohl nichts kaputt war.
+
+def _gespraech_mit_verwaister_suche():
+    from steuer.berater import Gespraech
+
+    gespraech = Gespraech()
+    gespraech.anhaengen("user", [{"type": "text", "text": "Wie ist der Kurs?"}])
+    gespraech.anhaengen(
+        "assistant",
+        [
+            {"type": "text", "text": "Ich sehe nach."},
+            {"type": "server_tool_use", "id": "srvtoolu_1", "name": "web_search", "input": {}},
+        ],
+    )
+    gespraech.anhaengen("user", [{"type": "text", "text": "Und weiter?"}])
+    return gespraech
+
+
+def test_verwaiste_websuche_faellt_aus_dem_verlauf():
+    nachrichten = _gespraech_mit_verwaister_suche().fuer_api()
+    bloecke = [b for n in nachrichten for b in n["content"]]
+    assert not [b for b in bloecke if b.get("type") == "server_tool_use"]
+    # Der Text der Antwort bleibt erhalten - nur der unfertige Aufruf geht.
+    assert any(b.get("text") == "Ich sehe nach." for b in bloecke)
+
+
+def test_vollstaendige_websuche_bleibt_erhalten():
+    from steuer.berater import Gespraech
+
+    gespraech = Gespraech()
+    gespraech.anhaengen("user", [{"type": "text", "text": "Kurs?"}])
+    gespraech.anhaengen(
+        "assistant",
+        [
+            {"type": "server_tool_use", "id": "srvtoolu_1", "name": "web_search", "input": {}},
+            {"type": "web_search_tool_result", "tool_use_id": "srvtoolu_1", "content": []},
+        ],
+    )
+    gespraech.anhaengen("user", [{"type": "text", "text": "Danke."}])
+    bloecke = [b for n in gespraech.fuer_api() for b in n["content"]]
+    assert any(b.get("type") == "server_tool_use" for b in bloecke)
+    assert any(b.get("type") == "web_search_tool_result" for b in bloecke)
+
+
+def test_letzte_nachricht_bleibt_unangetastet():
+    """Bei pause_turn muss der unfertige Aufruf zurueckgehen, sonst bricht er ab."""
+    from steuer.berater import Gespraech
+
+    gespraech = Gespraech()
+    gespraech.anhaengen("user", [{"type": "text", "text": "Kurs?"}])
+    gespraech.anhaengen(
+        "assistant",
+        [{"type": "server_tool_use", "id": "srvtoolu_9", "name": "web_search", "input": {}}],
+    )
+    bloecke = [b for n in gespraech.fuer_api() for b in n["content"]]
+    assert any(b.get("id") == "srvtoolu_9" for b in bloecke)
+
+
+def test_pause_turn_beendet_den_zug_nicht(mappe, regelwerk):
+    """Die Suche wird fortgesetzt, statt das Bruchstueck fuer fertig zu halten."""
+    from steuer import berater
+
+    pausiert = Antwort(
+        [{"type": "server_tool_use", "id": "srvtoolu_2", "name": "web_search", "input": {}}],
+        stop_reason="pause_turn",
+    )
+    fertig = Antwort([{"type": "text", "text": "Der Kurs lag bei 0,92."}])
+    dienst = Dienst(pausiert, fertig)
+
+    gespraech = berater.nachricht_senden(
+        mappe, berater.Gespraech(), "Wie war der Kurs?", dienst, regelwerk
+    )
+    assert len(dienst.aufrufe) == 2
+    letzter = gespraech.nachrichten[-1]
+    assert letzter["rolle"] == "assistant"
+    assert letzter["inhalt"][0]["text"] == "Der Kurs lag bei 0,92."

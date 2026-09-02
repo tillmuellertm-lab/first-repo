@@ -122,8 +122,10 @@ class Gespraech:
             gewaehlt = gewaehlt[1:]
 
         fertig: list[dict[str, Any]] = []
-        for nachricht in gewaehlt:
-            inhalt = _fuer_api_bloecke(nachricht["inhalt"], mappe)
+        for stelle, nachricht in enumerate(gewaehlt):
+            inhalt = _fuer_api_bloecke(
+                nachricht["inhalt"], mappe, unangetastet=stelle == len(gewaehlt) - 1
+            )
             if not inhalt:
                 # Eine Nachricht ohne Inhalt weist die API zurueck. Uebrig
                 # bleibt sie nur, wenn sie ausschliesslich aus leerem Text
@@ -227,19 +229,61 @@ def bildpfad(mappe: Arbeitsmappe, name: str) -> Path | None:
     return ziel
 
 
+# Ergebnisbloecke der serverseitigen Werkzeuge. Sie stehen in derselben
+# Antwort wie ihr Aufruf; fehlt das Ergebnis, weist die API die ganze
+# Unterhaltung zurueck - dauerhaft, denn der Verlauf geht jedes Mal mit.
+SERVERERGEBNISSE = frozenset(
+    {
+        "web_search_tool_result",
+        "web_fetch_tool_result",
+        "code_execution_tool_result",
+        "bash_code_execution_tool_result",
+    }
+)
+
+
+def _verwaiste_serverwerkzeuge(inhalt: list[dict[str, Any]]) -> set[str]:
+    """Kennungen, bei denen Aufruf und Ergebnis nicht zueinander finden.
+
+    Bricht eine Antwort mitten in einer Internetsuche ab - an der Token-Grenze
+    oder weil die Suche noch lief -, bleibt der Aufruf ohne Ergebnis im
+    Verlauf stehen. Jede spaetere Frage scheitert dann an
+    "`web_search` tool use ... was found without a corresponding
+    `web_search_tool_result` block". Das Gespraech ist vergiftet, ohne dass
+    etwas kaputt waere.
+    """
+    aufrufe = {
+        str(b.get("id"))
+        for b in inhalt
+        if isinstance(b, dict) and b.get("type") == "server_tool_use" and b.get("id")
+    }
+    ergebnisse = {
+        str(b.get("tool_use_id"))
+        for b in inhalt
+        if isinstance(b, dict) and b.get("type") in SERVERERGEBNISSE and b.get("tool_use_id")
+    }
+    return (aufrufe - ergebnisse) | (ergebnisse - aufrufe)
+
+
 def _fuer_api_bloecke(
-    inhalt: list[dict[str, Any]], mappe: Arbeitsmappe | None
+    inhalt: list[dict[str, Any]], mappe: Arbeitsmappe | None, unangetastet: bool = False
 ) -> list[dict[str, Any]]:
     """Bringt gespeicherte Bloecke in die Form, die die API annimmt.
 
-    Zwei Dinge passieren hier. Bildverweise werden durch die Bilddaten ersetzt.
-    Und leere Textbloecke fallen heraus: Die API weist eine Nachricht mit einem
+    Drei Dinge passieren hier. Bildverweise werden durch die Bilddaten ersetzt.
+    Leere Textbloecke fallen heraus: Die API weist eine Nachricht mit einem
     leeren Textblock ab ("text content blocks must be non-empty"), und weil der
     ganze Verlauf bei jedem Zug erneut mitgeht, macht ein einziger solcher Block
-    das Gespraech dauerhaft unbrauchbar. Sie entstehen, wenn eine Antwort an der
-    Token-Grenze abgeschnitten wird. Hier greift die Reparatur auch rueckwirkend,
-    fuer Verlaeufe, die schon einen solchen Block enthalten.
+    das Gespraech dauerhaft unbrauchbar. Und ein Aufruf eines serverseitigen
+    Werkzeugs ohne sein Ergebnis faellt ebenfalls heraus - derselbe Fehlertyp,
+    dieselbe Wirkung. Beide Reparaturen greifen rueckwirkend, fuer Verlaeufe,
+    die einen solchen Block schon enthalten.
+
+    ``unangetastet`` schuetzt die letzte Nachricht: Haelt der Server mitten in
+    einer Suche an (``pause_turn``), muss genau dieser unfertige Aufruf
+    unveraendert zurueckgehen, damit er zu Ende gefuehrt werden kann.
     """
+    verwaist = set() if unangetastet else _verwaiste_serverwerkzeuge(inhalt)
     ergebnis: list[dict[str, Any]] = []
     for block in inhalt:
         if not isinstance(block, dict):
@@ -249,6 +293,11 @@ def _fuer_api_bloecke(
             continue
         if art == "hinweis":
             # Nur fuer die Anzeige gedacht, nicht fuer das Modell.
+            continue
+        if verwaist and (
+            (art == "server_tool_use" and str(block.get("id")) in verwaist)
+            or (art in SERVERERGEBNISSE and str(block.get("tool_use_id")) in verwaist)
+        ):
             continue
         if art != "bild_verweis":
             ergebnis.append(block)
@@ -1754,6 +1803,15 @@ def nachricht_senden(
         gespraech.anhaengen("assistant", bloecke)
         if sichern:
             sichern(gespraech)
+
+        # Haelt der Server mitten in einer Internetsuche an, ist die Antwort
+        # nicht fertig, sondern unterbrochen: Der Aufruf steht da, sein
+        # Ergebnis noch nicht. Wer hier abbricht, haelt das Bruchstueck fuer
+        # eine Antwort und hinterlaesst einen verwaisten Aufruf im Verlauf,
+        # an dem jede spaetere Frage scheitert. Also weiterlaufen lassen -
+        # ohne neue Nachricht, die Fortsetzung ist die Antwort selbst.
+        if getattr(antwort, "stop_reason", "") == "pause_turn":
+            continue
 
         aufrufe = [b for b in bloecke if b.get("type") == "tool_use"]
         if not aufrufe:
