@@ -1186,3 +1186,54 @@ def test_hinter_dem_ende_wird_die_vollstaendigkeit_gemeldet(tmp_path):
         "dokumente_suchen", {"ab_treffer": 99}, mappe, None
     )
     assert "vollstaendig gesichtet" in text
+
+
+# ----------------------------------------------- Aufnahmedatum als Filter ---
+#
+# Nach einer Uebergabe an den Steuerberater lautet die Frage nicht "was liegt
+# in der Mappe", sondern "was kam seither dazu" - er hat den Stand von damals.
+# Ohne Filter nach dem Aufnahmedatum liess sich das im Gespraech nicht sagen.
+
+def _mappe_mit_aufnahmedaten(tmp_path):
+    from steuer.models import Analyse, Dokument
+    from steuer.workspace import Arbeitsmappe
+
+    mappe = Arbeitsmappe.anlegen(tmp_path / "zeit", 2024)
+    for kennung, tag in (("alt1", "2026-09-19"), ("alt2", "2026-09-20"), ("neu1", "2026-10-05")):
+        mappe.dokumente.append(
+            Dokument(
+                id=kennung,
+                dateiname=f"{kennung}.pdf",
+                sha256=kennung,
+                hinzugefuegt_am=tag,
+                analyse=Analyse(dokumenttyp="Rechnung", aussteller=kennung, steuerjahr=2024),
+            )
+        )
+    return mappe
+
+
+def test_aufgenommen_ab_zeigt_nur_juengere_belege(tmp_path):
+    mappe = _mappe_mit_aufnahmedaten(tmp_path)
+    text, _ = berater.werkzeug_ausfuehren(
+        "dokumente_suchen", {"aufgenommen_ab": "2026-09-21"}, mappe, None
+    )
+    assert "neu1" in text
+    assert "alt1" not in text and "alt2" not in text
+    assert "aufgenommen 2026-10-05" in text
+
+
+def test_aufgenommen_ab_schliesst_den_stichtag_ein(tmp_path):
+    mappe = _mappe_mit_aufnahmedaten(tmp_path)
+    text, _ = berater.werkzeug_ausfuehren(
+        "dokumente_suchen", {"aufgenommen_ab": "2026-09-20"}, mappe, None
+    )
+    assert "alt2" in text and "neu1" in text
+    assert "alt1" not in text
+
+
+def test_falsches_datumsformat_wird_abgewiesen_statt_leer_zu_liefern(tmp_path):
+    mappe = _mappe_mit_aufnahmedaten(tmp_path)
+    with pytest.raises(berater.BeratungsFehler, match="JJJJ-MM-TT"):
+        berater.werkzeug_ausfuehren(
+            "dokumente_suchen", {"aufgenommen_ab": "20.09.2026"}, mappe, None
+        )

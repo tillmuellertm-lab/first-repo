@@ -20,6 +20,7 @@ import datetime as _dt
 import hashlib as _hashlib
 import json
 import logging
+import re
 import time as _zeit
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -64,6 +65,7 @@ MAX_ANTWORT_TOKEN = 16000
 # Vergleiche models.Analyse.betragsart. Nur "aufwand" und "erstattung" bewegen
 # eine Summe; die uebrigen Arten bezeichnen Zahlen, die auf einem Beleg stehen,
 # ohne Aufwand zu sein - eine Darlehenssumme, ein Kontostand.
+_ISO_DATUM = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 BETRAGSARTEN = frozenset(
     {"aufwand", "erstattung", "einnahme", "vertragswert", "saldo"}
 )
@@ -804,6 +806,16 @@ def werkzeuge() -> list[dict[str, Any]]:
                         "type": "boolean",
                         "description": "Nur Belege, zu denen der Mandant noch nichts gesagt hat.",
                     },
+                    "aufgenommen_ab": {
+                        "type": "string",
+                        "description": (
+                            "Nur Belege, die an oder nach diesem Tag in die Mappe "
+                            "aufgenommen wurden (JJJJ-MM-TT). Beantwortet die Frage, "
+                            "was seit einer Uebergabe dazugekommen ist - der "
+                            "Steuerberater hat den Stand von damals, nicht den von "
+                            "heute. Im Ergebnis steht das Aufnahmedatum je Beleg voran."
+                        ),
+                    },
                     "ab_treffer": {
                         "type": "integer",
                         "description": (
@@ -1158,6 +1170,15 @@ def _passt(dokument: Dokument, eingabe: dict[str, Any]) -> bool:
         return False
     if eingabe.get("nur_ohne_notiz") and dokument.notiz.strip():
         return False
+    ab = str(eingabe.get("aufgenommen_ab") or "").strip()
+    if ab:
+        if not _ISO_DATUM.match(ab):
+            raise BeratungsFehler(
+                f"'{ab}' ist kein Datum im Format JJJJ-MM-TT. Ein falsch geschriebenes "
+                "Datum wuerde die Liste stillschweigend leeren."
+            )
+        if (dokument.hinzugefuegt_am or "") < ab:
+            return False
 
     begriff = str(eingabe.get("suchbegriff") or "").strip().lower()
     if not begriff:
@@ -1206,8 +1227,12 @@ def _suchen(mappe: Arbeitsmappe, eingabe: dict[str, Any]) -> str:
     if ab:
         kopf += f", hier Nummer {ab + 1} bis {ab + len(ausschnitt)}"
     zeilen = [kopf + ":"]
+    mit_datum = bool(str(eingabe.get("aufgenommen_ab") or "").strip())
     for dokument in ausschnitt:
-        zeilen.append(_dokumentzeile(dokument))
+        zeile = _dokumentzeile(dokument)
+        if mit_datum:
+            zeile = f"aufgenommen {dokument.hinzugefuegt_am or '?'} | {zeile}"
+        zeilen.append(zeile)
     rest = len(treffer) - (ab + len(ausschnitt))
     if rest > 0:
         zeilen.append(
