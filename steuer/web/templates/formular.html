@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+{% block titel %}Formularzuordnung{% endblock %}
+
+{% block inhalt %}
+<h1>Wo die Betraege hingehoeren</h1>
+
+<p class="klein">
+  Diese Seite ordnet jede Kategorie ihrem Abschnitt in der Steuererklaerung zu.
+  Aus &bdquo;Werbungskosten 12.920,58 EUR&ldquo; wird damit eine Liste, die sich
+  Feld fuer Feld abarbeiten laesst &mdash; in ELSTER, in einer Steuersoftware
+  oder als Vorlage fuer den Steuerberater.
+</p>
+
+{% if not geprueft %}
+<div class="banner warnung">
+  <strong>Zeilennummern sind nicht amtlich geprueft.</strong> Hinterlegt sind die
+  Abschnittsbezeichnungen der Vordrucke; danach laesst sich in ELSTER suchen. Wo
+  eine Zeilennummer fehlt, ist sie bewusst weggelassen &mdash; eine falsche Nummer
+  waere schlimmer als keine.
+</div>
+{% endif %}
+
+{% if not posten %}
+<section class="leer">
+  <h2>Noch nichts zuzuordnen</h2>
+  <p>
+    Es liegen keine verwertbaren Belege mit Betrag im Veranlagungsjahr {{ jahr }} vor.
+  </p>
+</section>
+{% else %}
+
+{% for eintrag in posten %}
+<details class="gruppe" open>
+  <summary>
+    <span class="label">{{ eintrag.label }}</span>
+    <span class="ordner">{{ eintrag.anlage }}</span>
+    <span class="betrag">{{ eintrag.betrag | euro }}</span>
+    <span class="anzahl">{{ eintrag.belege | length }} Belege</span>
+  </summary>
+
+  <div class="gruppeninhalt">
+    {% if not eintrag.abschnitte %}
+    <p class="klein">
+      Fuer diese Kategorie ist noch kein Formularabschnitt hinterlegt. Der
+      Steuerberater ordnet sie zu.
+    </p>
+    {% elif eintrag.aufzuteilen %}
+    <p class="klein">
+      Diese Summe verteilt sich auf mehrere Abschnitte. Welcher Beleg wohin
+      gehoert, steht in keinem Beleg &mdash; deshalb hier ungeteilt:
+    </p>
+    <ul class="abschnitte">
+      {% for abschnitt in eintrag.abschnitte %}
+      <li>
+        <strong>{{ abschnitt.fundstelle }}</strong>
+        {%- if abschnitt.standard %} <span class="marke">Sammelposten</span>{% endif %}
+        {% if abschnitt.hinweis %}<p class="klein">{{ abschnitt.hinweis }}</p>{% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    {% set abschnitt = eintrag.standardabschnitt or eintrag.abschnitte[0] %}
+    <p>Eintragen unter: <strong>{{ abschnitt.fundstelle }}</strong></p>
+    {% if abschnitt.hinweis %}<p class="klein">{{ abschnitt.hinweis }}</p>{% endif %}
+    {% endif %}
+
+    {% if eintrag.erstattungen %}
+    <p class="klein">
+      <strong>Bereits gegengerechnet:</strong>
+      {% for dokument in eintrag.erstattungen %}
+      {{ dokument.analyse.dokumenttyp or dokument.dateiname }}
+      ({{ (dokument.analyse.betrag_abzugsfaehig if dokument.analyse.betrag_abzugsfaehig is not none else dokument.analyse.betrag_gesamt) | euro }}){% if not loop.last %}, {% endif %}
+      {% endfor %}
+    </p>
+    {% endif %}
+
+    <table class="liste">
+      <thead>
+        <tr><th>Datum</th><th>Beleg</th><th class="rechts">Betrag</th></tr>
+      </thead>
+      <tbody>
+        {% for dokument in eintrag.belege %}
+        <tr>
+          <td>{{ dokument.analyse.datum or '—' }}</td>
+          <td>
+            <a href="{{ url_for('dokument', dokument_id=dokument.id) }}">
+              {{ dokument.analyse.dokumenttyp or dokument.dateiname }}
+            </a>
+            {% if dokument.analyse.aussteller %}
+            <span class="klein">{{ dokument.analyse.aussteller }}</span>
+            {% endif %}
+            {% if dokument.notiz %}
+            <p class="klein notiz">{{ dokument.notiz }}</p>
+            {% endif %}
+          </td>
+          <td class="rechts">
+            {{ (dokument.analyse.betrag_abzugsfaehig if dokument.analyse.betrag_abzugsfaehig is not none else dokument.analyse.betrag_gesamt) | euro }}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</details>
+{% endfor %}
+
+<p class="klein">
+  Dieselbe Aufstellung liegt nach dem Ordnen als
+  <span class="ordner">berichte/Formularzuordnung_{{ jahr }}.md</span> und geht
+  mit dem Paket an den Steuerberater.
+</p>
+{% endif %}
+{% endblock %}

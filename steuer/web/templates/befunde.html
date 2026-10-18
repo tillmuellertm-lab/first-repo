@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block titel %}Luecken und Chancen{% endblock %}
+
+{% block inhalt %}
+<h1>Luecken und Chancen</h1>
+<p class="einleitung">
+  Diese Auswertung entsteht aus dem Profil, dem hinterlegten Rechtsstand und den erfassten
+  Belegen. Sie zeigt, wozu noch nichts vorliegt und wo bei diesem Sachverhalt legal noch
+  etwas zu holen ist.
+</p>
+
+{% macro block(titel, befunde, hinweis) %}
+  <section class="befundgruppe">
+    <h2>{{ titel }} <span class="anzahl">{{ befunde | length }}</span></h2>
+    {% if befunde %}
+      {% for befund in befunde %}
+      <article class="befund {{ befund.prioritaet }}">
+        <header>
+          <h3>{{ befund.titel }}</h3>
+          {% if befund.potenzial_eur %}
+            <span class="potenzial">bis zu {{ befund.potenzial_eur | euro }}</span>
+          {% endif %}
+        </header>
+        <p class="meta">
+          Prioritaet {{ befund.prioritaet }}{% if befund.anlage %} · {{ befund.anlage }}{% endif %}
+          {%- if befund.betroffene_dokumente %} · {{ befund.betroffene_dokumente | length }} Dokumente{% endif %}
+        </p>
+        <p>{{ befund.beschreibung }}</p>
+        {% if befund.betroffene_dokumente %}
+        <p class="klein">
+          {% for kennung in befund.betroffene_dokumente[:8] %}
+            <a href="{{ url_for('dokument', dokument_id=kennung) }}">{{ kennung }}</a>{% if not loop.last %} · {% endif %}
+          {% endfor %}
+        </p>
+        {% endif %}
+      </article>
+      {% endfor %}
+    {% else %}
+      <p class="klein">{{ hinweis }}</p>
+    {% endif %}
+  </section>
+{% endmacro %}
+
+{{ block('Warnungen', auswertung.warnungen, 'Keine Auffaelligkeiten gefunden.') }}
+{{ block('Was noch fehlt', auswertung.luecken, 'Zu allen erwarteten Bereichen liegen Unterlagen vor.') }}
+{{ block('Wo Geld liegen bleibt', auswertung.chancen, 'Noch keine Ansaetze erkannt. Ein vollstaendigeres Profil hilft hier deutlich.') }}
+
+<section class="befundgruppe">
+  <h2>Hinterlegte Werte {{ jahr }}</h2>
+  <p class="klein">Rechtsstand {{ regelwerk.stand }} · Status {{ regelwerk.status }}</p>
+  <table class="werte">
+    <thead><tr><th>Wert</th><th class="betrag">Betrag</th><th>Rechtsgrundlage</th></tr></thead>
+    <tbody>
+    {% for schluessel, eintrag in regelwerk.werte.items() %}
+      {% if eintrag is mapping %}
+      <tr>
+        <td>{{ eintrag.label or schluessel }}
+          {% if eintrag.hinweis %}<div class="klein">{{ eintrag.hinweis }}</div>{% endif %}
+        </td>
+        <td class="betrag">{{ eintrag.wert }} {{ eintrag.einheit | replace('EUR_pro_km', 'EUR/km') | replace('EUR_pro_tag', 'EUR/Tag') | replace('EUR_netto', 'EUR netto') }}</td>
+        <td class="klein">{{ eintrag.rechtsgrundlage or '' }}</td>
+      </tr>
+      {% endif %}
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

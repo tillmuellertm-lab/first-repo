@@ -1,0 +1,160 @@
+{% extends "base.html" %}
+{% block titel %}Beratung{% endblock %}
+
+{% block inhalt %}
+<h1>Beratung</h1>
+
+<p class="klein">
+  Hier sprechen Sie mit dem Steuerexperten, der Ihre Belege ausgewertet hat. Er
+  sieht denselben Bestand wie die Analyse: alle {{ jahresansicht.eigene | length }}
+  Belege des Jahres {{ jahr }}, die Summen, die offenen Punkte. Er kann einzelne
+  Belege nachschlagen, sich einen Scan ansehen und Ihre Antworten dort eintragen,
+  wo sie in den Bericht fuer den Steuerberater gehoeren. Was Sie hier sagen,
+  bleibt also in der Mappe.
+</p>
+
+<details class="gruppe">
+  <summary><span class="label">Was der Steuerexperte vor jeder Antwort sieht</span></summary>
+  <ul class="fragenliste">
+    <li>Ihr Profil und die bestätigten Stammdaten aus den Vorjahren</li>
+    <li>den Rechtsstand {{ jahr }}: Pauschalen, Grenzen, Höchstbeträge</li>
+    <li>alle Summen je Anlage und die Werbungskosten gegen den Pauschbetrag</li>
+    <li>jeden Beleg des Jahres {{ jahr }} in einer Zeile — mit Datum, Kategorie,
+        Betrag, Eignung und <strong>Ihrer bereits gegebenen Antwort</strong></li>
+    <li>die regelbasierten Lücken, Chancen und Warnungen</li>
+    <li>die letzte Gesamtauswertung, falls eine erstellt wurde</li>
+    <li>wie viele Belege mit älterem Wissensstand geprüft wurden</li>
+  </ul>
+  <p class="klein">
+    Nicht enthalten sind die vollständigen Analysetexte, die Scans selbst und
+    die Belege anderer Jahre. Die holt er sich bei Bedarf selbst — das sehen Sie
+    dann an den grauen Zeilen im Verlauf.
+  </p>
+</details>
+
+{% if not schluessel_vorhanden %}
+<div class="banner warnung">
+  Es ist kein ANTHROPIC_API_KEY gesetzt. Ohne Schluessel kann das Gespraech nicht
+  gefuehrt werden.
+</div>
+{% endif %}
+
+<div class="banner fehler" id="beratung-fehler" {% if not fehler %}hidden{% endif %}>
+  {{ fehler }}
+</div>
+
+<div class="verlauf" id="verlauf">
+  {% if not beitraege %}
+  <div class="leer" id="beratung-leer">
+    <h2>Noch kein Gespraech</h2>
+    <p>
+      Fangen Sie mit dem an, was Sie gerade beschaeftigt. Zum Beispiel:
+      &bdquo;Welche Unterlagen fehlen mir noch am dringendsten?&ldquo;,
+      &bdquo;Sind die Zinsbescheinigungen fuer Halstenbek in der Mappe?&ldquo; oder
+      &bdquo;Ich habe den Transporter fuer den Umzug gemietet, wo gehoert die
+      Rechnung hin?&ldquo;
+    </p>
+  </div>
+  {% endif %}
+  {% for beitrag in beitraege %}
+  <div class="beitrag {{ beitrag.rolle }}">
+    <div class="beitrag-kopf">
+      {%- if beitrag.rolle == 'mandant' %}Sie
+      {%- elif beitrag.rolle == 'berater' %}Steuerexperte
+      {%- elif beitrag.rolle == 'bild' %}Ihr Bild
+      {%- else %}Nachgeschlagen{% endif %}
+      <span class="zeit">{{ beitrag.zeit }}</span>
+    </div>
+      {% if beitrag.rolle == 'bild' %}
+    <a href="{{ url_for('gespraechsbild', name=beitrag.text) }}" target="_blank">
+      <img class="beitrag-bild" src="{{ url_for('gespraechsbild', name=beitrag.text) }}"
+           alt="Vom Mandanten gezeigtes Bild">
+    </a>
+    {% else %}
+    <div class="beitrag-text">{{ beitrag.text }}</div>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+
+<div class="denkt" id="beratung-denkt" {% if not laeuft %}hidden{% endif %}>
+  Der Steuerexperte sieht sich Ihre Unterlagen an &hellip;
+</div>
+
+<form class="beratung-eingabe" id="beratung-form">
+  <textarea id="beratung-text" rows="3"
+            placeholder="Ihre Frage oder Ihre Auskunft. Bildschirmfoto mit Strg+V einfuegen. Mit Strg+Enter absenden."></textarea>
+  <div class="bildvorschau" id="bildvorschau" hidden></div>
+  <div class="knopfreihe">
+    <button type="submit" class="knopf haupt" id="beratung-senden">Senden</button>
+    <button type="button" class="knopf" id="bild-waehlen">Bild anhaengen</button>
+    <input type="file" id="bild-eingabe" accept="image/png,image/jpeg,image/gif,image/webp"
+           multiple hidden>
+    <label class="modellwahl" id="wahl-beratung">
+      Modell
+      <select id="modell-beratung">
+        {% for kennung, bezeichnung, erlaeuterung in auswahl_beratung %}
+        <option value="{{ kennung }}" title="{{ erlaeuterung }}"
+                {% if kennung == modell_beratung %}selected{% endif %}>{{ bezeichnung }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label class="modellwahl" id="wahl-denktiefe">
+      Denktiefe
+      <select id="denktiefe-beratung">
+        {% for kennung, bezeichnung, erlaeuterung in auswahl_denktiefe %}
+        <option value="{{ kennung }}" title="{{ erlaeuterung }}"
+                {% if kennung == denktiefe %}selected{% endif %}>{{ bezeichnung }}</option>
+        {% endfor %}
+      </select>
+    </label>
+  </div>
+  <p class="modellhinweis" id="hinweis-beratung"></p>
+  <p class="modellhinweis" id="hinweis-denktiefe"></p>
+  {% if zug_bericht %}
+  <p class="klein" id="zug-bericht">Letzte Antwort: {{ zug_bericht }}.</p>
+  {% endif %}
+</form>
+
+<p class="klein">
+  <strong>Bildschirmfotos:</strong> Bild aufnehmen und mit <kbd>Strg</kbd>+<kbd>V</kbd>
+  direkt in das Feld einfuegen &mdash; oder eine Datei hineinziehen, oder
+  &bdquo;Bild anhaengen&ldquo; anklicken. Hoechstens fuenf je Nachricht, PNG, JPEG,
+  GIF und WebP. Grosse Bilder werden vor dem Senden verkleinert. Ein Steuerbeleg
+  gehoert dagegen auf die Uebersichtsseite hochgeladen, damit er analysiert wird
+  und in die Ablage kommt.
+</p>
+
+<p class="klein">
+  Jede Frage kostet API-Guthaben, das Ansehen eines Originalscans spuerbar mehr
+  als eine Auskunft aus der gespeicherten Analyse. Die Zeilen
+  &bdquo;Nachgeschlagen&ldquo; zeigen Ihnen, worauf eine Antwort beruht.
+</p>
+
+{% if entwuerfe %}
+<h2>Entwuerfe</h2>
+<p class="klein">
+  Texte, die im Gespraech entstanden sind &mdash; gespeichert, nicht verschickt.
+  Sie liegen unter <span class="ordner">berichte/entwuerfe/</span>.
+</p>
+<ul class="entwurfsliste">
+  {% for name in entwuerfe %}
+  <li><a href="{{ url_for('entwurf', name=name) }}">{{ name }}</a></li>
+  {% endfor %}
+</ul>
+{% endif %}
+
+{% if verbesserungen %}
+<p class="klein">
+  <a href="{{ url_for('verbesserungen') }}">Was diesem Werkzeug fehlt</a> &mdash;
+  im Gebrauch aufgefallen und mitgeschrieben.
+</p>
+{% endif %}
+
+{% if beitraege %}
+<form method="post" action="{{ url_for('beratung_loeschen') }}"
+      onsubmit="return confirm('Das ganze Gespraech verwerfen? Eingetragene Notizen bleiben erhalten.');">
+  <button type="submit" class="knopf leise">Gespraech verwerfen und neu beginnen</button>
+</form>
+{% endif %}
+{% endblock %}

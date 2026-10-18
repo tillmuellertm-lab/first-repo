@@ -1,0 +1,82 @@
+jahr: 2023
+stand: "2026-08-14"
+status: gepflegt
+erbt_von: 2024
+hinweis: >-
+  Nur die Werte, die von 2024 abweichen, sind hier gepflegt. Alles Weitere wird
+  aus 2024.yaml und basis.yaml geerbt. Diese Datei ersetzt keine Steuerberatung.
+quellen:
+  - "EStG in der fuer den VZ 2023 geltenden Fassung"
+  - "Jahressteuergesetz 2022"
+
+werte:
+  grundfreibetrag:
+    label: Grundfreibetrag
+    wert: 10908
+    einheit: EUR
+    verdoppelt_bei_zusammenveranlagung: true
+    rechtsgrundlage: "§ 32a Abs. 1 EStG"
+
+  umzugskostenpauschale_berechtigter:
+    label: Umzugskostenpauschale Berechtigter (Stand 2023)
+    wert: 886
+    einheit: EUR
+    rechtsgrundlage: "§ 10 BUKG"
+
+  umzugskostenpauschale_weitere_person:
+    label: Umzugskostenpauschale je weiterer Person (Stand 2023)
+    wert: 590
+    einheit: EUR
+    rechtsgrundlage: "§ 10 BUKG"
+
+  kinderfreibetrag:
+    label: Kinderfreibetrag (beide Elternteile)
+    wert: 6024
+    einheit: EUR
+    rechtsgrundlage: "§ 32 Abs. 6 EStG"
+
+  vorsorgeaufwendungen_hoechstbetrag:
+    label: Hoechstbetrag Altersvorsorgeaufwendungen
+    wert: 26528
+    einheit: EUR
+    verdoppelt_bei_zusammenveranlagung: true
+    rechtsgrundlage: "§ 10 Abs. 3 EStG"
+    hinweis: "Ab 2023 zu 100 % als Sonderausgaben abziehbar."
+
+  private_veraeusserungsgeschaefte_freigrenze:
+    label: Freigrenze private Veraeusserungsgeschaefte
+    wert: 600
+    einheit: EUR
+    rechtsgrundlage: "§ 23 Abs. 3 Satz 5 EStG"
+    hinweis: "Ab 2024 auf 1.000 EUR angehoben."
+
+  unterhalt_hoechstbetrag:
+    label: Unterhalt an beduerftige Personen, Hoechstbetrag
+    wert: 10908
+    einheit: EUR
+    rechtsgrundlage: "§ 33a Abs. 1 EStG"
+
+zumutbare_belastung:
+  rechtsgrundlage: "§ 33 Abs. 3 EStG"
+  hinweis: "Stufenweise Berechnung nach BFH VI R 75/14."
+  stufen_gesamtbetrag_der_einkuenfte: [15340, 51130]
+  saetze:
+    ledig_ohne_kind: [5, 6, 7]
+    verheiratet_ohne_kind: [4, 5, 6]
+    ein_oder_zwei_kinder: [2, 3, 4]
+    drei_oder_mehr_kinder: [1, 1, 2]
+
+fristen:
+  abgabe_ohne_berater: "2024-09-02"
+  abgabe_mit_berater: "2025-06-02"
+  einspruchsfrist_tage: 30
+  festsetzungsverjaehrung_antragsveranlagung: "2027-12-31"
+  hinweis: "Fuer den VZ 2023 galten noch die verlaengerten Corona-Fristen."
+
+chancen:
+  - id: rueckwirkende_abgabe
+    titel: Freiwillige Abgabe fuer 2023
+    potenzial_eur: 1000
+    beschreibung: >-
+      Ohne Abgabepflicht kann die Erklaerung fuer 2023 noch bis zum 31.12.2027
+      eingereicht werden.

@@ -1,0 +1,366 @@
+"""Aufbereitung der Scans fuer die Analyse.
+
+Die Anthropic-API nimmt PDFs und Bilder direkt entgegen, eine eigene OCR-Stufe
+ist deshalb nicht noetig. Dieses Modul kuemmert sich um die Randbedingungen:
+Seitenzahl, Dateigroesse, Bildkantenlaenge und das Zerlegen von Sammelscans.
+"""
+
+from __future__ import annotations
+
+import base64
+import io
+import logging
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
+
+LOG = logging.getLogger(__name__)
+
+# Grenzen der Anthropic-API mit etwas Sicherheitsabstand.
+MAX_PDF_SEITEN = 30
+MAX_PDF_BYTES = 20_000_000  # die API nimmt maximal 32 MB je Anfrage, Base64 vergroessert um ein Drittel
+MAX_BILDKANTE = 1568
+MAX_BILD_BYTES = 4_500_000
+MAX_TEXT_ZEICHEN = 60_000
+
+BILDTYPEN = {"image/png", "image/jpeg", "image/gif", "image/webp"}
+
+
+class ExtraktionsFehler(RuntimeError):
+    pass
+
+
+@dataclass
+class Inhalt:
+    """Fuer die API aufbereiteter Dokumentinhalt."""
+
+    bloecke: list[dict[str, Any]]
+    seiten: int | None = None
+    gekuerzt: bool = False
+    textvorschau: str = ""
+    hinweise: list[str] = None  # type: ignore[assignment]
+
+    def __post_init__(self) -> None:
+        if self.hinweise is None:
+            self.hinweise = []
+
+
+def _pypdf():
+    try:
+        import pypdf  # noqa: PLC0415
+    except ImportError as fehler:  # pragma: no cover - Abhaengigkeit fehlt
+        raise ExtraktionsFehler(
+            "Fuer PDF-Verarbeitung wird 'pypdf' benoetigt: pip install pypdf"
+        ) from fehler
+    return pypdf
+
+
+def _pillow():
+    try:
+        from PIL import Image  # noqa: PLC0415
+    except ImportError:
+        return None
+    return Image
+
+
+def seitenzahl(pfad: Path) -> int | None:
+    if pfad.suffix.lower() != ".pdf":
+        return None
+    try:
+        pypdf = _pypdf()
+        with pfad.open("rb") as datei:
+            return len(pypdf.PdfReader(datei).pages)
+    except ExtraktionsFehler:
+        raise
+    except Exception as fehler:  # beschaedigte PDFs sollen nicht den Lauf stoppen
+        if "cryptography" in str(fehler):
+            # Verschluesselte PDFs, wie Arbeitgeber sie fuer Lohnunterlagen liefern.
+            LOG.warning(
+                "%s ist verschluesselt und kann ohne das Paket 'cryptography' nicht "
+                "gelesen werden. Behebung: pip install cryptography",
+                pfad.name,
+            )
+        else:
+            LOG.warning("Seitenzahl von %s nicht ermittelbar: %s", pfad.name, fehler)
+        return None
+
+
+def pdf_text(pfad: Path, max_seiten: int = MAX_PDF_SEITEN) -> str:
+    """Liest die Textebene eines PDFs, sofern vorhanden."""
+    try:
+        pypdf = _pypdf()
+        with pfad.open("rb") as datei:
+            leser = pypdf.PdfReader(datei)
+            teile = []
+            for seite in leser.pages[:max_seiten]:
+                teile.append(seite.extract_text() or "")
+        return "\n".join(teile).strip()
+    except Exception as fehler:
+        LOG.debug("Keine Textebene in %s: %s", pfad.name, fehler)
+        return ""
+
+
+def _pdf_kuerzen(pfad: Path, max_seiten: int, ab_seite: int = 0) -> bytes:
+    """Schneidet ``max_seiten`` Seiten heraus, beginnend bei ``ab_seite`` (0-basiert)."""
+    pypdf = _pypdf()
+    with pfad.open("rb") as datei:
+        leser = pypdf.PdfReader(datei)
+        schreiber = pypdf.PdfWriter()
+        for seite in leser.pages[ab_seite : ab_seite + max_seiten]:
+            schreiber.add_page(seite)
+        puffer = io.BytesIO()
+        schreiber.write(puffer)
+    return puffer.getvalue()
+
+
+def _bild_aufbereiten(pfad: Path, medientyp: str) -> tuple[bytes, str, list[str]]:
+    """Skaliert zu grosse Bilder herunter, damit sie die API-Grenzen einhalten."""
+    try:
+        return bild_verkleinern(pfad.read_bytes(), medientyp)
+    except ExtraktionsFehler as fehler:
+        raise ExtraktionsFehler(f"{pfad.name}: {fehler}") from fehler
+
+
+def bild_verkleinern(rohdaten: bytes, medientyp: str) -> tuple[bytes, str, list[str]]:
+    """Bringt Bilddaten auf ein Mass, das die API annimmt und das bezahlbar ist.
+
+    Ein Bildschirmfoto ist leicht 3000 Pixel breit. Ungekuerzt kostet es ein
+    Vielfaches an Tokens, ohne mehr zu zeigen: mehr als 1568 Pixel an der
+    langen Kante verarbeitet das Modell ohnehin nicht.
+    """
+    hinweise: list[str] = []
+    Image = _pillow()
+    if Image is None:
+        if len(rohdaten) > MAX_BILD_BYTES:
+            raise ExtraktionsFehler(
+                "Das Bild ist zu gross und 'Pillow' fehlt zum Verkleinern: pip install Pillow"
+            )
+        return rohdaten, medientyp, hinweise
+
+    with Image.open(io.BytesIO(rohdaten)) as bild:
+        bild.load()
+        breite, hoehe = bild.size
+        aendern = max(breite, hoehe) > MAX_BILDKANTE or len(rohdaten) > MAX_BILD_BYTES
+        if not aendern:
+            return rohdaten, medientyp, hinweise
+        faktor = min(1.0, MAX_BILDKANTE / max(breite, hoehe))
+        neue_groesse = (max(1, int(breite * faktor)), max(1, int(hoehe * faktor)))
+        verkleinert = bild.convert("RGB").resize(neue_groesse, Image.LANCZOS)
+        puffer = io.BytesIO()
+        verkleinert.save(puffer, format="JPEG", quality=85, optimize=True)
+        daten = puffer.getvalue()
+        while len(daten) > MAX_BILD_BYTES and verkleinert.size[0] > 400:
+            verkleinert = verkleinert.resize(
+                (int(verkleinert.size[0] * 0.8), int(verkleinert.size[1] * 0.8)), Image.LANCZOS
+            )
+            puffer = io.BytesIO()
+            verkleinert.save(puffer, format="JPEG", quality=80, optimize=True)
+            daten = puffer.getvalue()
+        hinweise.append(f"Bild auf {verkleinert.size[0]}x{verkleinert.size[1]} Pixel verkleinert.")
+        return daten, "image/jpeg", hinweise
+
+
+def _pdf_inhalt(
+    pfad: Path,
+    rohdaten: bytes,
+    seiten: int | None,
+    *,
+    gekuerzt: bool,
+    hinweise: list[str],
+) -> Inhalt:
+    if len(rohdaten) > MAX_PDF_BYTES:
+        raise ExtraktionsFehler(
+            f"{pfad.name} ist mit {len(rohdaten) / 1_000_000:.0f} MB zu gross fuer die "
+            "Analyse. Bitte die Datei aufteilen, am besten je Beleg eine Datei, "
+            "und erneut hochladen."
+        )
+    block = {
+        "type": "document",
+        "source": {
+            "type": "base64",
+            "media_type": "application/pdf",
+            "data": base64.standard_b64encode(rohdaten).decode("ascii"),
+        },
+    }
+    return Inhalt(
+        bloecke=[block],
+        seiten=seiten,
+        gekuerzt=gekuerzt,
+        textvorschau=pdf_text(pfad)[:2000],
+        hinweise=hinweise,
+    )
+
+
+def pdf_neu_aufbauen(pfad: Path) -> bytes | None:
+    """Schreibt ein PDF neu, um strukturelle Maengel zu beseitigen.
+
+    Manche Scanner und Exportprogramme erzeugen PDFs, die uebliche Betrachter
+    zwar anzeigen, die die API aber als ungueltig zurueckweist. Ein Durchlauf
+    durch pypdf serialisiert die Datei sauber neu; der Inhalt bleibt derselbe.
+    """
+    try:
+        from pypdf import PdfReader, PdfWriter  # noqa: PLC0415
+
+        leser = PdfReader(str(pfad))
+        if leser.is_encrypted:
+            try:
+                leser.decrypt("")
+            except Exception:  # noqa: BLE001
+                return None
+        schreiber = PdfWriter()
+        for seite in leser.pages[:MAX_PDF_SEITEN]:
+            schreiber.add_page(seite)
+        puffer = io.BytesIO()
+        schreiber.write(puffer)
+        daten = puffer.getvalue()
+        return daten if daten and len(daten) <= MAX_PDF_BYTES else None
+    except Exception as fehler:  # noqa: BLE001
+        LOG.debug("Neuaufbau von %s fehlgeschlagen: %s", pfad.name, fehler)
+        return None
+
+
+def inhalt_neu_aufbauen(pfad: Path) -> Inhalt | None:
+    """Baut den Inhaltsblock aus einem neu serialisierten PDF."""
+    rohdaten = pdf_neu_aufbauen(pfad)
+    if not rohdaten:
+        return None
+    return _pdf_inhalt(
+        pfad,
+        rohdaten,
+        seitenzahl(pfad),
+        gekuerzt=False,
+        hinweise=["Die Datei wurde vor der Uebertragung neu aufgebaut."],
+    )
+
+
+def notinhalt(pfad: Path, grund: str) -> Inhalt | None:
+    """Letzter Ausweg: nur den Text schicken, wenn die Datei selbst scheitert.
+
+    Ein Beleg, von dem wenigstens der Text gelesen wird, ist weit mehr wert als
+    einer, der als Fehler liegenbleibt. Bei reinen Scans ohne Textebene bleibt
+    allerdings auch das erfolglos - dann meldet das Werkzeug den Fehler ehrlich,
+    statt ein leeres Ergebnis zu erfinden.
+    """
+    text = pdf_text(pfad).strip()
+    if len(text) < 40:
+        return None
+    return Inhalt(
+        bloecke=[{"type": "text", "text": text[:MAX_TEXT_ZEICHEN]}],
+        seiten=seitenzahl(pfad),
+        gekuerzt=True,
+        textvorschau=text[:2000],
+        hinweise=[
+            f"Die Datei selbst konnte nicht uebertragen werden ({grund}). "
+            "Geprueft wurde nur der ausgelesene Text; Unterschriften, Stempel "
+            "und Tabellenlayout sind darin nicht enthalten."
+        ],
+    )
+
+
+def inhalt_aufbereiten(
+    pfad: Path, medientyp: str, ab_seite: int | None = None
+) -> Inhalt:
+    """Baut die Inhaltsbloecke fuer einen API-Aufruf.
+
+    ``ab_seite`` (1-basiert) prueft einen spaeteren Abschnitt eines langen PDF.
+    Eine Steuererklaerung hat leicht vierzig Seiten, und die wertvollen Anlagen
+    stehen hinten - ohne diese Moeglichkeit blieben sie ungelesen.
+    """
+    pfad = Path(pfad)
+    if not pfad.is_file():
+        raise ExtraktionsFehler(f"Datei nicht gefunden: {pfad}")
+
+    if medientyp == "application/pdf":
+        seiten = seitenzahl(pfad)
+        if ab_seite and ab_seite > 1:
+            bis = min(ab_seite + MAX_PDF_SEITEN - 1, seiten) if seiten else ab_seite + MAX_PDF_SEITEN - 1
+            rohdaten = _pdf_kuerzen(pfad, MAX_PDF_SEITEN, ab_seite - 1)
+            if not rohdaten:
+                raise ExtraktionsFehler(
+                    f"{pfad.name} hat keine Seite {ab_seite}"
+                    + (f", das Dokument endet bei Seite {seiten}." if seiten else ".")
+                )
+            return _pdf_inhalt(
+                pfad,
+                rohdaten,
+                seiten,
+                gekuerzt=True,
+                hinweise=[
+                    f"Ausschnitt: die Seiten {ab_seite} bis {bis}"
+                    + (f" von {seiten}" if seiten else "")
+                    + ". Die vorderen Seiten wurden bereits gesondert geprueft."
+                ],
+            )
+        gekuerzt = bool(seiten and seiten > MAX_PDF_SEITEN)
+        hinweise = []
+        if gekuerzt:
+            rohdaten = _pdf_kuerzen(pfad, MAX_PDF_SEITEN)
+            hinweise.append(
+                f"Nur die ersten {MAX_PDF_SEITEN} von {seiten} Seiten wurden analysiert."
+            )
+        elif seiten is None:
+            # Seitenzahl unbekannt (beschaedigtes oder ungewoehnliches PDF):
+            # sicherheitshalber trotzdem beschneiden, statt die volle Datei zu
+            # verschicken und an der Kontextgrenze der API zu scheitern.
+            try:
+                rohdaten = _pdf_kuerzen(pfad, MAX_PDF_SEITEN)
+                gekuerzt = True
+                hinweise.append(
+                    f"Seitenzahl nicht ermittelbar; vorsorglich nur die ersten "
+                    f"{MAX_PDF_SEITEN} Seiten analysiert."
+                )
+            except Exception:  # noqa: BLE001 - Zerlegen unmoeglich, Original versuchen
+                rohdaten = pfad.read_bytes()
+        else:
+            rohdaten = pfad.read_bytes()
+        return _pdf_inhalt(pfad, rohdaten, seiten, gekuerzt=gekuerzt, hinweise=hinweise)
+
+    if medientyp in BILDTYPEN:
+        daten, typ, hinweise = _bild_aufbereiten(pfad, medientyp)
+        block = {
+            "type": "image",
+            "source": {
+                "type": "base64",
+                "media_type": typ,
+                "data": base64.standard_b64encode(daten).decode("ascii"),
+            },
+        }
+        return Inhalt(bloecke=[block], seiten=1, hinweise=hinweise)
+
+    if medientyp.startswith("text/"):
+        text = pfad.read_text(encoding="utf-8", errors="replace")
+        gekuerzt = len(text) > MAX_TEXT_ZEICHEN
+        block = {"type": "text", "text": text[:MAX_TEXT_ZEICHEN]}
+        return Inhalt(
+            bloecke=[block],
+            seiten=1,
+            gekuerzt=gekuerzt,
+            textvorschau=text[:2000],
+            hinweise=["Textdatei wurde gekuerzt."] if gekuerzt else [],
+        )
+
+    raise ExtraktionsFehler(f"Nicht unterstuetzter Medientyp: {medientyp}")
+
+
+def pdf_zerlegen(pfad: Path, segmente: list[tuple[int, int]], zielordner: Path, basisname: str) -> list[Path]:
+    """Zerlegt einen Sammelscan in einzelne PDFs.
+
+    ``segmente`` enthaelt 1-basierte, inklusive Seitenbereiche.
+    """
+    pypdf = _pypdf()
+    zielordner.mkdir(parents=True, exist_ok=True)
+    erzeugt: list[Path] = []
+    with pfad.open("rb") as datei:
+        leser = pypdf.PdfReader(datei)
+        gesamt = len(leser.pages)
+        for nummer, (von, bis) in enumerate(segmente, start=1):
+            von = max(1, min(von, gesamt))
+            bis = max(von, min(bis, gesamt))
+            schreiber = pypdf.PdfWriter()
+            for index in range(von - 1, bis):
+                schreiber.add_page(leser.pages[index])
+            ziel = zielordner / f"{basisname}_teil{nummer:02d}_S{von:02d}-{bis:02d}.pdf"
+            with ziel.open("wb") as ausgabe:
+                schreiber.write(ausgabe)
+            erzeugt.append(ziel)
+    return erzeugt

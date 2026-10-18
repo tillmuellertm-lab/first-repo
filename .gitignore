@@ -1,0 +1,14 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+
+# Arbeitsmappen enthalten personenbezogene Steuerdaten und gehoeren niemals ins Repository.
+steuer-*/
+arbeitsmappe*/
+*.vorschlag.yaml
+*.yaml.bak

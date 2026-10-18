@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block titel %}Entwurf{% endblock %}
+
+{% block inhalt %}
+<div class="nurbildschirm">
+  <h1>Entwurf</h1>
+
+  <p class="klein">
+    <a href="{{ url_for('beratung') }}">&larr; zurueck zur Beratung</a>
+    &middot; Datei: <span class="ordner">berichte/entwuerfe/{{ name }}</span>
+  </p>
+
+  <p class="klein">
+    Dieser Text wurde im Gespraech erstellt und nur gespeichert &mdash; verschickt
+    wurde nichts. Zum Unterschreiben: <kbd>Strg</kbd>+<kbd>P</kbd>, Ziel
+    &bdquo;Als PDF speichern&ldquo;. Menue und diese Hinweise erscheinen im
+    Ausdruck nicht.
+  </p>
+
+  <details>
+    <summary>Rohtext zum Kopieren</summary>
+    <pre class="entwurf">{{ text }}</pre>
+  </details>
+</div>
+
+<article class="schriftstueck">{{ html | safe }}</article>
+{% endblock %}

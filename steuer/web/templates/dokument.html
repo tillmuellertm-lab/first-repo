@@ -1,0 +1,157 @@
+{% extends "base.html" %}
+{% block titel %}{{ dokument.dateiname }}{% endblock %}
+
+{% block inhalt %}
+<p class="brotkrumen"><a href="{{ url_for('uebersicht') }}">Uebersicht</a> / {{ dokument.dateiname }}</p>
+
+{% if gespeichert %}<div class="banner erfolg">Aenderungen gespeichert.</div>{% endif %}
+
+<div class="dokumentansicht">
+  <section class="dokumentdaten">
+    <h1>{{ dokument.analyse.dokumenttyp if dokument.analyse and dokument.analyse.dokumenttyp else dokument.dateiname }}</h1>
+
+    {% if dokument.analyse %}
+    {% set a = dokument.analyse %}
+    <p>
+      <span class="marke {{ a.eignung }}">{{ eignung_label.get(a.eignung, 'offen') }}</span>
+      <span class="klein">Sicherheit der Einordnung {{ (a.vertrauen * 100) | round | int }} %</span>
+    </p>
+    <p class="einleitung">{{ a.zusammenfassung }}</p>
+    <p><strong>Bewertung:</strong> {{ a.eignung_begruendung }}</p>
+
+    <table class="stammwerte">
+      <tr><th>Kategorie</th><td>{{ taxonomy.kategorie(dokument.wirksame_kategorie).label }}
+        ({{ taxonomy.kategorie(dokument.wirksame_kategorie).anlage }})</td></tr>
+      <tr><th>Aussteller</th><td>{{ a.aussteller or '—' }}</td></tr>
+      <tr><th>Belegdatum</th><td>{{ a.datum | datum or '—' }}</td></tr>
+      <tr><th>Steuerjahr</th><td>
+        {{ a.steuerjahr or '—' }}
+        {% if a.steuerjahr and a.steuerjahr != jahr %}
+          <span class="marke ungeeignet">gehoert nicht in {{ jahr }}</span>
+        {% endif %}
+      </td></tr>
+      <tr><th>Betrag gesamt</th><td>{{ a.betrag_gesamt | euro }}</td></tr>
+      <tr><th>davon abzugsfaehig</th><td>{{ a.betrag_abzugsfaehig | euro }}</td></tr>
+      <tr><th>Zahlungsart</th><td>{{ a.zahlungsart or 'unbekannt' }}</td></tr>
+      <tr><th>Analysiert</th><td>{{ a.analysiert_am }} mit {{ a.modell }}</td></tr>
+    </table>
+
+    {% if a.positionen %}
+    <h2>Positionen</h2>
+    <table>
+      <thead><tr><th>Bezeichnung</th><th class="betrag">Betrag</th><th>Abzugsfaehig</th></tr></thead>
+      <tbody>
+      {% for position in a.positionen %}
+        <tr>
+          <td>{{ position.bezeichnung }}
+            {% if position.hinweis %}<div class="klein">{{ position.hinweis }}</div>{% endif %}
+          </td>
+          <td class="betrag">{{ position.betrag | euro }}</td>
+          <td>{% if position.abzugsfaehig is none %}unklar{% elif position.abzugsfaehig %}ja{% else %}nein{% endif %}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+
+    {% if a.fehlende_nachweise %}
+    <h2>Fehlt noch</h2>
+    <ul class="fehlt">{% for eintrag in a.fehlende_nachweise %}<li>{{ eintrag }}</li>{% endfor %}</ul>
+    {% endif %}
+
+    {% if a.hinweise %}
+    <h2>Hinweise</h2>
+    <ul>{% for eintrag in a.hinweise %}<li>{{ eintrag }}</li>{% endfor %}</ul>
+    {% endif %}
+
+    {% if a.optimierungshinweise %}
+    <h2>Ansatzpunkte</h2>
+    <ul>{% for eintrag in a.optimierungshinweise %}<li>{{ eintrag }}</li>{% endfor %}</ul>
+    {% endif %}
+
+    {% if a.enthaelt_mehrere_dokumente %}
+    <h2>Sammelscan erkannt</h2>
+    <p>Diese Datei enthaelt mehrere eigenstaendige Dokumente:</p>
+    <ul>
+      {% for segment in a.segmente %}
+      <li>Seiten {{ segment.von_seite }}–{{ segment.bis_seite }}: {{ segment.beschreibung }}</li>
+      {% endfor %}
+    </ul>
+    <p class="klein">Trennen an der Kommandozeile: <code>steuer trennen {{ dokument.id }}</code></p>
+    {% endif %}
+
+    {% elif dokument.status == 'fehler' %}
+    <div class="banner warnung">Analyse fehlgeschlagen: {{ dokument.fehler }}</div>
+    {% else %}
+    <p class="einleitung">Dieses Dokument wurde noch nicht analysiert.</p>
+    {% endif %}
+
+    <h2>Manuell anpassen</h2>
+    <form method="post" class="formular schmal">
+      <label>Kategorie ueberschreiben
+        <select name="kategorie">
+          <option value="">— Einordnung der Analyse verwenden —</option>
+          {% for kategorie in kategorien %}
+          <option value="{{ kategorie.id }}" {% if dokument.manuelle_kategorie == kategorie.id %}selected{% endif %}>
+            {{ kategorie.ordner }} — {{ kategorie.label }}
+          </option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>Steuerjahr ueberschreiben
+        <input type="number" name="herkunft_jahr" min="1990" max="2100"
+               placeholder="{{ dokument.analyse.steuerjahr if dokument.analyse and dokument.analyse.steuerjahr else 'aus der Analyse' }}"
+               value="{{ dokument.herkunft_jahr if dokument.herkunft_jahr else '' }}">
+        <small>Ihre Angabe hat Vorrang. Leer lassen heisst: das Jahr aus der Analyse gilt.
+          Dokumente anderer Jahre bleiben im Bestand, gehen aber nicht in die Auswertung
+          dieses Jahres ein.</small>
+      </label>
+      <label>Herkunft
+        <select name="herkunft">
+          <option value="">— nicht angegeben —</option>
+          {% for kennung, beschriftung in herkuenfte %}
+          <option value="{{ kennung }}" {% if dokument.herkunft == kennung %}selected{% endif %}>{{ beschriftung }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>Notiz
+        <textarea name="notiz" rows="3"
+                  placeholder="Zusatzinformation, die bei einer erneuten Analyse mitgegeben wird">{{ dokument.notiz }}</textarea>
+        <small>Wird bei der naechsten Analyse als Zusatzinformation uebergeben.</small>
+      </label>
+      <div class="knopfreihe">
+        <button type="submit" class="knopf haupt">Speichern</button>
+        <button type="button" class="knopf" data-aktion="neu-analysieren" data-dokument="{{ dokument.id }}"
+                {% if not schluessel_vorhanden %}disabled{% endif %}>Neu analysieren</button>
+        <button type="button" class="knopf gefahr" data-aktion="loeschen" data-dokument="{{ dokument.id }}">
+          Aus der Mappe entfernen
+        </button>
+      </div>
+    </form>
+
+    <p class="klein pfad">
+      Original: <code>{{ dokument.dateiname }}</code> ·
+      {{ (dokument.groesse_bytes / 1024) | round | int }} kB ·
+      Kennung {{ dokument.id }}
+    </p>
+  </section>
+
+  <section class="vorschau">
+    {% if dokument.medientyp == 'application/pdf' %}
+      <object data="{{ url_for('datei', dokument_id=dokument.id) }}" type="application/pdf">
+        <p><a href="{{ url_for('datei', dokument_id=dokument.id) }}">PDF oeffnen</a></p>
+      </object>
+    {% elif dokument.medientyp.startswith('image/') %}
+      <img src="{{ url_for('datei', dokument_id=dokument.id) }}" alt="Scan">
+    {% else %}
+      <p><a href="{{ url_for('datei', dokument_id=dokument.id) }}">Datei oeffnen</a></p>
+    {% endif %}
+  </section>
+</div>
+
+<section id="fortschritt" class="fortschritt" hidden>
+  <div class="balken"><div class="fuellung" id="fuellung"></div></div>
+  <p class="zeile"><span id="fortschritt-text">…</span></p>
+  <pre id="protokoll" class="protokoll"></pre>
+</section>
+{% endblock %}
