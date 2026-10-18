@@ -1,6 +1,8 @@
 # Hier geht es weiter
 
-Stand: 1. September 2026. Die Neuanalyse aller Dokumente lief zuletzt.
+Stand: 18. Oktober 2026, nachts. Erklaerung 2024 liegt seit 21.09. bei Dr. Hagn.
+Die Kanzlei (Frau Wimmer, Mail vom 13.10.) hat vier Nachforderungen. Drei sind
+erledigt, eine haengt an der Werkzeug-Analyse.
 
 ## Als Erstes
 
@@ -8,77 +10,43 @@ Stand: 1. September 2026. Die Neuanalyse aller Dokumente lief zuletzt.
 cd ~/first-repo-claude-tax-return-document-tool-jesqdh && source .venv/bin/activate && git pull origin claude/tax-return-document-tool-jesqdh && cd steuer-2024 && steuer web
 ```
 
-Dann <http://127.0.0.1:5173>. Im Browser einmal Strg+Umschalt+R.
-Laeuft der Server schon im Fenster, blockiert er es: erst Strg+C.
+Laeuft der Server noch im Fenster: erst Strg+C. Im Browser Strg+Umschalt+R.
 
-## Wo wir stehen
+## Die vier Punkte der Kanzlei
 
-Die Neuanalyse mit Analyseversion 4 wurde gestartet. **Als Erstes nachsehen,
-ob sie durchgelaufen ist** - Seite Uebersicht, Hinweis "Dokumente wurden mit
-einem aelteren Stand geprueft". Steht dort keine Zahl mehr, ist sie fertig.
-
-Danach in dieser Reihenfolge:
-
-| # | Schritt | Wo |
+| # | Punkt | Stand |
 | --- | --- | --- |
-| 1 | Ergebnis der Neuanalyse durchsehen, besonders die Waehrungswarnung | Seite **Luecken & Chancen** |
-| 2 | Offene Faeden im Gespraech klaeren (siehe unten) | Seite **Beratung** |
-| 3 | **Ordnen & Auswerten** mit Gesamtauswertung und ZIP | Seite **Uebersicht**, unten |
-| 4 | Formularzuordnung durchsehen | Seite **Formular** |
+| 1 | Nebenkostenabrechnung 2024 an die Mieter | **fertig** - von Claude erstellt, datiert 18.10.2026, unterschrieben; Guthaben 690,53 EUR an die Mieter ueberweisen. Positionen DEVK und Wartung vorlaeufig mit 2023-Werten. |
+| 2 | eToro-Steuerbericht 2024 | **liegt vor** - Kapitalertraege ja; Verlustvortrag 157 EUR aus 2023 verrechnen |
+| 3 | Steuernummer Lemis Unternehmen | **232/251/18191**, USt-IdNr. DE367233220 |
+| 4 | GWG-Einzelrechnungen 2.363 EUR | **offen** - 287 Belege des Studios wurden in die Mappe geladen und analysiert; Werkzeug soll die GWG-Kandidaten heraussuchen (Nachricht steht im Gespraech) |
 
-## Die beiden Eigenaufstellungen
+Der Mailentwurf an Frau Wimmer ist fertig und steht im Chat mit Claude; nur die
+GWG-Liste fehlt darin. Zwei Nachtraege gehoeren in dieselbe Mail: Mietausfall-
+versicherung RheinLand 239,00 EUR (04.10.2024, Anlage V, fehlt im Uebergabe-
+schreiben) und Wasser-Restforderung 221,69 EUR (faellig 28.01.2025, VZ 2025).
 
-Beide sind fertig geschrieben und liegen als HTML vor; sie wurden im Chat
-uebergeben und muessen als PDF in die Mappe.
+## Noch zu beschaffen
 
-| Aufstellung | Ergebnis | Stand |
-| --- | ---: | --- |
-| Verpflegungsmehraufwand, 11 Auswaertsspiele, alle Tagesreisen | 140,00 EUR | ersetzt die alte 280-EUR-Fassung, die aus der Mappe muss |
-| Doppelte Haushaltsfuehrung 15.08.-30.09.2024 | 2.910,00 EUR | am 26.08. erstellt, war nie hochgeladen |
+- DEVK-Beitrag 2024 und HMN-Dettmann-Rechnung 2024 (oder: keine Wartung) - dann
+  wird die Betriebskostenabrechnung berichtigt
+- Zahlungsdatum Renovierungsrechnung S&W/Wuttke 1.500 EUR (Januar 2025?)
+- Die 287 Studio-Belege liegen in steuer-2024, nicht in gewerbe-2024. Pruefen
+  lassen, dass sie nicht in die Summen der Anlagen N und V eingehen.
 
-Geprueft: Die beiden ueberschneiden sich nicht. In den Zeitraum der doppelten
-Haushaltsfuehrung faellt genau ein Auswaertsspiel - Duesseldorf am 21.09.2024 -
-und dort stehen 0,00 EUR, weil die Abwesenheit unter acht Stunden lag.
+## Dateien dieser Nacht (nicht im Repository)
 
-## Offene Faeden im Gespraech
+Liegen im Chat mit Claude zum Herunterladen: Betriebskostenabrechnung 2024
+(final, mit Unterschrift), Entfernungsnachweis Koeln 2024. Beide ins Werkzeug
+hochladen, Steuerjahr 2024.
 
-Diesen Text abschicken, er raeumt mehreres gleichzeitig ab:
+## Zur Sicherung
 
-> Die Neuanalyse ist durch. Drei Dinge:
->
-> **1.** Sieh die Waehrungswarnungen durch und trag bei jedem Beleg in
-> Fremdwaehrung den Euro-Betrag mit `betrag_setzen` nach.
->
-> **2.** Pruef die 3.000 Euro: Die Umzugsrechnung Wuttke lautet ueber 3.000
-> Euro, der Umzugskostenzuschuss des 1. FC Koeln ebenfalls. Sieh in den vier
-> Koelner Gehaltsabrechnungen nach, ob der Zuschuss steuerpflichtig als
-> Arbeitslohn lief oder steuerfrei als Auslagenersatz. Falls steuerfrei,
-> erfasse ihn als Erstattung gegen die Umzugsrechnung.
->
-> **3.** Bei den sonstigen Werbungskosten gibt es eine Formularzuordnung mit
-> vier Abschnitten: doppelte Haushaltsfuehrung, Umzugskosten, Reisekosten,
-> weitere Werbungskosten. Sie teilt Summen nicht selbst auf. Schreib deshalb
-> bei jedem Beleg dieser Kategorie als Notiz dazu, in welchen Abschnitt er
-> gehoert.
+Noch nicht erledigt: Einstellungen > Entwickler > Linux-Entwicklungsumgebung >
+Sichern und Wiederherstellen > Sichern. Die Mappe existiert nur auf diesem
+Geraet.
 
-## Neu im Werkzeug, zuletzt
-
-| Neu | Wofuer |
-| --- | --- |
-| **Denktiefe** im Gespraech | Schnell / Zuegig / Gruendlich. Das Gespraech lief vorher auf der langsamsten Stufe. |
-| **Messzeile** unter dem Eingabefeld | Sekunden, Runden, Token aus dem Zwischenspeicher - zeigt, woran eine lange Wartezeit lag |
-| Modellwahl richtig beschriftet | Fable 5 ist das leistungsfaehigste Modell und kostet das Doppelte von Opus 5 |
-| `betrag_setzen`, `nicht_ansetzen` | Betrag im Gespraech setzen; Beleg aussortieren, ohne ihn zu loeschen |
-| Fremdwaehrung | Nicht-Euro-Betraege zaehlen nicht mehr stillschweigend als Euro mit |
-| Dubletten nach Rechnungsnummer | findet zwei Fassungen derselben Rechnung mit verschiedenen Betraegen |
-
-## Noch nicht gebaut
-
-Aus der Zwoelf-Punkte-Durchsicht offen: Aufteilung eines Belegs auf mehrere
-Anlagen, eigene Pruefung der Formerfordernisse, Paragraf 13b Reverse Charge,
-Neuanalyse als Folge einer geaenderten Notiz. Dazu: die Antwort im Gespraech
-erscheint erst vollstaendig statt Satz fuer Satz - eine Umstellung darauf
-wuerde die Wartezeit gefuehlt deutlich verkuerzen.
+---
 
 ## Die 3.000 Euro sind der teuerste offene Punkt
 
